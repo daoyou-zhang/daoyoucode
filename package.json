@@ -1,0 +1,50 @@
+{
+  "name": "daoyoucode",
+  "version": "0.0.1",
+  "description": "新一代AI编程助手 - 融合多智能体协作、LSP重构、中文优化",
+  "keywords": [
+    "ai",
+    "coding-assistant",
+    "llm",
+    "multi-agent",
+    "lsp",
+    "chinese",
+    "qwen",
+    "deepseek",
+    "claude",
+    "gpt"
+  ],
+  "homepage": "https://github.com/你的用户名/daoyoucode#readme",
+  "bugs": {
+    "url": "https://github.com/你的用户名/daoyoucode/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/你的用户名/daoyoucode.git"
+  },
+  "license": "MIT",
+  "author": "daoyoucode Team",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.4.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}
