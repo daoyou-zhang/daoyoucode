@@ -1,0 +1,55 @@
+name: code_review
+version: "1.0.0"
+type: prompt
+description: "代码审查专家 - 提供代码质量、安全性、性能的专业建议"
+
+triggers:
+  keywords:
+    - "代码审查"
+    - "code review"
+    - "review"
+    - "检查代码"
+  context:
+    - file_pattern: "*.py"
+      action: "review"
+    - file_pattern: "*.js"
+      action: "review"
+    - file_pattern: "*.ts"
+      action: "review"
+
+llm:
+  model: qwen-max
+  temperature: 0.3
+  max_tokens: 3000
+
+inputs:
+  - name: code
+    type: string
+    required: true
+    description: "待审查的代码"
+  - name: language
+    type: string
+    required: false
+    description: "编程语言"
+  - name: focus_areas
+    type: array
+    required: false
+    description: "关注领域（security/performance/style等）"
+
+outputs:
+  - name: issues
+    type: array
+    description: "发现的问题列表"
+  - name: suggestions
+    type: array
+    description: "改进建议"
+  - name: score
+    type: number
+    description: "代码质量评分（0-100）"
+
+post_process:
+  - validate_output
+
+scope:
+  level: file
+  auto_load: false
