@@ -1,0 +1,98 @@
+name: code-analysis
+version: 1.0.0
+description: 代码架构分析和技术咨询（借鉴oh-my-opencode的Oracle）
+
+# 使用简单编排器
+orchestrator: simple
+
+# 使用代码分析Agent
+agent: code_analyzer
+
+# Prompt配置（使用独立文件）
+prompt:
+  file: prompts/oracle.md
+
+# LLM配置
+llm:
+  model: qwen-max  # 或 gpt-5.2
+  temperature: 0.1  # 低温度，更准确
+  max_tokens: 4000
+
+# 中间件
+middleware:
+  - context_management
+
+# 权限（只读）
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: deny
+  execute:
+    - pattern: "*"
+      permission: deny
+
+# 输入
+inputs:
+  - name: analysis_request
+    type: string
+    required: true
+    description: 分析需求（架构分析、代码审查、性能分析等）
+  
+  - name: code_content
+    type: string
+    required: false
+    description: 要分析的代码内容
+  
+  - name: file_path
+    type: string
+    required: false
+    description: 文件路径
+  
+  - name: project_context
+    type: string
+    required: false
+    description: 项目背景信息
+
+# 输出
+outputs:
+  - name: analysis_result
+    type: string
+    description: 详细的分析报告
+  
+  - name: recommendations
+    type: array
+    description: 改进建议列表
+  
+  - name: effort_estimate
+    type: string
+    description: 工作量估算（Quick/Short/Medium/Large）
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+
+# 元数据
+metadata:
+  category: advisor
+  cost: EXPENSIVE
+  source: oh-my-opencode
+  triggers:
+    - "架构决策"
+    - "代码审查"
+    - "性能分析"
+    - "安全审查"
+  use_when:
+    - "复杂架构设计"
+    - "完成重要工作后的自我审查"
+    - "2次以上修复失败后"
+    - "不熟悉的代码模式"
+    - "安全/性能问题"
+  avoid_when:
+    - "简单文件操作"
+    - "第一次尝试修复"
+    - "从已读代码可以回答的问题"
+    - "琐碎决策（变量命名、格式化）"

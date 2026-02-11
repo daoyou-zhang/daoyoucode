@@ -1,0 +1,63 @@
+name: refactoring
+version: 1.0.0
+description: 代码重构专家服务
+
+orchestrator: simple
+agent: refactor_master
+
+prompt:
+  file: prompts/refactor.md
+
+llm:
+  model: qwen-coder-plus
+  temperature: 0.2
+  max_tokens: 4000
+
+middleware:
+  - context_management
+
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*.py"
+      permission: ask
+    - pattern: "*.js"
+      permission: ask
+    - pattern: "*.ts"
+      permission: ask
+
+inputs:
+  - name: refactor_request
+    type: string
+    required: true
+    description: 重构需求
+  
+  - name: code_content
+    type: string
+    required: false
+    description: 要重构的代码
+  
+  - name: test_content
+    type: string
+    required: false
+    description: 现有测试
+
+outputs:
+  - name: refactor_plan
+    type: string
+    description: 重构方案
+  
+  - name: steps
+    type: array
+    description: 重构步骤列表
+
+hooks:
+  - logging
+  - metrics
+  - validation
+
+metadata:
+  category: development
+  cost: MEDIUM

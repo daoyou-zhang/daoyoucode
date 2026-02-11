@@ -1,0 +1,67 @@
+name: programming
+version: 1.0.0
+description: 编程专家服务
+
+# 使用简单编排器
+orchestrator: simple
+
+# 使用编程Agent
+agent: programmer
+
+# Prompt配置（使用独立文件）
+prompt:
+  file: prompts/programmer.md
+
+# LLM配置
+llm:
+  model: qwen-coder-plus
+  temperature: 0.1
+  max_tokens: 4000
+
+# 中间件
+middleware:
+  - context_management
+
+# 可用工具
+tools:
+  - read_file
+  - write_file
+  - list_files
+  - get_file_info
+  - grep_search
+  - find_function
+  - find_class
+  - git_status
+  - git_diff
+
+# 输入
+inputs:
+  - name: task
+    type: string
+    required: true
+    description: 编程任务描述
+  
+  - name: code_context
+    type: string
+    required: false
+    description: 相关代码上下文
+  
+  - name: language
+    type: string
+    required: false
+    description: 编程语言
+
+# 输出
+outputs:
+  - name: code
+    type: string
+    description: 生成的代码
+  
+  - name: explanation
+    type: string
+    description: 代码说明
+
+# Hook配置
+hooks:
+  - logging
+  - metrics

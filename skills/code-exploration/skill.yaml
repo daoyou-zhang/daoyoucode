@@ -1,0 +1,99 @@
+name: code-exploration
+version: 1.0.0
+description: 代码库搜索和探索（借鉴oh-my-opencode的Explore）
+
+# 使用简单编排器
+orchestrator: simple
+
+# 使用代码探索Agent
+agent: code_explorer
+
+# Prompt配置（使用独立文件）
+prompt:
+  file: prompts/explore.md
+
+# LLM配置
+llm:
+  model: qwen-coder-plus  # 或 grok-code
+  temperature: 0.1
+  max_tokens: 3000
+
+# 中间件
+middleware:
+  - context_management
+
+# 可用工具
+tools:
+  - grep_search
+  - find_function
+  - find_class
+  - find_imports
+  - read_file
+  - list_files
+
+# 权限（只读）
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: deny
+  execute:
+    - pattern: "*"
+      permission: deny
+
+# 输入
+inputs:
+  - name: search_query
+    type: string
+    required: true
+    description: 搜索查询（"在哪里实现X？"、"哪些文件包含Y？"）
+  
+  - name: search_scope
+    type: string
+    required: false
+    description: 搜索范围（目录路径）
+  
+  - name: thoroughness
+    type: string
+    required: false
+    description: 搜索深度（quick/medium/thorough）
+    default: medium
+
+# 输出
+outputs:
+  - name: files_found
+    type: array
+    description: 找到的文件列表（绝对路径）
+  
+  - name: answer
+    type: string
+    description: 直接回答用户的实际需求
+  
+  - name: next_steps
+    type: string
+    description: 后续建议
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+
+# 元数据
+metadata:
+  category: exploration
+  cost: FREE
+  source: oh-my-opencode
+  triggers:
+    - "查找代码结构"
+    - "发现模式和风格"
+    - "多模块搜索"
+  use_when:
+    - "需要多角度搜索"
+    - "不熟悉的模块结构"
+    - "跨层模式发现"
+  avoid_when:
+    - "确切知道要搜索什么"
+    - "单个关键词/模式就够了"
+    - "已知文件位置"

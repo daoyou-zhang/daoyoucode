@@ -1,0 +1,42 @@
+name: translation
+version: 1.0.0
+description: 专业翻译服务
+
+# 使用简单编排器
+orchestrator: simple
+
+# 使用翻译Agent
+agent: translator
+
+# Prompt配置（使用独立文件）
+prompt:
+  file: prompts/translator.md
+
+# LLM配置
+llm:
+  model: qwen-max
+  temperature: 0.3
+  max_tokens: 2000
+
+# 中间件（可选）
+middleware:
+  - followup_detection
+  - context_management
+
+# 输入
+inputs:
+  - name: text
+    type: string
+    required: true
+    description: 要翻译的文本
+  
+  - name: target_language
+    type: string
+    required: false
+    description: 目标语言（可选）
+
+# 输出
+outputs:
+  - name: translated_text
+    type: string
+    description: 翻译后的文本

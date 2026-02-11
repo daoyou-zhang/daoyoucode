@@ -1,36 +1,58 @@
 """
-Agents智能体系统
+Agents系统 - 统一的Agent执行框架
 
-融合oh-my-opencode和daoyouCodePilot的精华：
-- 多智能体协作（oh-my-opencode）
-- 中文优化（daoyouCodePilot）
-- 工具权限控制（oh-my-opencode）
-- 任务委托和并行执行（oh-my-opencode）
+架构:
+    Skill (配置) → Orchestrator (编排) → Agent (执行) → LLM (基础设施)
 
-目录结构：
-- core/: 核心基础设施（BaseAgent, Registry等）
-- builtin/: 内置Agents（Sisyphus, ChineseEditor等）
-- utils/: 工具模块（监控、分析等）
+核心组件:
+    - core: 核心基类和注册表
+    - orchestrators: 编排器实现
+    - middleware: 中间件实现
+    - builtin: 内置Agent
+    - llm: LLM基础设施
+    - hooks: Hook系统
 """
 
-from .core import BaseAgent, AgentConfig, AgentResult, AgentRegistry, get_agent_registry
-from .builtin import (
-    SisyphusAgent,
-    ChineseEditorAgent,
-    OracleAgent,
-    LibrarianAgent,
-    ExploreAgent,
-)
+# 导入并注册内置编排器
+from . import orchestrators
+
+from .executor import execute_skill, list_skills, get_skill_info
+from .core.agent import BaseAgent, AgentConfig, register_agent, get_agent_registry
+from .core.orchestrator import BaseOrchestrator, register_orchestrator, get_orchestrator
+from .core.middleware import BaseMiddleware, register_middleware, get_middleware
+from .core.skill import SkillConfig, SkillLoader
+from .core.hook import BaseHook, HookContext, register_hook, unregister_hook, get_hook_manager
 
 __all__ = [
+    # 执行器
+    'execute_skill',
+    'list_skills',
+    'get_skill_info',
+    
+    # Agent
     'BaseAgent',
     'AgentConfig',
-    'AgentResult',
-    'AgentRegistry',
+    'register_agent',
     'get_agent_registry',
-    'SisyphusAgent',
-    'ChineseEditorAgent',
-    'OracleAgent',
-    'LibrarianAgent',
-    'ExploreAgent',
+    
+    # Orchestrator
+    'BaseOrchestrator',
+    'register_orchestrator',
+    'get_orchestrator',
+    
+    # Middleware
+    'BaseMiddleware',
+    'register_middleware',
+    'get_middleware',
+    
+    # Skill
+    'SkillConfig',
+    'SkillLoader',
+    
+    # Hook
+    'BaseHook',
+    'HookContext',
+    'register_hook',
+    'unregister_hook',
+    'get_hook_manager',
 ]

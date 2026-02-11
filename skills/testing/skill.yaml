@@ -1,0 +1,55 @@
+name: testing
+version: 1.0.0
+description: 测试编写和修复专家
+
+orchestrator: simple
+agent: test_expert
+
+prompt:
+  file: prompts/test.md
+
+llm:
+  model: deepseek-coder
+  temperature: 0.3
+  max_tokens: 4000
+
+middleware:
+  - context_management
+
+inputs:
+  - name: test_request
+    type: string
+    required: true
+    description: 测试需求或失败信息
+  
+  - name: code_content
+    type: string
+    required: false
+    description: 被测代码
+  
+  - name: test_content
+    type: string
+    required: false
+    description: 现有测试
+  
+  - name: test_failure
+    type: string
+    required: false
+    description: 测试失败信息
+
+outputs:
+  - name: test_plan
+    type: string
+    description: 测试方案
+  
+  - name: test_code
+    type: string
+    description: 测试代码
+
+hooks:
+  - logging
+  - metrics
+
+metadata:
+  category: development
+  cost: CHEAP

@@ -1,30 +1,38 @@
 """
-内置Agents
+内置Agent注册
 
-包含所有内置的Agent实现：
-- Sisyphus: 主编排器
-- ChineseEditor: 中文编辑专家
-- Oracle: 架构顾问
-- Librarian: 文档专家
-- Explore: 代码探索专家
+所有内置Agent在这里注册到全局注册表
 """
 
-from .sisyphus import SisyphusAgent, create_sisyphus_agent
-from .chinese_editor import ChineseEditorAgent, create_chinese_editor_agent
-from .oracle import OracleAgent, create_oracle_agent
-from .librarian import LibrarianAgent, create_librarian_agent
-from .explore import ExploreAgent, create_explore_agent
+from ..core.agent import register_agent
+from .translator import TranslatorAgent
+from .programmer import ProgrammerAgent
+from .code_analyzer import CodeAnalyzerAgent
+from .code_explorer import CodeExplorerAgent
+from .refactor_master import RefactorMasterAgent
+from .test_expert import TestExpertAgent
+
+
+def register_builtin_agents():
+    """注册所有内置Agent"""
+    
+    # 基础Agent
+    register_agent(TranslatorAgent())
+    register_agent(ProgrammerAgent())
+    
+    # 编程辅助Agent（借鉴oh-my-opencode）
+    register_agent(CodeAnalyzerAgent())      # Oracle - 架构顾问
+    register_agent(CodeExplorerAgent())      # Explore - 代码搜索
+    register_agent(RefactorMasterAgent())    # 重构专家
+    register_agent(TestExpertAgent())        # 测试专家
+
 
 __all__ = [
-    'SisyphusAgent',
-    'create_sisyphus_agent',
-    'ChineseEditorAgent',
-    'create_chinese_editor_agent',
-    'OracleAgent',
-    'create_oracle_agent',
-    'LibrarianAgent',
-    'create_librarian_agent',
-    'ExploreAgent',
-    'create_explore_agent',
+    'register_builtin_agents',
+    'TranslatorAgent',
+    'ProgrammerAgent',
+    'CodeAnalyzerAgent',
+    'CodeExplorerAgent',
+    'RefactorMasterAgent',
+    'TestExpertAgent',
 ]
-
