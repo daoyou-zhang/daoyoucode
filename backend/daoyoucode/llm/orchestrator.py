@@ -1,19 +1,162 @@
 """
-LLM编排器
-整合所有组件，提供统一的调用接口
+LLM编排器（已废弃）
+
+⚠️ 警告：此模块已废弃，请使用Agent系统的Sisyphus
+
+迁移指南：
+    # 旧代码
+    from daoyoucode.llm import get_orchestrator
+    orchestrator = get_orchestrator()
+    result = await orchestrator.execute_skill('documentation', '生成文档', 'session_123')
+    
+    # 新代码
+    from daoyoucode.agents import get_agent
+    sisyphus = get_agent('sisyphus')
+    result = await sisyphus.execute('生成文档', 'session_123')
+
+Sisyphus会自动：
+1. 判断追问（节省tokens）
+2. 检查Skill匹配（使用模板）
+3. 限流熔断保护（系统稳定）
+4. 保存上下文（对话连贯）
 """
 
 from typing import Dict, Any, Optional, AsyncIterator
 import logging
+import warnings
 
 from .skills import get_skill_loader, get_skill_executor
-from .context import get_context_manager
 from .client_manager import get_client_manager
 
 logger = logging.getLogger(__name__)
 
 
 class LLMOrchestrator:
+    """
+    LLM编排器（已废弃）
+    
+    ⚠️ 此类已废弃，请使用Agent系统的Sisyphus
+    
+    保留此类仅为向后兼容，将在未来版本中移除
+    """
+    
+    def __init__(self):
+        warnings.warn(
+            "LLMOrchestrator已废弃，请使用Agent系统的Sisyphus。\n"
+            "示例：\n"
+            "  from daoyoucode.agents import get_agent\n"
+            "  sisyphus = get_agent('sisyphus')\n"
+            "  result = await sisyphus.execute(task, session_id)",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
+        # 初始化组件（保持兼容）
+        self.skill_loader = get_skill_loader()
+        self.skill_executor = get_skill_executor()
+        self.client_manager = get_client_manager()
+        
+        # 加载所有Skill
+        self.skill_loader.load_all_skills()
+        
+        logger.warning(
+            "LLMOrchestrator已废弃，建议迁移到Agent系统的Sisyphus"
+        )
+    
+    async def execute_skill(
+        self,
+        skill_name: str,
+        user_message: str,
+        session_id: str,
+        user_id: Optional[int] = None,
+        context: Optional[Dict[str, Any]] = None,
+        force_full_mode: bool = False
+    ) -> Dict[str, Any]:
+        """
+        执行Skill（已废弃）
+        
+        ⚠️ 请使用Sisyphus代替
+        """
+        warnings.warn(
+            f"execute_skill已废弃，请使用Sisyphus。\n"
+            f"建议代码：\n"
+            f"  sisyphus = get_agent('sisyphus')\n"
+            f"  result = await sisyphus.execute('{user_message}', '{session_id}')",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
+        # 为了向后兼容，委托给Sisyphus
+        from ..agents import get_agent
+        
+        sisyphus = get_agent('sisyphus')
+        result = await sisyphus.execute(
+            task=user_message,
+            session_id=session_id,
+            context=context
+        )
+        
+        # 转换为旧格式
+        return {
+            'response': result.content,
+            'success': result.success,
+            'metadata': result.metadata,
+            '_deprecated': True,
+            '_migration_hint': 'Please use Sisyphus from agents module'
+        }
+    
+    def list_skills(self) -> Dict[str, str]:
+        """列出所有可用的Skill"""
+        return {
+            skill.name: skill.description
+            for skill in self.skill_loader.skills.values()
+        }
+    
+    def get_skill_info(self, skill_name: str) -> Optional[Dict[str, Any]]:
+        """获取Skill详细信息"""
+        skill = self.skill_loader.get_skill(skill_name)
+        if not skill:
+            return None
+        
+        return {
+            'name': skill.name,
+            'version': skill.version,
+            'description': skill.description,
+            'type': skill.skill_type,
+            'llm': skill.llm,
+            'inputs': skill.inputs,
+            'outputs': skill.outputs,
+            'triggers': skill.triggers
+        }
+
+
+def get_orchestrator() -> LLMOrchestrator:
+    """
+    获取编排器单例（已废弃）
+    
+    ⚠️ 此函数已废弃，请使用Agent系统的Sisyphus
+    
+    迁移示例：
+        # 旧代码
+        orchestrator = get_orchestrator()
+        result = await orchestrator.execute_skill('doc', 'msg', 'session')
+        
+        # 新代码
+        from daoyoucode.agents import get_agent
+        sisyphus = get_agent('sisyphus')
+        result = await sisyphus.execute('msg', 'session')
+    """
+    warnings.warn(
+        "get_orchestrator()已废弃，请使用get_agent('sisyphus')。\n"
+        "详见文档：backend/AGENT_VS_LLM_CONFLICT.md",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    if not hasattr(get_orchestrator, '_instance'):
+        get_orchestrator._instance = LLMOrchestrator()
+    return get_orchestrator._instance
+
     """
     LLM编排器
     
