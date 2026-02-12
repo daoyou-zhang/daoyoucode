@@ -5,6 +5,7 @@
 """
 
 from ..core.agent import register_agent
+from .main_agent import MainAgent
 from .translator import TranslatorAgent
 from .programmer import ProgrammerAgent
 from .code_analyzer import CodeAnalyzerAgent
@@ -15,6 +16,9 @@ from .test_expert import TestExpertAgent
 
 def register_builtin_agents():
     """注册所有内置Agent"""
+    
+    # 主Agent
+    register_agent(MainAgent())
     
     # 基础Agent
     register_agent(TranslatorAgent())
@@ -29,6 +33,7 @@ def register_builtin_agents():
 
 __all__ = [
     'register_builtin_agents',
+    'MainAgent',
     'TranslatorAgent',
     'ProgrammerAgent',
     'CodeAnalyzerAgent',

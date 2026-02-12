@@ -16,6 +16,10 @@ Agents系统 - 统一的Agent执行框架
 # 导入并注册内置编排器
 from . import orchestrators
 
+# 初始化工具注册表（确保工具在系统启动时就可用）
+from .tools import get_tool_registry
+_tool_registry = get_tool_registry()  # 触发工具注册
+
 from .executor import execute_skill, list_skills, get_skill_info
 from .core.agent import BaseAgent, AgentConfig, register_agent, get_agent_registry
 from .core.orchestrator import BaseOrchestrator, register_orchestrator, get_orchestrator

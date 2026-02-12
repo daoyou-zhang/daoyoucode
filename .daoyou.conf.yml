@@ -1,0 +1,211 @@
+# 项目或用户主目录均可放置 .daoyou.conf.yml
+# ⚠️ 层级不要缩进错，YAML 使用空格而非 Tab
+
+# ───────────────────────────────────────
+# 1. 模型设置
+# ───────────────────────────────────────
+llm:
+  # 质量
+  # 主模型：复杂编辑 / 架构分析
+  # main_model: qwen-max
+  # 轻量模型：生成 commit message / 对话总结
+  # weak_model: qwen-turbo
+  # 编辑器模型：纯代码补丁，速度优先
+  #editor_model: qwen3-coder-plus
+
+  # 成本 & 速度均衡
+  # 主模型：复杂编辑 / 架构分析
+  main_model: qwen-plus
+  # 轻量模型：生成 commit message / 对话总结
+  weak_model: qwen-flash
+  # 编辑器模型：纯代码补丁，速度优先
+  editor_model: qwen-coder-plus
+
+  # 超低延迟实验
+  # 主模型：复杂编辑 / 架构分析
+  # main_model: qwen-coder-plus
+  # 轻量模型：生成 commit message / 对话总结
+  # weak_model: qwen-flash
+  # 编辑器模型：纯代码补丁，速度优先
+  # editor_model: qwen-flash
+
+  # 默认采样参数，可被 CLI 覆盖
+  temperature: 0.7
+  max_tokens: 8000
+
+  # ───────────────────────────────────────
+  # 智能历史记忆配置
+  # ───────────────────────────────────────
+  history:
+    # 全局默认模式（disabled, economy, default, high_quality）
+    mode: default
+    
+    # 模式定义
+    modes:
+      # 禁用模式：不保留历史
+      disabled:
+        enable: false
+        max_turns: 0
+      
+      # 经济模式：保留 3 轮对话
+      economy:
+        enable: true
+        max_turns: 3
+        summary_threshold: 5
+      
+      # 默认模式：保留 5 轮对话
+      default:
+        enable: true
+        max_turns: 5
+        summary_threshold: 8
+      
+      # 高质量模式：保留 10 轮对话
+      high_quality:
+        enable: true
+        max_turns: 10
+        summary_threshold: 15
+    
+    # 不同 Coder 类型的历史策略
+    coder_specific:
+      # 帮助模式：不需要历史
+      help:
+        mode: disabled
+      
+      # 问答模式：需要较长历史
+      ask:
+        mode: default
+      
+      # 编辑模式：需要短期历史
+      editblock:
+        mode: economy
+      
+      # 架构分析：需要短期历史
+      architect:
+        mode: economy
+      
+      # 编排器模式：需要完整历史
+      orchestrator:
+        mode: high_quality
+        preserve_planning: true
+        preserve_reflection: true
+      
+      # 规划器：需要中等历史
+      planner:
+        mode: default
+      
+      # 探索器：不需要历史
+      explorer:
+        mode: disabled
+    
+    # 语义过滤配置
+    semantic_filter:
+      enable: true
+      use_tree_sitter: true
+      preserve_code_blocks: true
+      preserve_errors: true
+    
+    # 文档轮转配置
+    rotation:
+      enable: true
+      max_file_size: 1048576  # 1MB
+      max_turns: 100
+      keep_backups: 10
+    
+    # 摘要配置
+    summary:
+      use_weak_model: true
+      cache_enabled: true
+      timeout: 30
+
+  # 多 Provider 支持，按需填写
+  providers:
+    dashscope:
+      api_key: "sk-d2971f2015574377bdf97046b1a03b87"      # 亦可直接写字符串
+      api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    #deepseek:
+    #  api_key: "${DEEPSEEK_API_KEY}"
+    #  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+model_profiles:
+  aliases:
+    qwen-coder: qwen-coder-plus-latest
+  profiles:
+    qwen-plus:
+      provider: dashscope
+      use_repo_map: true
+    qwen-flash:
+      provider: dashscope
+      use_repo_map: true
+    qwen-coder-plus:
+      provider: dashscope
+      use_repo_map: true
+    qwen-coder-plus-latest:
+      weak_model_name: qwen3-coder-flash
+      editor_model_name: qwen-coder-plus-1106
+      editor_edit_format: editblock
+      use_repo_map: true
+      extra_params:
+        top_p: 0.9
+    qwen3-coder-flash:
+      provider: dashscope
+      edit_format: diff
+      use_repo_map: false
+      extra_params:
+        top_p: 0.8
+
+# ───────────────────────────────────────
+# 2. Git 集成
+# ───────────────────────────────────────
+git:
+  auto_commit: false        # 编辑完成后自动 git commit
+  attribute_author: true   # 使用当前系统用户名填充 author
+  push_after_commit: false # 可选，自动 push
+
+# ───────────────────────────────────────
+# 3. 代码审查 / Lint
+# ───────────────────────────────────────
+linter:
+  auto_lint: true          # 编辑后自动 lint
+  lint_cmds:               # 语言 → 命令
+    python: "flake8 --select=E9,F821"
+
+# ───────────────────────────────────────
+# 4. 自动测试
+# ───────────────────────────────────────
+testing:
+  auto_test: true          # 编辑后自动运行测试
+  test_cmd: "pytest"       # 默认测试命令
+  timeout: 300             # 单次测试超时时间（秒）
+
+# ───────────────────────────────────────
+# 5. 历史记录
+# ───────────────────────────────────────
+history:
+  enabled: true
+  file: ".daoyou.chat.history.md"
+  restore: false           # 启动 CLI 时是否自动载入
+
+# ───────────────────────────────────────
+# 6. 文件监控（交互式对话专用）
+# ───────────────────────────────────────
+watch:
+  enabled: true
+  max_file_size_kb: 1024   # 超过即跳过
+  respect_gitignore: true
+
+# ───────────────────────────────────────
+# 7. 其他开关
+# ───────────────────────────────────────
+misc:
+  verbose: false           # CLI / 日志是否输出 debug
+  default_edit_format: architect   # 默认问答
+  verbose: true              # 打印补丁 diff
+  stream: true               # 实时流式输出编辑模式
+
+# ───────────────────────────────────────
+# 7. 其他开关
+# ───────────────────────────────────────
+extra:
+  enable_skills: false
+  enable_tools: true
+  restore_history: false

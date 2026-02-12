@@ -89,24 +89,46 @@ def _register_builtin_tools():
     _tool_registry.register(RunTestTool())
     
     # Diff工具（1个）
-    _tool_registry.register(SearchReplaceTool())
+    try:
+        _tool_registry.register(SearchReplaceTool())
+    except Exception as e:
+        logger.error(f"注册SearchReplaceTool失败: {e}")
     
     # RepoMap工具（2个）
-    _tool_registry.register(RepoMapTool())
-    _tool_registry.register(GetRepoStructureTool())
+    try:
+        _tool_registry.register(RepoMapTool())
+        logger.info("✓ RepoMapTool注册成功")
+    except Exception as e:
+        logger.error(f"注册RepoMapTool失败: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    try:
+        _tool_registry.register(GetRepoStructureTool())
+        logger.info("✓ GetRepoStructureTool注册成功")
+    except Exception as e:
+        logger.error(f"注册GetRepoStructureTool失败: {e}")
     
     # LSP工具（6个）
-    _tool_registry.register(LSPDiagnosticsTool())
-    _tool_registry.register(LSPGotoDefinitionTool())
-    _tool_registry.register(LSPFindReferencesTool())
-    _tool_registry.register(LSPSymbolsTool())
-    _tool_registry.register(LSPRenameTool())
-    _tool_registry.register(LSPCodeActionsTool())
+    try:
+        _tool_registry.register(LSPDiagnosticsTool())
+        _tool_registry.register(LSPGotoDefinitionTool())
+        _tool_registry.register(LSPFindReferencesTool())
+        _tool_registry.register(LSPSymbolsTool())
+        _tool_registry.register(LSPRenameTool())
+        _tool_registry.register(LSPCodeActionsTool())
+    except Exception as e:
+        logger.error(f"注册LSP工具失败: {e}")
     
     # AST工具（2个）
-    _tool_registry.register(AstGrepSearchTool())
-    _tool_registry.register(AstGrepReplaceTool())
+    try:
+        _tool_registry.register(AstGrepSearchTool())
+        _tool_registry.register(AstGrepReplaceTool())
+    except Exception as e:
+        logger.error(f"注册AST工具失败: {e}")
     
     logger.info(f"已注册 {len(_tool_registry.list_tools())} 个内置工具")
     
-    logger.info(f"已注册 {len(_tool_registry.list_tools())} 个内置工具")
+    # 列出所有已注册的工具
+    tools = _tool_registry.list_tools()
+    logger.info(f"工具列表: {', '.join(sorted(tools))}")

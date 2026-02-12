@@ -1,0 +1,113 @@
+name: chat_assistant
+version: 1.0.0
+description: 交互式对话助手，支持代码理解、编写和项目分析
+
+# 使用ReAct编排器（支持工具调用和推理循环）
+orchestrator: react
+
+# 使用MainAgent
+agent: MainAgent
+
+# Prompt配置
+prompt:
+  file: prompts/chat_assistant.md
+
+# LLM配置
+llm:
+  model: qwen-max
+  temperature: 0.7
+  max_tokens: 4000
+
+# 可用工具（ReAct编排器会自动管理）
+tools:
+  - repo_map              # 生成代码地图
+  - get_repo_structure    # 获取目录结构
+  - read_file             # 读取文件
+  - text_search           # 文本搜索（修正：原来是grep_search）
+  - regex_search          # 正则搜索
+  - write_file            # 写入文件（如果需要）
+  - list_files            # 列出目录（修正：原来是list_directory）
+
+# 中间件
+middleware:
+  - context_management
+  - memory_integration
+
+# 权限（读写权限）
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*.py"
+      permission: allow
+    - pattern: "*.js"
+      permission: allow
+    - pattern: "*.ts"
+      permission: allow
+    - pattern: "*.md"
+      permission: allow
+  execute:
+    - pattern: "*"
+      permission: deny
+
+# 输入
+inputs:
+  - name: user_input
+    type: string
+    required: true
+    description: 用户输入的问题或指令
+  
+  - name: session_id
+    type: string
+    required: false
+    description: 会话ID
+  
+  - name: files
+    type: array
+    required: false
+    description: 已加载的文件列表
+  
+  - name: repo
+    type: string
+    required: false
+    description: 仓库路径
+
+# 输出
+outputs:
+  - name: response
+    type: string
+    description: AI的响应内容
+  
+  - name: tools_used
+    type: array
+    description: 使用的工具列表
+  
+  - name: reasoning
+    type: string
+    description: 推理过程
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+  - memory_save
+
+# 元数据
+metadata:
+  category: assistant
+  cost: MEDIUM
+  triggers:
+    - "对话"
+    - "提问"
+    - "代码编写"
+    - "项目分析"
+  use_when:
+    - "用户交互"
+    - "代码理解"
+    - "项目探索"
+  features:
+    - "自动工具调用"
+    - "推理循环"
+    - "记忆集成"
+    - "上下文管理"

@@ -266,6 +266,11 @@ class BaseAgent(ABC):
         tool_registry = get_tool_registry()
         tools_used = []
         
+        # 调试：列出所有可用工具
+        available_tools = tool_registry.list_tools()
+        self.logger.info(f"可用工具数量: {len(available_tools)}")
+        self.logger.debug(f"可用工具列表: {', '.join(sorted(available_tools))}")
+        
         # 获取工具的Function schemas
         function_schemas = tool_registry.get_function_schemas(tool_names)
         
@@ -300,13 +305,18 @@ class BaseAgent(ABC):
             tool_args = json.loads(function_call['arguments'])
             
             self.logger.info(f"调用工具: {tool_name}, 参数: {tool_args}")
+            print(f"\n🔧 执行工具: {tool_name}")  # 添加控制台输出
+            print(f"   参数: {tool_args}")
             tools_used.append(tool_name)
             
             # 执行工具
             try:
+                print(f"   ⏳ 正在执行...")  # 添加进度提示
                 tool_result = await tool_registry.execute_tool(tool_name, **tool_args)
+                print(f"   ✓ 执行完成")  # 添加完成提示
                 tool_result_str = str(tool_result)
             except Exception as e:
+                print(f"   ✗ 执行失败: {e}")  # 添加失败提示
                 tool_result_str = f"Error: {str(e)}"
                 self.logger.error(f"工具执行失败: {e}")
             

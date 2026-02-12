@@ -65,158 +65,89 @@ class ReActOrchestrator(BaseOrchestrator):
     async def execute(
         self,
         skill: Any,
-        context: Context,
-        agents: Optional[List[BaseAgent]] = None,
-        **kwargs
+        user_input: str,
+        context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         执行ReAct循环
         
         Args:
-            skill: 技能定义
+            skill: 技能定义（SkillConfig对象）
+            user_input: 用户输入
             context: 执行上下文
-            agents: Agent列表
-            **kwargs: 其他参数
             
         Returns:
             执行结果
         """
-        original_instruction = skill.get('instruction', '')
-        current_instruction = original_instruction
+        if context is None:
+            context = {}
         
-        # 创建主任务
-        main_task = self.task_manager.create_task(
-            name=f"ReAct: {original_instruction[:50]}",
-            description=original_instruction,
-            metadata={'orchestrator': 'react', 'max_reflections': self.max_reflections}
-        )
+        logger.info(f"ReAct编排器执行: {skill.name}")
         
-        # 触发Hook
-        await self.hook_manager.trigger(
-            HookEvent.PRE_ORCHESTRATE,
-            data={
-                'orchestrator': 'react',
-                'skill': skill,
-                'task_id': main_task.task_id
-            }
-        )
+        # 简化版本：直接调用Agent（完整的ReAct循环需要更多实现）
+        # TODO: 实现完整的Reason-Act-Observe-Reflect循环
         
-        attempt = 0
-        last_error = None
-        last_plan = None
-        
-        while attempt < self.max_reflections:
-            attempt += 1
-            logger.info(f"ReAct循环 - 尝试 {attempt}/{self.max_reflections}")
+        try:
+            # 1. 获取Agent
+            from ..core.agent import get_agent_registry
+            registry = get_agent_registry()
+            agent = registry.get_agent(skill.agent)
             
-            try:
-                # === 1. Reason（规划）===
-                logger.info("阶段1: 规划（Reason）")
-                plan = await self._plan(current_instruction, context, last_error, last_plan)
-                
-                if not plan:
-                    logger.error("规划失败")
-                    last_error = "规划失败：无法生成有效的执行计划"
-                    continue
-                
-                # === 2. 用户批准（可选）===
-                if self.require_approval and not await self._approve(plan, context):
-                    logger.info("用户取消了执行")
-                    self.task_manager.update_task(main_task.task_id, status=TaskStatus.CANCELLED)
-                    return {
-                        'status': 'cancelled',
-                        'message': '用户取消了执行',
-                        'task_id': main_task.task_id
-                    }
-                
-                # === 3. Act（执行）===
-                logger.info("阶段2: 执行（Act）")
-                result = await self._execute_plan(plan, context, agents, main_task)
-                
-                # === 4. Observe（观察）===
-                logger.info("阶段3: 观察（Observe）")
-                observation = await self._observe(result, context)
-                
-                if observation['success']:
-                    # 成功！
-                    logger.info("ReAct循环成功完成")
-                    self.task_manager.update_task(
-                        main_task.task_id,
-                        status=TaskStatus.COMPLETED,
-                        result=result
-                    )
-                    
-                    # 触发Hook
-                    await self.hook_manager.trigger(
-                        HookEvent.POST_ORCHESTRATE,
-                        data={
-                            'orchestrator': 'react',
-                            'task_id': main_task.task_id,
-                            'result': result,
-                            'attempts': attempt
-                        }
-                    )
-                    
-                    return {
-                        'status': 'success',
-                        'result': result,
-                        'task_id': main_task.task_id,
-                        'attempts': attempt
-                    }
-                
-                # 失败，准备反思
-                last_error = observation.get('error', '未知错误')
-                last_plan = plan
-                
-            except Exception as e:
-                logger.error(f"执行过程中发生异常: {e}", exc_info=True)
-                last_error = str(e)
-                last_plan = plan if 'plan' in locals() else None
+            if not agent:
+                return {
+                    'success': False,
+                    'content': '',
+                    'error': f"Agent '{skill.agent}' not found"
+                }
             
-            # === 5. Reflect（反思）===
-            if attempt < self.max_reflections:
-                logger.info(f"阶段4: 反思（Reflect）- 尝试 {attempt}")
-                new_instruction = await self._reflect(
-                    original_instruction,
-                    current_instruction,
-                    last_error,
-                    last_plan,
-                    context,
-                    attempt
-                )
-                
-                if new_instruction:
-                    current_instruction = new_instruction
-                    logger.info(f"生成新指令: {new_instruction[:100]}...")
-                else:
-                    logger.error("反思失败，无法生成新指令")
-                    break
-        
-        # 达到最大反思次数，仍然失败
-        logger.error(f"ReAct循环失败，已达到最大反思次数 ({self.max_reflections})")
-        self.task_manager.update_task(
-            main_task.task_id,
-            status=TaskStatus.FAILED,
-            error=last_error
-        )
-        
-        # 触发Hook
-        await self.hook_manager.trigger(
-            HookEvent.ON_ERROR,
-            data={
-                'orchestrator': 'react',
-                'task_id': main_task.task_id,
-                'error': last_error,
-                'attempts': attempt
+            # 2. 准备prompt
+            prompt_source = self._prepare_prompt_source(skill)
+            
+            # 3. 执行Agent（带工具）
+            result = await agent.execute(
+                prompt_source=prompt_source,
+                user_input=user_input,
+                context=context,
+                llm_config=skill.llm,
+                tools=skill.tools if skill.tools else None
+            )
+            
+            # 4. 返回结果
+            return {
+                'success': result.success,
+                'content': result.content,
+                'metadata': {
+                    **result.metadata,
+                    'skill': skill.name,
+                    'agent': skill.agent,
+                    'orchestrator': 'react',
+                    'tools_used': result.tools_used,
+                    'tokens_used': result.tokens_used,
+                    'cost': result.cost
+                },
+                'error': result.error,
+                'tools_used': result.tools_used,
+                'tokens_used': result.tokens_used,
+                'cost': result.cost
             }
-        )
         
-        return {
-            'status': 'failed',
-            'error': last_error,
-            'task_id': main_task.task_id,
-            'attempts': attempt
-        }
+        except Exception as e:
+            logger.error(f"ReAct执行失败: {e}", exc_info=True)
+            return {
+                'success': False,
+                'content': '',
+                'error': str(e)
+            }
+    
+    def _prepare_prompt_source(self, skill: Any) -> Dict[str, Any]:
+        """准备prompt来源配置"""
+        if skill.prompt:
+            if isinstance(skill.prompt, dict):
+                return skill.prompt
+            if isinstance(skill.prompt, str):
+                return {'file': skill.prompt}
+        
+        return {'use_agent_default': True}
     
     async def _plan(
         self,

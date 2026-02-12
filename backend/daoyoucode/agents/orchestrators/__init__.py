@@ -11,6 +11,7 @@ from .workflow import WorkflowOrchestrator
 from .conditional import ConditionalOrchestrator
 from .parallel import ParallelOrchestrator
 from .parallel_explore import ParallelExploreOrchestrator
+from .react import ReActOrchestrator
 
 
 def register_builtin_orchestrators():
@@ -21,6 +22,7 @@ def register_builtin_orchestrators():
     register_orchestrator('conditional', ConditionalOrchestrator)
     register_orchestrator('parallel', ParallelOrchestrator)
     register_orchestrator('parallel_explore', ParallelExploreOrchestrator)
+    register_orchestrator('react', ReActOrchestrator)
 
 
 # 自动注册
@@ -34,5 +36,6 @@ __all__ = [
     'ConditionalOrchestrator',
     'ParallelOrchestrator',
     'ParallelExploreOrchestrator',
+    'ReActOrchestrator',
     'register_builtin_orchestrators',
 ]

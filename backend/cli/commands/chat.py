@@ -1,0 +1,632 @@
+"""
+交互式对话命令
+
+最重要的命令，提供完整的交互式体验
+"""
+
+import typer
+from typing import Optional, List
+from pathlib import Path
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.live import Live
+from rich.spinner import Spinner
+import time
+
+
+def main(
+    files: Optional[List[Path]] = typer.Argument(None, help="要加载的文件"),
+    model: str = typer.Option("qwen-plus", "--model", "-m", help="使用的模型"),
+    repo: Path = typer.Option(".", "--repo", "-r", help="仓库路径"),
+):
+    """
+    启动交互式对话
+    
+    示例:
+        daoyoucode chat
+        daoyoucode chat main.py utils.py
+        daoyoucode chat --model deepseek-coder
+    """
+    from cli.ui.console import console
+    import uuid
+    
+    # 显示欢迎横幅
+    show_banner(model, repo, files)
+    
+    # 生成会话ID（用于记忆系统）
+    session_id = str(uuid.uuid4())
+    
+    # 简单的上下文（只存储UI状态）
+    ui_context = {
+        "session_id": session_id,
+        "model": model,
+        "repo": str(repo),
+        "initial_files": [str(f) for f in files] if files else []
+    }
+    
+    try:
+        # 主循环
+        while True:
+            # 获取用户输入
+            user_input = console.input("\n[bold green]你[/bold green] › ")
+            
+            if not user_input.strip():
+                continue
+            
+            # 处理命令
+            if user_input.startswith("/"):
+                if not handle_command(user_input, ui_context):
+                    break  # /exit命令返回False
+                continue
+            
+            # 处理普通对话（通过Skill系统）
+            handle_chat(user_input, ui_context)
+    
+    except KeyboardInterrupt:
+        console.print("\n\n[cyan]👋 再见！[/cyan]\n")
+        raise typer.Exit(0)
+    except Exception as e:
+        console.print(f"\n[red]❌ 错误: {e}[/red]\n")
+        raise typer.Exit(1)
+    
+    try:
+        # 主循环
+        while True:
+            # 获取用户输入
+            user_input = console.input("\n[bold green]你[/bold green] › ")
+            
+            if not user_input.strip():
+                continue
+            
+            # 处理命令
+            if user_input.startswith("/"):
+                if not handle_command(user_input, context):
+                    break  # /exit命令返回False
+                continue
+            
+            # 处理普通对话
+            handle_chat(user_input, context)
+    
+    except KeyboardInterrupt:
+        console.print("\n\n[cyan]👋 再见！[/cyan]\n")
+        raise typer.Exit(0)
+    except Exception as e:
+        console.print(f"\n[red]❌ 错误: {e}[/red]\n")
+        raise typer.Exit(1)
+
+
+def show_banner(model: str, repo: Path, files: Optional[List[Path]]):
+    """显示欢迎横幅"""
+    from cli.ui.console import console
+    
+    banner = """
+╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║     🤖  DaoyouCode 交互式对话                            ║
+║                                                          ║
+║     精简而强大，基于18大核心系统                         ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+"""
+    console.print(f"[bold cyan]{banner}[/bold cyan]")
+    
+    # 显示配置信息
+    info_panel = f"""
+[bold]当前配置[/bold]
+• 模型: [cyan]{model}[/cyan]
+• 仓库: [dim]{repo}[/dim]
+• 文件: [dim]{len(files) if files else 0} 个[/dim]
+"""
+    console.print(Panel(info_panel, border_style="cyan", padding=(0, 2)))
+    
+    # 显示提示
+    console.print("\n[yellow]💡 提示:[/yellow]")
+    console.print("  • 输入 [cyan]/help[/cyan] 查看所有命令")
+    console.print("  • 输入 [cyan]/exit[/cyan] 退出对话")
+    console.print("  • 按 [cyan]Ctrl+C[/cyan] 也可退出")
+
+
+def handle_command(cmd: str, ui_context: dict) -> bool:
+    """
+    处理命令
+    
+    Returns:
+        True: 继续对话
+        False: 退出对话
+    """
+    from cli.ui.console import console
+    
+    parts = cmd.split(maxsplit=1)
+    command = parts[0].lower()
+    args = parts[1] if len(parts) > 1 else ""
+    
+    if command == "/exit" or command == "/quit":
+        console.print("\n[cyan]👋 再见！[/cyan]\n")
+        return False
+    
+    elif command == "/help":
+        show_help()
+    
+    elif command == "/model":
+        if not args:
+            console.print(f"[cyan]当前模型: {ui_context['model']}[/cyan]")
+        else:
+            ui_context['model'] = args
+            console.print(f"[green]✓[/green] 已切换到模型: [cyan]{args}[/cyan]")
+    
+    elif command == "/session":
+        console.print(f"[cyan]会话ID: {ui_context['session_id']}[/cyan]")
+    
+    else:
+        console.print(f"[red]未知命令: {command}[/red]")
+        console.print("[dim]输入 /help 查看所有命令[/dim]")
+    
+    return True
+
+
+def show_help():
+    """显示帮助信息"""
+    from cli.ui.console import console
+    
+    help_text = """
+[bold cyan]可用命令[/bold cyan]
+
+[bold]对话控制[/bold]
+  /exit, /quit     退出对话
+  /clear           清空对话历史
+  /history         查看对话历史
+
+[bold]文件管理[/bold]
+  /add <file>      添加文件到上下文
+  /drop <file>     从上下文移除文件
+  /files           查看已加载的文件
+
+[bold]配置[/bold]
+  /model [name]    查看或切换模型
+  /help            显示此帮助
+
+[bold]快捷键[/bold]
+  Ctrl+C           退出对话
+"""
+    console.print(Panel(help_text, border_style="cyan", padding=(1, 2)))
+
+
+def add_file(filepath: str, context: dict):
+    """添加文件到上下文"""
+    from cli.ui.console import console
+    
+    path = Path(filepath)
+    if not path.exists():
+        console.print(f"[red]文件不存在: {filepath}[/red]")
+        return
+    
+    if str(path) in context["files"]:
+        console.print(f"[yellow]文件已在上下文中: {filepath}[/yellow]")
+        return
+    
+    # 读取文件内容
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 保存文件路径和内容
+        context["files"].append(str(path))
+        if "file_contents" not in context:
+            context["file_contents"] = {}
+        context["file_contents"][str(path)] = content
+        
+        # 显示文件信息
+        lines = len(content.splitlines())
+        size = len(content)
+        console.print(f"[green]✓[/green] 已添加文件: [cyan]{filepath}[/cyan]")
+        console.print(f"[dim]  {lines} 行, {size} 字符[/dim]")
+    
+    except Exception as e:
+        console.print(f"[red]读取文件失败: {e}[/red]")
+
+
+def drop_file(filepath: str, context: dict):
+    """从上下文移除文件"""
+    from cli.ui.console import console
+    
+    if filepath in context["files"]:
+        context["files"].remove(filepath)
+        if "file_contents" in context and filepath in context["file_contents"]:
+            del context["file_contents"][filepath]
+        console.print(f"[green]✓[/green] 已移除文件: [cyan]{filepath}[/cyan]")
+    else:
+        console.print(f"[yellow]文件不在上下文中: {filepath}[/yellow]")
+
+
+def auto_load_project_files(context: dict, repo: Path):
+    """自动加载项目关键文件"""
+    from cli.ui.console import console
+    import os
+    
+    # 定义要自动加载的文件模式
+    key_files = [
+        "README.md",
+        "README.txt",
+        "STRUCTURE.txt",
+        "PROJECT_STRUCTURE.md",
+        "ARCHITECTURE.md",
+        "核心设计文档.md",
+        "项目结构设计.md",
+    ]
+    
+    loaded_files = []
+    repo_path = Path(repo)
+    
+    # 尝试加载关键文件
+    for filename in key_files:
+        file_path = repo_path / filename
+        if file_path.exists():
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # 限制文件大小（避免加载过大的文件）
+                if len(content) > 50000:  # 50KB限制
+                    console.print(f"[yellow]⚠[/yellow] 跳过大文件: [dim]{filename}[/dim]")
+                    continue
+                
+                context["files"].append(str(file_path))
+                context["file_contents"][str(file_path)] = content
+                loaded_files.append(filename)
+            
+            except Exception as e:
+                console.print(f"[yellow]⚠[/yellow] 无法读取: [dim]{filename}[/dim]")
+    
+    # 显示加载结果
+    if loaded_files:
+        console.print(f"\n[dim]✓ 自动加载了 {len(loaded_files)} 个项目文件:[/dim]")
+        for filename in loaded_files:
+            console.print(f"[dim]  • {filename}[/dim]")
+        console.print()
+    else:
+        console.print(f"\n[dim]💡 未找到项目文档，使用 /add 命令添加文件[/dim]\n")
+
+
+def show_files(context: dict):
+    """显示已加载的文件"""
+    from cli.ui.console import console
+    from rich.table import Table
+    
+    if not context["files"]:
+        console.print("[yellow]未加载任何文件[/yellow]")
+        return
+    
+    table = Table(title="已加载的文件", show_header=True, border_style="cyan")
+    table.add_column("#", style="dim")
+    table.add_column("文件路径", style="cyan")
+    
+    for i, file in enumerate(context["files"], 1):
+        table.add_row(str(i), file)
+    
+    console.print(table)
+
+
+def clear_history(context: dict):
+    """清空对话历史"""
+    from cli.ui.console import console
+    
+    context["history"].clear()
+    console.print("[green]✓[/green] 对话历史已清空")
+
+
+def change_model(model: str, context: dict):
+    """切换模型"""
+    from cli.ui.console import console
+    
+    context["model"] = model
+    console.print(f"[green]✓[/green] 已切换到模型: [cyan]{model}[/cyan]")
+
+
+def show_history(context: dict):
+    """显示对话历史"""
+    from cli.ui.console import console
+    
+    if not context["history"]:
+        console.print("[yellow]暂无对话历史[/yellow]")
+        return
+    
+    console.print("\n[bold cyan]对话历史[/bold cyan]\n")
+    for i, (user_msg, ai_msg) in enumerate(context["history"], 1):
+        console.print(f"[dim]--- 第 {i} 轮 ---[/dim]")
+        console.print(f"[bold green]你[/bold green]: {user_msg}")
+        console.print(f"[bold blue]AI[/bold blue]: {ai_msg}\n")
+
+
+def handle_chat(user_input: str, ui_context: dict):
+    """处理对话 - 通过Skill系统"""
+    from cli.ui.console import console
+    import asyncio
+    
+    # 准备基本上下文（传递给Skill系统）
+    context = {
+        "session_id": ui_context["session_id"],
+        "repo": ui_context["repo"],
+        "model": ui_context["model"],
+        "initial_files": ui_context.get("initial_files", [])
+    }
+    
+    # 显示思考动画
+    with console.status("[bold blue]AI正在思考...[/bold blue]", spinner="dots"):
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        try:
+            # 1. 配置LLM客户端
+            from daoyoucode.agents.llm.client_manager import get_client_manager
+            from daoyoucode.agents.llm.config_loader import auto_configure
+            
+            client_manager = get_client_manager()
+            auto_configure(client_manager)
+            
+            # 2. 注册内置Agent
+            from daoyoucode.agents.builtin import register_builtin_agents
+            register_builtin_agents()
+            
+            # 3. 通过Skill系统执行
+            from daoyoucode.agents.executor import execute_skill
+            
+            result = loop.run_until_complete(execute_skill(
+                skill_name="chat_assistant",
+                user_input=user_input,
+                session_id=context["session_id"],
+                context=context
+            ))
+            
+            # 显示结果
+            if result.get('success'):
+                ai_response = result.get('content', '')
+            else:
+                error_msg = result.get('error', '未知错误')
+                console.print(f"[yellow]⚠ 执行失败: {error_msg}[/yellow]")
+                ai_response = "抱歉，我遇到了一些问题。请重试。"
+        
+        except Exception as e:
+            console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
+            ai_response = "抱歉，系统出现异常。请重试。"
+    
+    # 显示AI响应
+    console.print(f"\n[bold blue]AI[/bold blue] › ", end="")
+    
+    # 使用Markdown渲染（如果包含代码块）
+    if "```" in ai_response:
+        console.print(Markdown(ai_response))
+    else:
+        console.print(ai_response)
+
+
+def generate_mock_response(user_input: str, context: dict) -> str:
+    """生成模拟响应（临时）"""
+    
+    # 简单的关键词响应
+    if "你好" in user_input or "hello" in user_input.lower():
+        return "你好！我是DaoyouCode AI助手，基于18大核心系统。我可以帮你编写代码、重构项目、解答问题。有什么我可以帮助你的吗？"
+    
+    elif "帮助" in user_input or "help" in user_input.lower():
+        return "我可以帮你：\n\n1. 📝 编写和修改代码\n2. 🔍 分析代码结构\n3. 🐛 调试和修复bug\n4. 📚 解答编程问题\n5. 🚀 优化代码性能\n\n请告诉我你需要什么帮助！"
+    
+    elif "功能" in user_input or "能做什么" in user_input:
+        return """我基于DaoyouCode的18大核心系统，拥有以下能力：
+
+**核心功能**
+• 智能代码编辑和重构
+• 多Agent协作（6个专业Agent）
+• 完整的记忆系统
+• 智能任务路由
+• 权限控制（100+规则）
+• 4级验证机制
+
+**工具系统**
+• 25个专业工具
+• LSP集成
+• Git操作
+• 文件管理
+• 代码搜索
+
+目前CLI功能正在集成中，敬请期待！"""
+    
+    elif "代码" in user_input or "code" in user_input.lower():
+        return """当然！我可以帮你编写代码。例如：
+
+```python
+def hello_world():
+    \"\"\"一个简单的示例函数\"\"\"
+    print("Hello, DaoyouCode!")
+    return "Success"
+
+# 调用函数
+hello_world()
+```
+
+请告诉我你需要什么样的代码，我会为你生成！"""
+    
+    else:
+        return f"收到你的消息：「{user_input}」\n\n目前我还在学习中，完整的AI对话功能即将上线！\n\n💡 提示：输入 /help 查看可用命令"
+
+
+def initialize_agents(model: str) -> bool:
+    """
+    初始化Agent系统
+    
+    Returns:
+        True: Agent初始化成功
+        False: Agent初始化失败，使用模拟模式
+    """
+    from cli.ui.console import console
+    
+    try:
+        # 1. 配置LLM客户端
+        from daoyoucode.agents.llm.client_manager import get_client_manager
+        from daoyoucode.agents.llm.config_loader import auto_configure
+        
+        client_manager = get_client_manager()
+        auto_configure(client_manager)
+        
+        # 检查是否有可用的提供商
+        if not client_manager.provider_configs:
+            console.print("[yellow]⚠ 未配置LLM提供商，使用模拟模式[/yellow]")
+            console.print("[dim]请配置 backend/config/llm_config.yaml[/dim]")
+            return False
+        
+        # 2. 导入Agent系统
+        from daoyoucode.agents.core.agent import (
+            get_agent_registry,
+            register_agent,
+            BaseAgent,
+            AgentConfig
+        )
+        
+        # 3. 检查是否已有Agent
+        registry = get_agent_registry()
+        if "MainAgent" in registry.list_agents():
+            console.print("[dim]✓ Agent系统已就绪[/dim]")
+            return True
+        
+        # 创建并注册MainAgent
+        config = AgentConfig(
+            name="MainAgent",
+            description="主对话Agent，负责处理用户交互",
+            model=model,
+            temperature=0.7,
+            system_prompt="""你是DaoyouCode AI助手，基于18大核心系统。
+
+你的能力：
+- 智能代码编写和重构
+- 多Agent协作
+- 完整的记忆系统
+- 智能任务路由
+- 权限控制
+- 4级验证机制
+- **可以主动调用工具来理解项目代码**
+
+你的风格：
+- 专业但友好
+- 简洁而清晰
+- 注重实用性
+- 提供可运行的代码
+
+当前项目：DaoyouCode
+- 位置: backend/
+- 核心模块: daoyoucode/agents/
+- CLI工具: cli/
+- 配置: config/
+
+可用工具（你可以主动调用）：
+1. **repo_map** - 生成智能代码地图
+   - 自动分析项目结构
+   - PageRank排序最相关的代码
+   - 当用户问"项目结构"、"有哪些模块"时使用
+
+2. **get_repo_structure** - 获取目录树
+   - 显示文件和目录结构
+   - 当用户问"目录结构"、"文件列表"时使用
+
+3. **read_file** - 读取文件内容
+   - 读取具体文件
+   - 当需要查看代码细节时使用
+
+4. **search_files** - 搜索文件
+   - 按文件名搜索
+   - 当用户问"哪个文件"时使用
+
+5. **grep_search** - 搜索代码
+   - 在代码中搜索关键词
+   - 当用户问"在哪里实现"时使用
+
+重要提示：
+1. 当用户询问项目相关问题时，**主动调用工具**获取信息
+2. 不要说"我需要查看文件"，而是直接调用工具
+3. 例如：
+   - 用户："这个项目的结构是什么？"
+   - 你：调用 repo_map 工具 → 基于结果回答
+   
+   - 用户："Agent系统在哪里实现的？"
+   - 你：调用 search_files("agent") → 找到文件 → 调用 read_file → 回答
+
+4. 系统已自动加载项目的关键文档（README、STRUCTURE等）
+5. 用户也可以通过 /add 命令手动添加文件
+
+用户命令：
+- /add <文件路径> - 添加文件到上下文
+- /files - 查看已加载的文件
+- /drop <文件路径> - 移除文件
+
+请主动使用工具，帮助用户理解和改进代码。"""
+        )
+        
+        agent = BaseAgent(config)
+        register_agent(agent)
+        
+        console.print("[dim]✓ Agent系统初始化完成[/dim]")
+        return True
+        
+    except Exception as e:
+        console.print(f"[yellow]⚠ Agent初始化失败，使用模拟模式[/yellow]")
+        console.print(f"[dim]原因: {str(e)[:100]}[/dim]")
+        return False
+
+
+def handle_chat_with_agent(user_input: str, context: dict) -> str:
+    """使用真实Agent处理对话 - 通过Skill系统"""
+    from cli.ui.console import console
+    import asyncio
+    
+    try:
+        # 准备上下文
+        agent_context = {
+            "session_id": context.get("session_id", "default"),
+            "files": context.get("files", []),
+            "repo": context.get("repo", "."),
+            "conversation_history": context.get("history", [])[-3:]  # 最近3轮
+        }
+        
+        # 如果有文件内容，添加到上下文
+        if "file_contents" in context and context["file_contents"]:
+            agent_context["file_contents"] = context["file_contents"]
+            
+            # 构建文件信息
+            file_info = "\n\n已加载的文件:\n"
+            for filepath, content in context["file_contents"].items():
+                lines = len(content.splitlines())
+                file_info += f"\n--- {filepath} ({lines} 行) ---\n{content}\n"
+            
+            # 将文件信息添加到用户输入前
+            user_input = file_info + "\n\n用户问题: " + user_input
+        
+        # 显示思考动画
+        with console.status("[bold blue]AI正在思考...[/bold blue]", spinner="dots"):
+            # 使用 get_event_loop 而不是 run 来避免 event loop closed 问题
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # 通过Skill系统执行（正确的架构）
+            from daoyoucode.agents.executor import execute_skill
+            
+            result = loop.run_until_complete(execute_skill(
+                skill_name="chat_assistant",  # 使用chat_assistant Skill
+                user_input=user_input,
+                session_id=agent_context["session_id"],
+                context=agent_context
+            ))
+        
+        # 检查结果
+        if result.get('success'):
+            return result.get('content', '')
+        else:
+            error_msg = result.get('error', '未知错误')
+            console.print(f"[yellow]⚠ 执行失败: {error_msg}[/yellow]")
+            return generate_mock_response(user_input, context)
+    
+    except Exception as e:
+        console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
+        return generate_mock_response(user_input, context)

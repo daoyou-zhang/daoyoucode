@@ -1,0 +1,48 @@
+# LLM API 配置
+# 请填入你的API密钥
+
+providers:
+  # 通义千问 (阿里云)
+  qwen:
+    api_key: "sk-d2971f2015574377bdf97046b1a03b87"  # 替换为你的API密钥
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    models:
+      - qwen-max
+      - qwen-plus
+      - qwen-turbo
+      - qwen-coder-plus
+    enabled: true
+  
+  # DeepSeek
+  deepseek:
+    api_key: "your-deepseek-api-key-here"  # 替换为你的API密钥
+    base_url: "https://api.deepseek.com/v1"
+    models:
+      - deepseek-chat
+      - deepseek-coder
+    enabled: false
+  
+  # OpenAI
+  openai:
+    api_key: "your-openai-api-key-here"  # 替换为你的API密钥
+    base_url: "https://api.openai.com/v1"
+    models:
+      - gpt-4
+      - gpt-3.5-turbo
+    enabled: false
+  
+  # Claude (Anthropic)
+  anthropic:
+    api_key: "your-anthropic-api-key-here"  # 替换为你的API密钥
+    base_url: "https://api.anthropic.com/v1"
+    models:
+      - claude-3-opus
+      - claude-3-sonnet
+    enabled: false
+
+# 默认配置
+default:
+  model: "qwen-turbo"
+  temperature: 0.7
+  max_tokens: 4000
+  timeout: 60
