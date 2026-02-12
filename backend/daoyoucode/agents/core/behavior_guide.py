@@ -24,6 +24,7 @@ class Phase(Enum):
 
 class RequestType(Enum):
     """请求类型"""
+    CHAT = "chat"                    # 闲聊（非代码相关）
     SKILL_MATCH = "skill_match"      # 匹配Skill
     TRIVIAL = "trivial"              # 简单任务
     EXPLICIT = "explicit"            # 明确任务
@@ -56,6 +57,7 @@ class BehaviorGuide:
                 '检查是否需要澄清',
             ],
             'decision_rules': {
+                RequestType.CHAT: 'respond_directly',  # 闲聊直接回复
                 RequestType.SKILL_MATCH: 'invoke_skill_immediately',
                 RequestType.TRIVIAL: 'use_direct_tools',
                 RequestType.EXPLICIT: 'execute_directly',
@@ -158,6 +160,58 @@ class BehaviorGuide:
         """
         instruction_lower = instruction.lower()
         
+        # 首先检查是否是闲聊（非代码相关）
+        chat_patterns = [
+            # 问候
+            'hello', 'hi', 'hey', '你好', '您好', '嗨',
+            # 感谢
+            'thank', 'thanks', '谢谢', '感谢',
+            # 闲聊
+            'how are you', 'what\'s up', '怎么样', '最近如何',
+            # 天气
+            'weather', '天气',
+            # 时间
+            'what time', 'what day', '几点', '星期几',
+            # 非技术问题
+            'tell me about yourself', '介绍一下', '你是谁',
+            'what can you do', '你能做什么', '你会什么',
+            # 情感
+            'i love', 'i hate', 'i like', '我喜欢', '我讨厌',
+        ]
+        
+        # 代码相关关键词
+        code_keywords = [
+            'code', 'function', 'class', 'file', 'bug', 'error',
+            'test', 'debug', 'refactor', 'implement', 'fix',
+            'analyze', 'review', 'optimize', 'deploy',
+            '代码', '函数', '类', '文件', '错误', '测试',
+            '调试', '重构', '实现', '修复', '分析', '优化',
+            '.py', '.js', '.ts', '.java', '.cpp', '.go',
+        ]
+        
+        # 检查是否包含代码关键词
+        has_code_keywords = any(keyword in instruction_lower for keyword in code_keywords)
+        
+        # 检查是否是纯闲聊
+        is_chat = any(pattern in instruction_lower for pattern in chat_patterns)
+        
+        # 如果是闲聊且没有代码关键词，判定为闲聊
+        if is_chat and not has_code_keywords:
+            return RequestType.CHAT
+        
+        # 如果指令很短且没有代码关键词，可能是闲聊
+        if len(instruction) < 30 and not has_code_keywords:
+            # 进一步检查是否包含疑问词
+            question_words = ['what', 'how', 'why', 'when', 'where', 'who',
+                            '什么', '怎么', '为什么', '何时', '哪里', '谁']
+            has_question = any(word in instruction_lower for word in question_words)
+            
+            # 如果有疑问词但没有代码关键词，可能是闲聊
+            if has_question and not has_code_keywords:
+                return RequestType.CHAT
+        
+        # 以下是代码相关的分类
+        
         # 检查GitHub工作模式
         github_patterns = [
             'look into',
@@ -179,7 +233,7 @@ class BehaviorGuide:
             '查找',
             '搜索',
         ]
-        if any(pattern in instruction_lower for pattern in exploratory_patterns):
+        if any(pattern in instruction_lower for pattern in exploratory_patterns) and has_code_keywords:
             return RequestType.EXPLORATORY
         
         # 检查开放性任务
@@ -206,8 +260,17 @@ class BehaviorGuide:
         if any(pattern in instruction_lower for pattern in explicit_patterns):
             return RequestType.EXPLICIT
         
-        # 检查简单任务
-        if len(instruction) < 50:
+        # 检查简单任务（代码相关的简单操作）
+        trivial_patterns = [
+            'add comment', 'remove comment', '添加注释', '删除注释',
+            'rename', '重命名',
+            'format', '格式化',
+        ]
+        if any(pattern in instruction_lower for pattern in trivial_patterns):
+            return RequestType.TRIVIAL
+        
+        # 检查简单任务（指令短且有代码关键词）
+        if len(instruction) < 50 and has_code_keywords:
             return RequestType.TRIVIAL
         
         # 默认为模糊任务
@@ -218,6 +281,89 @@ class BehaviorGuide:
         """获取请求类型对应的行动"""
         phase_guide = cls.get_phase_guide(Phase.INTENT_GATE)
         return phase_guide['decision_rules'].get(request_type, 'ask_clarification')
+    
+    @classmethod
+    def get_action(cls, request_type: RequestType) -> Dict[str, Any]:
+        """
+        获取请求类型的详细行动指南
+        
+        Returns:
+            {
+                'action': str,           # 行动类型
+                'description': str,      # 描述
+                'skip_steps': List[str], # 可以跳过的步骤
+                'required_steps': List[str], # 必须的步骤
+            }
+        """
+        action_guides = {
+            RequestType.CHAT: {
+                'action': 'respond_directly',
+                'description': '这是闲聊，直接回复即可',
+                'skip_steps': [
+                    '代码库评估',
+                    '智能上下文选择',
+                    '执行规划',
+                    '权限检查',
+                    '独立验证',
+                ],
+                'required_steps': [
+                    '记忆加载（了解用户历史）',
+                    '直接回复',
+                ],
+                'use_simple_flow': True,
+            },
+            RequestType.SKILL_MATCH: {
+                'action': 'invoke_skill_immediately',
+                'description': '匹配到Skill，立即调用',
+                'skip_steps': ['智能路由'],
+                'required_steps': ['执行Skill'],
+                'use_simple_flow': False,
+            },
+            RequestType.TRIVIAL: {
+                'action': 'use_direct_tools',
+                'description': '简单任务，直接使用工具',
+                'skip_steps': ['执行规划', '代码库评估'],
+                'required_steps': ['权限检查', '执行工具'],
+                'use_simple_flow': False,
+            },
+            RequestType.EXPLICIT: {
+                'action': 'execute_directly',
+                'description': '明确任务，直接执行',
+                'skip_steps': ['代码库评估'],
+                'required_steps': ['权限检查', '执行', '验证'],
+                'use_simple_flow': False,
+            },
+            RequestType.EXPLORATORY: {
+                'action': 'fire_explore_parallel',
+                'description': '探索性任务，并行探索',
+                'skip_steps': [],
+                'required_steps': ['并行探索', '结果聚合'],
+                'use_simple_flow': False,
+            },
+            RequestType.OPEN_ENDED: {
+                'action': 'assess_codebase_first',
+                'description': '开放性任务，先评估代码库',
+                'skip_steps': [],
+                'required_steps': ['代码库评估', '执行规划', '执行', '验证'],
+                'use_simple_flow': False,
+            },
+            RequestType.GITHUB_WORK: {
+                'action': 'full_cycle_workflow',
+                'description': 'GitHub工作，完整流程',
+                'skip_steps': [],
+                'required_steps': ['所有步骤'],
+                'use_simple_flow': False,
+            },
+            RequestType.AMBIGUOUS: {
+                'action': 'ask_clarification',
+                'description': '模糊任务，需要澄清',
+                'skip_steps': ['所有执行步骤'],
+                'required_steps': ['澄清问题'],
+                'use_simple_flow': True,
+            },
+        }
+        
+        return action_guides.get(request_type, action_guides[RequestType.AMBIGUOUS])
     
     @classmethod
     def should_ask_clarification(

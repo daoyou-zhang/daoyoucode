@@ -65,23 +65,7 @@
 
 ---
 
-#### 5. [INTELLIGENCE_FEATURES_COMPLETE.md](./INTELLIGENCE_FEATURES_COMPLETE.md) - 智能化功能
-**推荐** ⭐⭐⭐⭐
-
-7个智能化系统详解，包括：
-- ModelSelector - 智能模型选择
-- ContextSelector - 智能上下文选择
-- DelegationManager - 结构化委托
-- BehaviorGuide - Agent行为指南
-- CodebaseAssessor - 代码库评估
-- ParallelExecutor - 并行执行
-- SessionManager - 会话管理
-
-**适合**: AI工程师、算法工程师
-
----
-
-#### 6. [VERIFICATION_PERMISSION_COMPLETE.md](./VERIFICATION_PERMISSION_COMPLETE.md) - 验证与权限
+#### 5. [VERIFICATION_PERMISSION_COMPLETE.md](./VERIFICATION_PERMISSION_COMPLETE.md) - 验证与权限
 **推荐** ⭐⭐⭐⭐
 
 最终优化功能详解，包括：
@@ -92,29 +76,55 @@
 
 ---
 
-### 📖 参考文档
+### 🔧 工具文档
 
-#### 7. [INTEGRATION_EXAMPLE.md](./INTEGRATION_EXAMPLE.md) - 集成示例
-**实用** ⭐⭐⭐
+#### 6. [TOOLS_SYSTEM_COMPLETE.md](./TOOLS_SYSTEM_COMPLETE.md) - 工具系统
+**推荐** ⭐⭐⭐⭐
 
-完整的集成示例，包括：
-- 智能化功能集成
-- 完整流程示例
-- 最佳实践
+工具系统总结，包括：
+- 17个已实现工具
+- 三系统深度对比
+- 工具注册表和Function Calling
 
-**适合**: 集成工程师、应用开发者
+**适合**: 工具开发者、集成工程师
 
 ---
 
-#### 8. [FINAL_COMPARISON_2025.md](./FINAL_COMPARISON_2025.md) - 深度对比
-**参考** ⭐⭐⭐
+#### 7. [DIFF_SYSTEM_COMPLETE.md](./DIFF_SYSTEM_COMPLETE.md) - Diff系统
+**推荐** ⭐⭐⭐⭐
 
-与其他项目的深度对比，包括：
-- 与opencode、oh-my-opencode、daoyouCodePilot的对比
-- 优劣势分析
-- 评分对比
+Diff系统详解，包括：
+- 9种Replacer策略
+- Levenshtein距离算法
+- BlockAnchorReplacer（最强大）
 
-**适合**: 技术选型、竞品分析
+**适合**: 编辑器开发者、算法工程师
+
+---
+
+#### 8. [REPOMAP_SYSTEM_COMPLETE.md](./REPOMAP_SYSTEM_COMPLETE.md) - RepoMap系统
+**推荐** ⭐⭐⭐⭐
+
+RepoMap系统详解，包括：
+- PageRank排序算法
+- 个性化权重系统
+- SQLite缓存机制
+
+**适合**: 代码分析、上下文管理
+
+---
+
+### 📖 扩展文档
+
+#### 9. [SKILL_EXTENSION_GUIDE.md](./SKILL_EXTENSION_GUIDE.md) - Skill扩展指南
+**实用** ⭐⭐⭐
+
+Skill扩展指南，包括：
+- Skill系统设计
+- 扩展示例（NovelWriterAgent）
+- 最佳实践
+
+**适合**: Skill开发者、业务扩展
 
 ---
 
@@ -132,14 +142,14 @@
 1. **架构设计** → [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md)
 2. **调用流程** → [AGENT_WORKFLOW.md](./AGENT_WORKFLOW.md)
 3. **高级功能** → [ADVANCED_FEATURES_COMPLETE.md](./ADVANCED_FEATURES_COMPLETE.md)
-4. **智能化功能** → [INTELLIGENCE_FEATURES_COMPLETE.md](./INTELLIGENCE_FEATURES_COMPLETE.md)
-5. **验证与权限** → [VERIFICATION_PERMISSION_COMPLETE.md](./VERIFICATION_PERMISSION_COMPLETE.md)
+4. **验证与权限** → [VERIFICATION_PERMISSION_COMPLETE.md](./VERIFICATION_PERMISSION_COMPLETE.md)
+5. **工具系统** → [TOOLS_SYSTEM_COMPLETE.md](./TOOLS_SYSTEM_COMPLETE.md)
 
 ### 架构师路线
 
 1. **架构总览** → [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md)
 2. **优化总结** → [ALL_OPTIMIZATIONS_COMPLETE.md](./ALL_OPTIMIZATIONS_COMPLETE.md)
-3. **深度对比** → [FINAL_COMPARISON_2025.md](./FINAL_COMPARISON_2025.md)
+3. **工具系统** → [TOOLS_SYSTEM_COMPLETE.md](./TOOLS_SYSTEM_COMPLETE.md)
 4. **所有功能文档** → 深入了解每个系统
 
 ---

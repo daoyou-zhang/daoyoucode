@@ -161,6 +161,14 @@ def test_delegation_prompt_validate():
 
 def test_behavior_guide_classify_request():
     """测试请求分类"""
+    # 测试闲聊
+    assert BehaviorGuide.classify_request("你好") == RequestType.CHAT
+    assert BehaviorGuide.classify_request("Hello") == RequestType.CHAT
+    assert BehaviorGuide.classify_request("How are you?") == RequestType.CHAT
+    assert BehaviorGuide.classify_request("谢谢") == RequestType.CHAT
+    assert BehaviorGuide.classify_request("今天天气怎么样？") == RequestType.CHAT
+    
+    # 测试代码相关
     assert BehaviorGuide.classify_request("添加注释") == RequestType.TRIVIAL
     assert BehaviorGuide.classify_request("如何实现认证功能") == RequestType.EXPLORATORY
     assert BehaviorGuide.classify_request("重构整个系统") == RequestType.OPEN_ENDED
@@ -169,6 +177,13 @@ def test_behavior_guide_classify_request():
 
 def test_behavior_guide_get_action():
     """测试获取行动"""
+    # 测试闲聊
+    action = BehaviorGuide.get_action(RequestType.CHAT)
+    assert action['action'] == 'respond_directly'
+    assert action['use_simple_flow'] is True
+    assert '代码库评估' in action['skip_steps']
+    
+    # 测试代码任务
     action = BehaviorGuide.get_action_for_request(RequestType.TRIVIAL)
     assert action == 'use_direct_tools'
     

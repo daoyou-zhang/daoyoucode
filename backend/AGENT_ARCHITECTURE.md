@@ -595,6 +595,7 @@ result = await manager.verify(
 
 ### 6.1 核心文档
 
+- `AGENT_README.md` - 文档导航（推荐起点）
 - `AGENT_ARCHITECTURE.md` - 架构文档（本文档）
 - `AGENT_WORKFLOW.md` - 调用流程文档
 - `ALL_OPTIMIZATIONS_COMPLETE.md` - 完整优化总结
@@ -602,10 +603,17 @@ result = await manager.verify(
 ### 6.2 功能文档
 
 - `ADVANCED_FEATURES_COMPLETE.md` - 高级功能（Hook、权限、ReAct）
-- `INTELLIGENCE_FEATURES_COMPLETE.md` - 智能化功能（7个系统）
 - `VERIFICATION_PERMISSION_COMPLETE.md` - 验证与权限
-- `INTEGRATION_EXAMPLE.md` - 集成示例
-- `FINAL_COMPARISON_2025.md` - 深度对比分析
+
+### 6.3 工具文档
+
+- `TOOLS_SYSTEM_COMPLETE.md` - 工具系统总结
+- `DIFF_SYSTEM_COMPLETE.md` - Diff系统详解
+- `REPOMAP_SYSTEM_COMPLETE.md` - RepoMap系统详解
+
+### 6.4 扩展文档
+
+- `SKILL_EXTENSION_GUIDE.md` - Skill扩展指南
 
 ---
 
