@@ -82,52 +82,130 @@ class PermissionManager:
     
     def _init_default_permissions(self):
         """初始化默认权限"""
-        # 读取权限
+        # 读取权限（灵感来自opencode）
         read_category = PermissionCategory("read", default_action="allow")
         read_category.add_rule("*", "allow", priority=1000)
+        # 敏感文件需要确认
         read_category.add_rule("*.env", "ask", priority=10, reason="敏感文件")
         read_category.add_rule("*.env.*", "ask", priority=10, reason="敏感文件")
-        read_category.add_rule("*.env.example", "allow", priority=5)
+        read_category.add_rule("*.env.example", "allow", priority=5)  # 示例文件可以读取
+        read_category.add_rule("*.env.local", "ask", priority=8, reason="本地环境变量")
+        read_category.add_rule("*.env.production", "ask", priority=5, reason="生产环境变量")
         read_category.add_rule("*.key", "ask", priority=10, reason="密钥文件")
         read_category.add_rule("*.pem", "ask", priority=10, reason="证书文件")
+        read_category.add_rule("*.crt", "ask", priority=10, reason="证书文件")
+        read_category.add_rule("*.p12", "ask", priority=10, reason="证书文件")
         read_category.add_rule("*secret*", "ask", priority=20, reason="可能包含敏感信息")
         read_category.add_rule("*password*", "ask", priority=20, reason="可能包含密码")
+        read_category.add_rule("*token*", "ask", priority=20, reason="可能包含令牌")
+        read_category.add_rule("*credential*", "ask", priority=20, reason="可能包含凭证")
+        read_category.add_rule(".git/config", "ask", priority=15, reason="Git配置")
+        read_category.add_rule(".ssh/*", "ask", priority=10, reason="SSH密钥")
         self.categories["read"] = read_category
         
-        # 写入权限
+        # 写入权限（更细粒度）
         write_category = PermissionCategory("write", default_action="ask")
+        # 允许写入常见代码文件
         write_category.add_rule("*.py", "allow", priority=100)
         write_category.add_rule("*.js", "allow", priority=100)
         write_category.add_rule("*.ts", "allow", priority=100)
+        write_category.add_rule("*.jsx", "allow", priority=100)
+        write_category.add_rule("*.tsx", "allow", priority=100)
+        write_category.add_rule("*.java", "allow", priority=100)
+        write_category.add_rule("*.cpp", "allow", priority=100)
+        write_category.add_rule("*.c", "allow", priority=100)
+        write_category.add_rule("*.h", "allow", priority=100)
+        write_category.add_rule("*.go", "allow", priority=100)
+        write_category.add_rule("*.rs", "allow", priority=100)
         write_category.add_rule("*.md", "allow", priority=100)
         write_category.add_rule("*.txt", "allow", priority=100)
         write_category.add_rule("*.json", "allow", priority=100)
         write_category.add_rule("*.yaml", "allow", priority=100)
         write_category.add_rule("*.yml", "allow", priority=100)
+        write_category.add_rule("*.toml", "allow", priority=100)
+        write_category.add_rule("*.ini", "allow", priority=100)
+        write_category.add_rule("*.cfg", "allow", priority=100)
+        # 禁止写入敏感文件
         write_category.add_rule("*.env", "deny", priority=10, reason="禁止修改环境变量文件")
+        write_category.add_rule("*.env.*", "ask", priority=15, reason="环境变量文件需要确认")
+        write_category.add_rule("*.env.example", "allow", priority=5)  # 示例文件可以修改
         write_category.add_rule("*.key", "deny", priority=10, reason="禁止修改密钥文件")
         write_category.add_rule("*.pem", "deny", priority=10, reason="禁止修改证书文件")
+        write_category.add_rule("*.crt", "deny", priority=10, reason="禁止修改证书文件")
+        write_category.add_rule(".git/*", "deny", priority=10, reason="禁止直接修改Git目录")
+        write_category.add_rule(".gitignore", "allow", priority=5)  # 但允许修改.gitignore
+        write_category.add_rule("package-lock.json", "ask", priority=20, reason="锁文件需要确认")
+        write_category.add_rule("yarn.lock", "ask", priority=20, reason="锁文件需要确认")
+        write_category.add_rule("Pipfile.lock", "ask", priority=20, reason="锁文件需要确认")
+        write_category.add_rule("poetry.lock", "ask", priority=20, reason="锁文件需要确认")
         self.categories["write"] = write_category
         
-        # 删除权限
+        # 删除权限（更细粒度）
         delete_category = PermissionCategory("delete", default_action="ask")
+        # 允许删除临时文件
         delete_category.add_rule("*.pyc", "allow", priority=100)
         delete_category.add_rule("__pycache__/*", "allow", priority=100)
         delete_category.add_rule("*.log", "allow", priority=100)
         delete_category.add_rule("*.tmp", "allow", priority=100)
+        delete_category.add_rule("*.temp", "allow", priority=100)
+        delete_category.add_rule("*.cache", "allow", priority=100)
+        delete_category.add_rule(".DS_Store", "allow", priority=100)
+        delete_category.add_rule("Thumbs.db", "allow", priority=100)
+        delete_category.add_rule("node_modules/*", "ask", priority=50, reason="依赖目录")
+        delete_category.add_rule("dist/*", "allow", priority=100)
+        delete_category.add_rule("build/*", "allow", priority=100)
+        # 禁止删除重要文件
         delete_category.add_rule("*.env", "deny", priority=10, reason="禁止删除环境变量文件")
         delete_category.add_rule("*.key", "deny", priority=10, reason="禁止删除密钥文件")
+        delete_category.add_rule("*.pem", "deny", priority=10, reason="禁止删除证书文件")
+        delete_category.add_rule(".git/*", "deny", priority=10, reason="禁止删除Git目录")
+        delete_category.add_rule("package.json", "deny", priority=10, reason="禁止删除包配置")
+        delete_category.add_rule("requirements.txt", "deny", priority=10, reason="禁止删除依赖文件")
+        delete_category.add_rule("Pipfile", "deny", priority=10, reason="禁止删除依赖文件")
+        delete_category.add_rule("pyproject.toml", "deny", priority=10, reason="禁止删除项目配置")
         self.categories["delete"] = delete_category
         
-        # 执行权限
+        # 执行权限（更细粒度）
         execute_category = PermissionCategory("execute", default_action="ask")
+        # 允许常见的安全命令
         execute_category.add_rule("git *", "allow", priority=100)
         execute_category.add_rule("python *", "allow", priority=100)
+        execute_category.add_rule("python3 *", "allow", priority=100)
         execute_category.add_rule("pip *", "allow", priority=100)
+        execute_category.add_rule("pip3 *", "allow", priority=100)
         execute_category.add_rule("npm *", "allow", priority=100)
+        execute_category.add_rule("yarn *", "allow", priority=100)
+        execute_category.add_rule("pnpm *", "allow", priority=100)
+        execute_category.add_rule("node *", "allow", priority=100)
+        execute_category.add_rule("cargo *", "allow", priority=100)
+        execute_category.add_rule("go *", "allow", priority=100)
+        execute_category.add_rule("make *", "allow", priority=100)
+        execute_category.add_rule("cmake *", "allow", priority=100)
+        execute_category.add_rule("ls *", "allow", priority=100)
+        execute_category.add_rule("cat *", "allow", priority=100)
+        execute_category.add_rule("grep *", "allow", priority=100)
+        execute_category.add_rule("find *", "allow", priority=100)
+        execute_category.add_rule("echo *", "allow", priority=100)
+        # 危险命令需要确认或禁止
         execute_category.add_rule("rm -rf *", "deny", priority=10, reason="危险命令")
         execute_category.add_rule("rm -rf /*", "deny", priority=5, reason="极度危险")
+        execute_category.add_rule("rm -rf .*", "deny", priority=8, reason="删除隐藏文件")
+        execute_category.add_rule("rm *", "ask", priority=50, reason="删除命令需要确认")
         execute_category.add_rule("sudo *", "ask", priority=20, reason="需要管理员权限")
+        execute_category.add_rule("su *", "ask", priority=20, reason="切换用户")
+        execute_category.add_rule("chmod *", "ask", priority=30, reason="修改权限")
+        execute_category.add_rule("chown *", "ask", priority=30, reason="修改所有者")
+        execute_category.add_rule("dd *", "deny", priority=10, reason="危险的磁盘操作")
+        execute_category.add_rule("mkfs*", "deny", priority=10, reason="格式化磁盘")
+        execute_category.add_rule("fdisk *", "deny", priority=10, reason="磁盘分区")
+        execute_category.add_rule("curl *", "ask", priority=50, reason="网络请求")
+        execute_category.add_rule("wget *", "ask", priority=50, reason="网络下载")
+        execute_category.add_rule("ssh *", "ask", priority=30, reason="远程连接")
+        execute_category.add_rule("scp *", "ask", priority=30, reason="远程复制")
+        execute_category.add_rule("rsync *", "ask", priority=30, reason="远程同步")
+        # 防止无限循环
+        execute_category.add_rule("while true*", "deny", priority=10, reason="无限循环")
+        execute_category.add_rule(":(){ :|:& };:", "deny", priority=5, reason="Fork炸弹")
         self.categories["execute"] = execute_category
         
         # 外部目录访问权限
