@@ -41,6 +41,10 @@ class BaseAgent(ABC):
         self.config = config
         self.name = config.name
         self.logger = logging.getLogger(f"agent.{self.name}")
+        
+        # 接入记忆模块（单例，不会重复加载）
+        from ..memory import get_memory_manager
+        self.memory = get_memory_manager()
     
     async def execute(
         self,
@@ -68,16 +72,40 @@ class BaseAgent(ABC):
         if context is None:
             context = {}
         
+        # 提取session_id和user_id
+        session_id = context.get('session_id', 'default')
+        user_id = context.get('user_id', session_id)
+        
         tools_used = []
         
         try:
-            # 1. 加载Prompt
+            # ========== 1. 获取记忆 ==========
+            
+            # 1.1 对话历史（LLM层记忆）
+            history = self.memory.get_conversation_history(session_id, limit=3)
+            if history:
+                context['conversation_history'] = history
+                self.logger.debug(f"加载了 {len(history)} 轮对话历史")
+            
+            # 1.2 用户偏好（Agent层记忆）
+            prefs = self.memory.get_preferences(user_id)
+            if prefs:
+                context['user_preferences'] = prefs
+                self.logger.debug(f"加载了用户偏好: {list(prefs.keys())}")
+            
+            # 1.3 任务历史（Agent层记忆）
+            task_history = self.memory.get_task_history(user_id, limit=5)
+            if task_history:
+                context['recent_tasks'] = task_history
+                self.logger.debug(f"加载了 {len(task_history)} 个最近任务")
+            
+            # ========== 2. 加载Prompt ==========
             prompt = await self._load_prompt(prompt_source, context)
             
-            # 2. 渲染Prompt
+            # ========== 3. 渲染Prompt ==========
             full_prompt = self._render_prompt(prompt, user_input, context)
             
-            # 3. 如果有工具，进入工具调用循环
+            # ========== 4. 调用LLM ==========
             if tools:
                 response, tools_used = await self._call_llm_with_tools(
                     full_prompt,
@@ -86,8 +114,33 @@ class BaseAgent(ABC):
                     max_tool_iterations
                 )
             else:
-                # 4. 无工具，直接调用LLM
                 response = await self._call_llm(full_prompt, llm_config)
+            
+            # ========== 5. 保存到记忆 ==========
+            
+            # 5.1 保存对话（LLM层记忆）
+            self.memory.add_conversation(
+                session_id,
+                user_input,
+                response,
+                metadata={'agent': self.name}
+            )
+            
+            # 5.2 保存任务（Agent层记忆）
+            self.memory.add_task(user_id, {
+                'agent': self.name,
+                'input': user_input[:200],  # 限制长度
+                'result': response[:200],   # 限制长度
+                'success': True,
+                'tools_used': tools_used
+            })
+            
+            # 5.3 学习用户偏好（Agent层记忆）
+            # 例如：如果用户经常问Python问题，记住这个偏好
+            if 'python' in user_input.lower():
+                self.memory.remember_preference(user_id, 'preferred_language', 'python')
+            elif 'javascript' in user_input.lower() or 'js' in user_input.lower():
+                self.memory.remember_preference(user_id, 'preferred_language', 'javascript')
             
             return AgentResult(
                 success=True,
@@ -98,6 +151,15 @@ class BaseAgent(ABC):
         
         except Exception as e:
             self.logger.error(f"执行失败: {e}", exc_info=True)
+            
+            # 失败也记录到任务历史
+            self.memory.add_task(user_id, {
+                'agent': self.name,
+                'input': user_input[:200],
+                'error': str(e)[:200],
+                'success': False
+            })
+            
             return AgentResult(
                 success=False,
                 content="",

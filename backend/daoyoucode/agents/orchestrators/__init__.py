@@ -10,6 +10,7 @@ from .multi_agent import MultiAgentOrchestrator
 from .workflow import WorkflowOrchestrator
 from .conditional import ConditionalOrchestrator
 from .parallel import ParallelOrchestrator
+from .parallel_explore import ParallelExploreOrchestrator
 
 
 def register_builtin_orchestrators():
@@ -19,6 +20,7 @@ def register_builtin_orchestrators():
     register_orchestrator('workflow', WorkflowOrchestrator)
     register_orchestrator('conditional', ConditionalOrchestrator)
     register_orchestrator('parallel', ParallelOrchestrator)
+    register_orchestrator('parallel_explore', ParallelExploreOrchestrator)
 
 
 # 自动注册
@@ -31,5 +33,6 @@ __all__ = [
     'WorkflowOrchestrator',
     'ConditionalOrchestrator',
     'ParallelOrchestrator',
+    'ParallelExploreOrchestrator',
     'register_builtin_orchestrators',
 ]

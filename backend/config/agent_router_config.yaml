@@ -1,0 +1,72 @@
+# Agent路由配置
+# 定义每个Agent的关键词，用于智能路由
+
+agent_domains:
+  # 测试相关
+  test_writer:
+    - 测试
+    - test
+    - 用例
+    - 单元测试
+    - 集成测试
+  
+  # 文档相关
+  doc_writer:
+    - 文档
+    - 说明
+    - readme
+    - api
+    - 注释
+    - 文档化
+  
+  # 调试相关
+  debugger:
+    - 调试
+    - bug
+    - 错误
+    - 修复
+    - 问题
+    - 异常
+  
+  # 代码审查
+  code_reviewer:
+    - 审查
+    - 检查
+    - 优化
+    - 改进
+    - 重构
+    - review
+  
+  # 代码编写
+  code_writer:
+    - 编写
+    - 生成
+    - 创建
+    - 实现
+    - 写
+    - hello
+    - world
+  
+  # 代码分析
+  code_analyzer:
+    - 分析
+    - 结构
+    - 查看
+    - 理解
+    - 架构
+  
+  # 示例：添加新的Agent
+  # data_scientist:
+  #   - 数据
+  #   - 分析
+  #   - 统计
+  #   - 机器学习
+  #   - 模型
+  #   - 训练
+  
+  # security_expert:
+  #   - 安全
+  #   - 漏洞
+  #   - 加密
+  #   - 权限
+  #   - 认证

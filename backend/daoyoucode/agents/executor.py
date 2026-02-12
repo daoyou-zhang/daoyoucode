@@ -11,6 +11,7 @@ from .core.skill import get_skill_loader
 from .core.orchestrator import get_orchestrator
 from .core.hook import get_hook_manager, HookContext
 from .core.recovery import RecoveryManager, RecoveryConfig
+from .core.task import get_task_manager, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ async def _execute_skill_internal(
     """
     session_id = context.get('session_id')
     
+    # 获取任务管理器
+    task_manager = get_task_manager()
+    
     # 创建Hook上下文
     hook_context = HookContext(
         skill_name=skill_name,
@@ -89,6 +93,9 @@ async def _execute_skill_internal(
     
     # 获取Hook管理器
     hook_manager = get_hook_manager()
+    
+    # 创建任务（先不知道编排器）
+    task = None
     
     try:
         # 1. 运行before hooks
@@ -123,29 +130,74 @@ async def _execute_skill_internal(
             }
             return await hook_manager.run_after_hooks(hook_context, error_result)
         
-        # 4. 执行
+        # 4. 创建任务
+        task = task_manager.create_task(
+            description=user_input[:200],  # 限制长度
+            orchestrator=skill.orchestrator,
+            agent=skill.agent,
+            metadata={
+                'skill_name': skill_name,
+                'session_id': session_id
+            }
+        )
+        
+        # 添加任务ID到context
+        context['task_id'] = task.id
+        
+        # 更新任务状态为运行中
+        task_manager.update_status(task.id, TaskStatus.RUNNING)
+        
+        # 5. 执行
         result = await orchestrator.execute(skill, user_input, context)
         
-        # 5. 运行after hooks
+        # 6. 更新任务状态
+        if result.get('success'):
+            task_manager.update_status(
+                task.id,
+                TaskStatus.COMPLETED,
+                result=result.get('content', '')
+            )
+        else:
+            task_manager.update_status(
+                task.id,
+                TaskStatus.FAILED,
+                error=result.get('error', 'Unknown error')
+            )
+        
+        # 7. 运行after hooks
         result = await hook_manager.run_after_hooks(hook_context, result)
+        
+        # 添加任务信息到结果
+        result['task_id'] = task.id
         
         return result
     
     except Exception as e:
         logger.error(f"执行Skill失败: {e}", exc_info=True)
         
+        # 更新任务状态为失败
+        if task:
+            task_manager.update_status(
+                task.id,
+                TaskStatus.FAILED,
+                error=str(e)
+            )
+        
         # 运行error hooks
         error_result = await hook_manager.run_error_hooks(hook_context, e)
         
         if error_result is not None:
             # Hook处理了错误
+            if task:
+                error_result['task_id'] = task.id
             return error_result
         
         # Hook没有处理，返回默认错误
         return {
             'success': False,
             'content': '',
-            'error': str(e)
+            'error': str(e),
+            'task_id': task.id if task else None
         }
 
 
@@ -172,3 +224,47 @@ def get_skill_info(skill_name: str) -> Optional[Dict[str, Any]]:
         'agents': skill.agents,
         'middleware': skill.middleware
     }
+
+
+def get_task_info(task_id: str) -> Optional[Dict[str, Any]]:
+    """
+    获取任务信息
+    
+    Args:
+        task_id: 任务ID
+    
+    Returns:
+        任务信息字典，如果任务不存在返回None
+    """
+    task_manager = get_task_manager()
+    task = task_manager.get_task(task_id)
+    
+    if not task:
+        return None
+    
+    return task.to_dict()
+
+
+def get_task_tree(task_id: str) -> Optional[Dict[str, Any]]:
+    """
+    获取任务树（包含所有子任务）
+    
+    Args:
+        task_id: 根任务ID
+    
+    Returns:
+        任务树字典，如果任务不存在返回None
+    """
+    task_manager = get_task_manager()
+    return task_manager.get_task_tree(task_id)
+
+
+def get_task_stats() -> Dict[str, Any]:
+    """
+    获取任务统计信息
+    
+    Returns:
+        统计信息字典
+    """
+    task_manager = get_task_manager()
+    return task_manager.get_stats()
