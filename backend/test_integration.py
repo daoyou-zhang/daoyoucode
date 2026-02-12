@@ -42,11 +42,13 @@ class TestIntegration:
         tools = registry.list_tools()
         
         # 验证工具已注册
-        assert len(tools) == 23  # 6文件+2搜索+4Git+2命令+1Diff+2RepoMap+6LSP
+        assert len(tools) == 25  # 6文件+2搜索+4Git+2命令+1Diff+2RepoMap+6LSP+2AST
         assert "read_file" in tools
         assert "write_file" in tools
         assert "repo_map" in tools
         assert "lsp_diagnostics" in tools
+        assert "ast_grep_search" in tools
+        assert "ast_grep_replace" in tools
         
         print(f"\n✅ 工具系统集成成功: {len(tools)}个工具已注册")
     
@@ -367,7 +369,7 @@ def main():
             # 6. 验证集成
             assert agent.memory is not None  # 记忆系统
             assert context.get("repo_map") is not None  # RepoMap
-            assert len(get_tool_registry().list_tools()) == 23  # 工具系统
+            assert len(get_tool_registry().list_tools()) == 25  # 工具系统
             
             print(f"\n✅ 完整工作流集成成功:")
             print(f"   - Agent: {agent.name}")
@@ -386,7 +388,7 @@ class TestToolRegistry:
         tools = registry.list_tools()
         
         # 验证工具数量
-        assert len(tools) == 23
+        assert len(tools) == 25
         
         # 验证文件工具（6个）
         assert "read_file" in tools
@@ -425,7 +427,11 @@ class TestToolRegistry:
         assert "lsp_rename" in tools
         assert "lsp_code_actions" in tools
         
-        print(f"\n✅ 所有23个工具已正确注册")
+        # 验证AST工具（2个）
+        assert "ast_grep_search" in tools
+        assert "ast_grep_replace" in tools
+        
+        print(f"\n✅ 所有25个工具已正确注册")
     
     def test_get_function_schemas(self):
         """测试获取Function schemas"""

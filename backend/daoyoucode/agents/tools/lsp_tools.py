@@ -646,15 +646,21 @@ class LSPServerManager:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._initialized = True
         
-        # 启动清理任务
-        self._start_cleanup_timer()
+        # 不在初始化时启动清理任务，而是在第一次使用时启动
+        # self._start_cleanup_timer()
         
         logger.info("LSP服务器管理器已初始化")
     
     def _start_cleanup_timer(self):
         """启动清理定时器"""
-        if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        try:
+            if self._cleanup_task is None or self._cleanup_task.done():
+                # 只在有运行的事件循环时创建任务
+                loop = asyncio.get_running_loop()
+                self._cleanup_task = loop.create_task(self._cleanup_loop())
+        except RuntimeError:
+            # 没有运行的事件循环，跳过
+            pass
     
     async def _cleanup_loop(self):
         """清理循环"""
@@ -707,6 +713,9 @@ class LSPServerManager:
         server_config: LSPServerConfig
     ) -> LSPClient:
         """获取或创建LSP客户端"""
+        # 确保清理任务已启动
+        self._start_cleanup_timer()
+        
         key = self._get_key(root, server_config.id)
         
         # 检查是否已存在

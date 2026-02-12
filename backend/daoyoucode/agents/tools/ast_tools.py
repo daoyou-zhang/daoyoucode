@@ -88,11 +88,17 @@ class AstGrepManager:
     1. 查找已安装的ast-grep
     2. 自动下载ast-grep二进制
     3. 管理缓存目录
+    4. 检查NAPI可用性（环境诊断）
+    
+    注意：与oh-my-opencode一致，只使用CLI模式，不使用NAPI
     """
     
     # GitHub仓库
     REPO = "ast-grep/ast-grep"
     DEFAULT_VERSION = "0.40.0"
+    
+    # NAPI支持的语言（5种）
+    NAPI_LANGUAGES = ["html", "javascript", "tsx", "css", "typescript"]
     
     # 平台映射
     PLATFORM_MAP = {
@@ -107,6 +113,7 @@ class AstGrepManager:
     def __init__(self):
         self._binary_path: Optional[str] = None
         self._cache_dir = self._get_cache_dir()
+        self._napi_available: Optional[bool] = None
     
     def _get_cache_dir(self) -> Path:
         """获取缓存目录"""
@@ -275,8 +282,10 @@ class AstGrepSearchTool(BaseTool):
     - 搜索所有async函数: pattern='async function $NAME($$) { $$ }'
     """
     
-    name = "ast_grep_search"
-    description = """Search code patterns using AST-aware matching. Supports 25 languages.
+    def __init__(self):
+        super().__init__(
+            name="ast_grep_search",
+            description="""Search code patterns using AST-aware matching. Supports 25 languages.
 
 Use meta-variables:
 - $VAR: matches single node
@@ -291,39 +300,39 @@ Examples:
 - async function $NAME($$) { $$ }
 
 Supported languages: bash, c, cpp, csharp, css, elixir, go, haskell, html, java, javascript, json, kotlin, lua, nix, php, python, ruby, rust, scala, solidity, swift, typescript, tsx, yaml"""
-    
-    parameters = {
-        "type": "object",
-        "properties": {
-            "pattern": {
-                "type": "string",
-                "description": "AST pattern with meta-variables ($VAR, $$). Must be complete AST node."
+        )
+        self.parameters = {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "AST pattern with meta-variables ($VAR, $$). Must be complete AST node."
+                },
+                "lang": {
+                    "type": "string",
+                    "enum": SUPPORTED_LANGUAGES,
+                    "description": "Target language"
+                },
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to search (default: ['.'])",
+                    "default": ["."]
+                },
+                "globs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Include/exclude globs (prefix ! to exclude)",
+                    "default": []
+                },
+                "context": {
+                    "type": "integer",
+                    "description": "Context lines around match",
+                    "default": 0
+                }
             },
-            "lang": {
-                "type": "string",
-                "enum": SUPPORTED_LANGUAGES,
-                "description": "Target language"
-            },
-            "paths": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Paths to search (default: ['.'])",
-                "default": ["."]
-            },
-            "globs": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Include/exclude globs (prefix ! to exclude)",
-                "default": []
-            },
-            "context": {
-                "type": "integer",
-                "description": "Context lines around match",
-                "default": 0
-            }
-        },
-        "required": ["pattern", "lang"]
-    }
+            "required": ["pattern", "lang"]
+        }
     
     async def execute(
         self,
@@ -609,8 +618,10 @@ class AstGrepReplaceTool(BaseTool):
       rewrite='logger.info($MSG)'
     """
     
-    name = "ast_grep_replace"
-    description = """Replace code patterns using AST-aware rewriting.
+    def __init__(self):
+        super().__init__(
+            name="ast_grep_replace",
+            description="""Replace code patterns using AST-aware rewriting.
 
 Dry-run by default (preview changes without applying).
 Use meta-variables in rewrite to preserve matched content.
@@ -620,43 +631,43 @@ Example:
   rewrite='logger.info($MSG)'
 
 Supported languages: bash, c, cpp, csharp, css, elixir, go, haskell, html, java, javascript, json, kotlin, lua, nix, php, python, ruby, rust, scala, solidity, swift, typescript, tsx, yaml"""
-    
-    parameters = {
-        "type": "object",
-        "properties": {
-            "pattern": {
-                "type": "string",
-                "description": "AST pattern to match"
+        )
+        self.parameters = {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "AST pattern to match"
+                },
+                "rewrite": {
+                    "type": "string",
+                    "description": "Replacement pattern (can use $VAR from pattern)"
+                },
+                "lang": {
+                    "type": "string",
+                    "enum": SUPPORTED_LANGUAGES,
+                    "description": "Target language"
+                },
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to search",
+                    "default": ["."]
+                },
+                "globs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Include/exclude globs",
+                    "default": []
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Preview changes without applying (default: true)",
+                    "default": True
+                }
             },
-            "rewrite": {
-                "type": "string",
-                "description": "Replacement pattern (can use $VAR from pattern)"
-            },
-            "lang": {
-                "type": "string",
-                "enum": SUPPORTED_LANGUAGES,
-                "description": "Target language"
-            },
-            "paths": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Paths to search",
-                "default": ["."]
-            },
-            "globs": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Include/exclude globs",
-                "default": []
-            },
-            "dry_run": {
-                "type": "boolean",
-                "description": "Preview changes without applying (default: true)",
-                "default": True
-            }
-        },
-        "required": ["pattern", "rewrite", "lang"]
-    }
+            "required": ["pattern", "rewrite", "lang"]
+        }
     
     async def execute(
         self,
