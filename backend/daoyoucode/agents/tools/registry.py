@@ -11,14 +11,20 @@ logger = logging.getLogger(__name__)
 
 # 全局单例
 _tool_registry = None
+_registry_id = None  # 用于调试
 
 
 def get_tool_registry() -> ToolRegistry:
     """获取工具注册表单例"""
-    global _tool_registry
+    global _tool_registry, _registry_id
     if _tool_registry is None:
+        logger.info("创建新的工具注册表实例")
         _tool_registry = ToolRegistry()
+        _registry_id = id(_tool_registry)
         _register_builtin_tools()
+        logger.info(f"工具注册表ID: {_registry_id}")
+    else:
+        logger.debug(f"返回现有工具注册表实例 (ID: {_registry_id})")
     return _tool_registry
 
 

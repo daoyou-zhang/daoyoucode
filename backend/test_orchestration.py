@@ -192,7 +192,7 @@ async def test_tool_integration():
     print("测试6: 工具集成验证")
     print("="*60)
     
-    from daoyoucode.tools import get_tool_registry
+    from daoyoucode.agents.tools import get_tool_registry
     
     registry = get_tool_registry()
     

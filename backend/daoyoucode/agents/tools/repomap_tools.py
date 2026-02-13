@@ -50,6 +50,10 @@ class RepoMapTool(BaseTool):
     - Token预算控制
     """
     
+    # RepoMap可以稍微长一点，因为它是智能排序的
+    MAX_OUTPUT_CHARS = 10000
+    MAX_OUTPUT_LINES = 1000
+    
     def __init__(self):
         super().__init__(
             name="repo_map",
@@ -564,6 +568,10 @@ class GetRepoStructureTool(BaseTool):
     
     只返回文件树，不做智能排序
     """
+    
+    # 目录结构也需要限制
+    MAX_OUTPUT_LINES = 500
+    MAX_OUTPUT_CHARS = 8000
     
     def __init__(self):
         super().__init__(

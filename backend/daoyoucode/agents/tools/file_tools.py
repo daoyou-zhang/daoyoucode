@@ -14,6 +14,10 @@ from .base import BaseTool, ToolResult
 class ReadFileTool(BaseTool):
     """读取文件工具"""
     
+    # 单个文件不要太长
+    MAX_OUTPUT_CHARS = 5000
+    MAX_OUTPUT_LINES = 200
+    
     def __init__(self):
         super().__init__(
             name="read_file",

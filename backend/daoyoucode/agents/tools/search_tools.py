@@ -13,6 +13,10 @@ from .base import BaseTool, ToolResult
 class TextSearchTool(BaseTool):
     """文本搜索工具（类似ripgrep）"""
     
+    # 搜索结果限制行数
+    MAX_OUTPUT_LINES = 100
+    MAX_OUTPUT_CHARS = 6000
+    
     def __init__(self):
         super().__init__(
             name="text_search",
@@ -166,6 +170,10 @@ class TextSearchTool(BaseTool):
 
 class RegexSearchTool(BaseTool):
     """正则表达式搜索工具"""
+    
+    # 搜索结果限制
+    MAX_OUTPUT_LINES = 100
+    MAX_OUTPUT_CHARS = 6000
     
     def __init__(self):
         super().__init__(

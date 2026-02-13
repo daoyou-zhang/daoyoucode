@@ -9,7 +9,7 @@ from pathlib import Path
 # 添加backend到路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from daoyoucode.tools import get_tool_registry
+from daoyoucode.agents.tools import get_tool_registry
 
 
 async def test_search_tools():

@@ -56,7 +56,11 @@ class UnifiedLLMClient(BaseLLMClient):
         """同步对话"""
         start_time = time.time()
         
-        messages = [{"role": "user", "content": request.prompt}]
+        # 支持多轮对话：如果request中有messages，使用它；否则构建单轮消息
+        if hasattr(request, 'messages') and request.messages:
+            messages = request.messages
+        else:
+            messages = [{"role": "user", "content": request.prompt}]
         
         try:
             payload = {

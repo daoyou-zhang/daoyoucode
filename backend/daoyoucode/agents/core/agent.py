@@ -42,9 +42,19 @@ class BaseAgent(ABC):
         self.name = config.name
         self.logger = logging.getLogger(f"agent.{self.name}")
         
+        # 确保工具注册表已初始化（双保险）
+        from ..tools import get_tool_registry
+        self._tool_registry = get_tool_registry()
+        self.logger.debug(f"工具注册表已就绪: {len(self._tool_registry.list_tools())} 个工具")
+        
         # 接入记忆模块（单例，不会重复加载）
         from ..memory import get_memory_manager
         self.memory = get_memory_manager()
+        
+        # 接入工具后处理器
+        from ..tools.postprocessor import get_tool_postprocessor
+        self.tool_postprocessor = get_tool_postprocessor()
+        self.logger.debug("工具后处理器已就绪")
     
     async def execute(
         self,
@@ -107,8 +117,29 @@ class BaseAgent(ABC):
             
             # ========== 4. 调用LLM ==========
             if tools:
+                # 构建初始消息（包含历史对话）
+                initial_messages = []
+                
+                # 添加历史对话（如果有）
+                if history:
+                    for h in history:
+                        initial_messages.append({
+                            "role": "user",
+                            "content": h.get('user', '')  # 修正：使用'user'而不是'user_message'
+                        })
+                        initial_messages.append({
+                            "role": "assistant",
+                            "content": h.get('ai', '')  # 修正：使用'ai'而不是'ai_response'
+                        })
+                
+                # 添加当前用户输入
+                initial_messages.append({
+                    "role": "user",
+                    "content": full_prompt
+                })
+                
                 response, tools_used = await self._call_llm_with_tools(
-                    full_prompt,
+                    initial_messages,  # 传递包含历史的消息列表
                     tools,
                     llm_config,
                     max_tool_iterations
@@ -243,7 +274,7 @@ class BaseAgent(ABC):
     
     async def _call_llm_with_tools(
         self,
-        prompt: str,
+        initial_messages: List[Dict[str, Any]],  # 改为接受消息列表
         tool_names: List[str],
         llm_config: Optional[Dict[str, Any]] = None,
         max_iterations: int = 5
@@ -252,7 +283,7 @@ class BaseAgent(ABC):
         调用LLM并支持工具调用
         
         Args:
-            prompt: 提示词
+            initial_messages: 初始消息列表（包含历史对话和当前输入）
             tool_names: 可用工具名称列表
             llm_config: LLM配置
             max_iterations: 最大迭代次数
@@ -260,10 +291,10 @@ class BaseAgent(ABC):
         Returns:
             (最终响应, 使用的工具列表)
         """
-        from ...tools import get_tool_registry
         import json
         
-        tool_registry = get_tool_registry()
+        # 使用已初始化的工具注册表
+        tool_registry = self._tool_registry
         tools_used = []
         
         # 调试：列出所有可用工具
@@ -276,11 +307,17 @@ class BaseAgent(ABC):
         
         if not function_schemas:
             # 没有可用工具，直接调用
-            response = await self._call_llm(prompt, llm_config)
+            # 从initial_messages中提取最后一条用户消息
+            last_user_message = ""
+            for msg in reversed(initial_messages):
+                if msg['role'] == 'user':
+                    last_user_message = msg['content']
+                    break
+            response = await self._call_llm(last_user_message, llm_config)
             return response, []
         
-        # 构建消息历史
-        messages = [{"role": "user", "content": prompt}]
+        # 使用初始消息作为起点
+        messages = initial_messages.copy()
         
         # 工具调用循环
         for iteration in range(max_iterations):
@@ -314,7 +351,33 @@ class BaseAgent(ABC):
                 print(f"   ⏳ 正在执行...")  # 添加进度提示
                 tool_result = await tool_registry.execute_tool(tool_name, **tool_args)
                 print(f"   ✓ 执行完成")  # 添加完成提示
-                tool_result_str = str(tool_result)
+                
+                # ========== 智能后处理 ==========
+                if tool_result.success:
+                    # 提取用户问题（从messages中找最后一条用户消息）
+                    user_query = ""
+                    for msg in reversed(messages):
+                        if msg.get('role') == 'user':
+                            user_query = msg.get('content', '')
+                            break
+                    
+                    # 后处理
+                    if user_query:
+                        tool_result = await self.tool_postprocessor.process(
+                            tool_name=tool_name,
+                            result=tool_result,
+                            user_query=user_query,
+                            context={
+                                'session_id': context.get('session_id'),
+                                'conversation_history': history,
+                            }
+                        )
+                
+                # 提取实际内容
+                if tool_result.success:
+                    tool_result_str = str(tool_result.content) if tool_result.content else "工具执行成功，但没有返回内容"
+                else:
+                    tool_result_str = f"Error: {tool_result.error}"
             except Exception as e:
                 print(f"   ✗ 执行失败: {e}")  # 添加失败提示
                 tool_result_str = f"Error: {str(e)}"
@@ -371,19 +434,15 @@ class BaseAgent(ABC):
         # 获取客户端
         client = client_manager.get_client(model=model)
         
-        # 构建请求（简化版，实际需要支持messages）
-        # 这里暂时用最后一条用户消息
-        user_message = ""
-        for msg in reversed(messages):
-            if msg['role'] == 'user':
-                user_message = msg['content']
-                break
-        
+        # 构建请求 - 传递完整的消息历史
         request = LLMRequest(
-            prompt=user_message,
+            prompt="",  # 当有messages时，prompt可以为空
             model=model,
             temperature=temperature
         )
+        
+        # 添加完整的消息历史
+        request.messages = messages
         
         # 添加functions
         if functions:

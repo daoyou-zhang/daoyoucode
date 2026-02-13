@@ -20,6 +20,7 @@ from . import orchestrators
 from .tools import get_tool_registry
 _tool_registry = get_tool_registry()  # 触发工具注册
 
+from .init import initialize_agent_system
 from .executor import execute_skill, list_skills, get_skill_info
 from .core.agent import BaseAgent, AgentConfig, register_agent, get_agent_registry
 from .core.orchestrator import BaseOrchestrator, register_orchestrator, get_orchestrator
@@ -28,6 +29,9 @@ from .core.skill import SkillConfig, SkillLoader
 from .core.hook import BaseHook, HookContext, register_hook, unregister_hook, get_hook_manager
 
 __all__ = [
+    # 初始化
+    'initialize_agent_system',
+    
     # 执行器
     'execute_skill',
     'list_skills',

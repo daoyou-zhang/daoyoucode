@@ -350,47 +350,47 @@ def handle_chat(user_input: str, ui_context: dict):
         "initial_files": ui_context.get("initial_files", [])
     }
     
-    # 显示思考动画
-    with console.status("[bold blue]AI正在思考...[/bold blue]", spinner="dots"):
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    try:
+        # 初始化Agent系统（包括工具注册、Agent注册、编排器注册）
+        from daoyoucode.agents.init import initialize_agent_system
+        initialize_agent_system()
         
-        try:
-            # 1. 配置LLM客户端
-            from daoyoucode.agents.llm.client_manager import get_client_manager
-            from daoyoucode.agents.llm.config_loader import auto_configure
-            
-            client_manager = get_client_manager()
-            auto_configure(client_manager)
-            
-            # 2. 注册内置Agent
-            from daoyoucode.agents.builtin import register_builtin_agents
-            register_builtin_agents()
-            
-            # 3. 通过Skill系统执行
-            from daoyoucode.agents.executor import execute_skill
-            
-            result = loop.run_until_complete(execute_skill(
-                skill_name="chat_assistant",
-                user_input=user_input,
-                session_id=context["session_id"],
-                context=context
-            ))
-            
-            # 显示结果
-            if result.get('success'):
-                ai_response = result.get('content', '')
-            else:
-                error_msg = result.get('error', '未知错误')
-                console.print(f"[yellow]⚠ 执行失败: {error_msg}[/yellow]")
-                ai_response = "抱歉，我遇到了一些问题。请重试。"
+        # 配置LLM客户端
+        from daoyoucode.agents.llm.client_manager import get_client_manager
+        from daoyoucode.agents.llm.config_loader import auto_configure
         
-        except Exception as e:
-            console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
-            ai_response = "抱歉，系统出现异常。请重试。"
+        client_manager = get_client_manager()
+        auto_configure(client_manager)
+        
+        # 通过Skill系统执行
+        from daoyoucode.agents.executor import execute_skill
+        
+        console.print("[bold blue]🤔 AI正在思考...[/bold blue]")
+        
+        result = loop.run_until_complete(execute_skill(
+            skill_name="chat_assistant",
+            user_input=user_input,
+            session_id=context["session_id"],
+            context=context
+        ))
+        
+        # 显示结果
+        if result.get('success'):
+            ai_response = result.get('content', '')
+        else:
+            error_msg = result.get('error', '未知错误')
+            console.print(f"[yellow]⚠ 执行失败: {error_msg}[/yellow]")
+            ai_response = "抱歉，我遇到了一些问题。请重试。"
+    
+    except Exception as e:
+        console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
+        ai_response = "抱歉，系统出现异常。请重试。"
     
     # 显示AI响应
     console.print(f"\n[bold blue]AI[/bold blue] › ", end="")
