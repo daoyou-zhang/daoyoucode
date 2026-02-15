@@ -68,31 +68,6 @@ def main(
     except Exception as e:
         console.print(f"\n[red]❌ 错误: {e}[/red]\n")
         raise typer.Exit(1)
-    
-    try:
-        # 主循环
-        while True:
-            # 获取用户输入
-            user_input = console.input("\n[bold green]你[/bold green] › ")
-            
-            if not user_input.strip():
-                continue
-            
-            # 处理命令
-            if user_input.startswith("/"):
-                if not handle_command(user_input, context):
-                    break  # /exit命令返回False
-                continue
-            
-            # 处理普通对话
-            handle_chat(user_input, context)
-    
-    except KeyboardInterrupt:
-        console.print("\n\n[cyan]👋 再见！[/cyan]\n")
-        raise typer.Exit(0)
-    except Exception as e:
-        console.print(f"\n[red]❌ 错误: {e}[/red]\n")
-        raise typer.Exit(1)
 
 
 def show_banner(model: str, repo: Path, files: Optional[List[Path]]):

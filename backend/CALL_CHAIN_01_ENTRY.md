@@ -36,36 +36,58 @@ if __name__ == "__main__":
 **代码**:
 ```python
 import typer
-from cli.commands import chat, edit, doctor, ...
 
 app = typer.Typer(name="daoyoucode", help="DaoyouCode CLI")
 
-# 注册命令
-app.command(name="chat")(chat.main)
-app.command(name="edit")(edit.main)
-app.command(name="doctor")(doctor.main)
-...
+# 使用装饰器注册命令（推荐方式）
+@app.command()
+def chat(
+    files: Optional[list[Path]] = typer.Argument(None, help="要加载的文件"),
+    model: str = typer.Option("qwen-max", "--model", "-m", help="使用的模型"),
+    repo: Path = typer.Option(".", "--repo", "-r", help="仓库路径"),
+):
+    """启动交互式对话"""
+    from cli.commands import chat as chat_cmd  # 延迟导入
+    chat_cmd.main(files, model, repo)
+
+@app.command()
+def edit(...):
+    """单次编辑文件"""
+    from cli.commands import edit as edit_cmd
+    edit_cmd.main(...)
+
+# ... 其他命令
 ```
 
 **职责**:
 - 创建Typer应用实例
-- 注册所有CLI命令
+- 使用装饰器注册所有CLI命令
+- 定义命令参数（Argument和Option）
+- 延迟导入命令模块（提升启动速度）
 - 解析命令行参数
 - 路由到对应的命令处理函数
+
+**注册方式说明**:
+- 使用`@app.command()`装饰器注册
+- 参数定义在app.py中（清晰可见）
+- 实际实现在commands/目录中（分离关注点）
+- 延迟导入（只在执行时加载模块）
 
 **分支逻辑**:
 ```
 用户输入命令
-├─ chat    → chat.main()
-├─ edit    → edit.main()
-├─ doctor  → doctor.main()
-├─ config  → config.main()
-├─ models  → models.main()
-├─ agent   → agent.main()
-├─ session → session.main()
-├─ serve   → serve.main()
-└─ version → 显示版本信息
+├─ chat    → @app.command() → chat_cmd.main()
+├─ edit    → @app.command() → edit_cmd.main()
+├─ doctor  → @app.command() → doctor_cmd.main()
+├─ config  → @app.command() → config_cmd.main()
+├─ models  → @app.command() → models_cmd.main()
+├─ agent   → @app.command() → agent_cmd.main()
+├─ session → @app.command() → session_cmd.main()
+├─ serve   → @app.command() → serve_cmd.main()
+└─ version → @app.command() → 直接显示版本信息
 ```
+
+**详细说明**: 参见 `TYPER_REGISTRATION_EXPLAINED.md`
 
 ---
 

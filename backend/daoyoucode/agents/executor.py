@@ -131,13 +131,17 @@ async def _execute_skill_internal(
             return await hook_manager.run_after_hooks(hook_context, error_result)
         
         # 4. 创建任务
+        # 智能截断描述：保留开头和结尾，中间用...连接
+        task_description = self._truncate_description(user_input, max_length=500)
+        
         task = task_manager.create_task(
-            description=user_input[:200],  # 限制长度
+            description=task_description,
             orchestrator=skill.orchestrator,
             agent=skill.agent,
             metadata={
                 'skill_name': skill_name,
-                'session_id': session_id
+                'session_id': session_id,
+                'input_length': len(user_input)  # 记录原始长度
             }
         )
         
@@ -268,3 +272,44 @@ def get_task_stats() -> Dict[str, Any]:
     """
     task_manager = get_task_manager()
     return task_manager.get_stats()
+
+
+def _truncate_description(text: str, max_length: int = 500) -> str:
+    """
+    智能截断描述文本
+    
+    策略：
+    - 如果文本长度 <= max_length，直接返回
+    - 如果文本长度 > max_length，保留开头和结尾，中间用...连接
+    
+    Args:
+        text: 原始文本
+        max_length: 最大长度
+    
+    Returns:
+        截断后的文本
+    
+    Examples:
+        >>> _truncate_description("短文本", 500)
+        "短文本"
+        
+        >>> _truncate_description("很长的文本" * 100, 100)
+        "很长的文本很长的文本很长的文本很长...的文本很长的文本很长的文本很长的文本"
+    """
+    if len(text) <= max_length:
+        return text
+    
+    # 计算开头和结尾的长度
+    # 开头占60%，结尾占40%，中间3个字符用于...
+    separator = "..."
+    separator_len = len(separator)
+    available_len = max_length - separator_len
+    
+    head_len = int(available_len * 0.6)
+    tail_len = available_len - head_len
+    
+    # 截断
+    head = text[:head_len]
+    tail = text[-tail_len:] if tail_len > 0 else ""
+    
+    return f"{head}{separator}{tail}"

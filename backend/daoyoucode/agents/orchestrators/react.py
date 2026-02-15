@@ -1,8 +1,42 @@
 """
 ReAct循环编排器
 
-实现完整的"规划-执行-反思-重试"循环，提供自愈能力。
-灵感来源：daoyouCodePilot的OrchestratorCoder
+实现ReAct（Reason-Act-Observe-Reflect）模式的编排器。
+
+架构说明：
+-----------
+ReAct循环的核心逻辑已在Agent层实现（通过Function Calling机制）：
+- Thought（思考）：LLM分析用户问题，决定是否调用工具
+- Action（行动）：执行工具获取信息
+- Observation（观察）：处理工具返回的结果
+- Reflect（反思）：LLM基于结果决定下一步行动
+
+当前编排器的职责：
+-----------------
+1. 调用Agent执行任务
+2. 准备Prompt和上下文
+3. 处理执行结果
+4. 返回统一格式的响应
+
+这种设计的优势：
+--------------
+- 简单高效：LLM自动控制循环，无需额外的规划步骤
+- 成本低：减少不必要的LLM调用
+- 灵活性：LLM可以根据实际情况动态调整策略
+- 易于使用：对用户透明，无需配置复杂参数
+
+扩展方向：
+---------
+如需更复杂的编排逻辑（如显式规划、多轮反思、强错误恢复），
+可以创建AdvancedReActOrchestrator，实现：
+- 显式的规划阶段（生成详细的执行计划）
+- 显式的反思阶段（分析失败原因并调整策略）
+- 更强的错误恢复能力（自动重试和策略调整）
+
+参考：
+-----
+- daoyouCodePilot的OrchestratorCoder
+- REACT_IMPLEMENTATION_STATUS.md（详细说明）
 """
 
 from typing import Dict, Any, List, Optional
@@ -71,6 +105,21 @@ class ReActOrchestrator(BaseOrchestrator):
         """
         执行ReAct循环
         
+        注意：ReAct循环的核心逻辑已在Agent层实现（通过Function Calling）。
+        Agent会自动进行：
+        - Thought（思考）：LLM分析问题
+        - Action（行动）：调用工具
+        - Observation（观察）：获取工具结果
+        - Reflect（反思）：LLM决定下一步
+        
+        当前编排器负责：
+        - 调用Agent执行任务
+        - 处理结果和错误
+        - 返回统一格式的响应
+        
+        如需更复杂的编排逻辑（如显式规划、多轮反思、错误恢复），
+        可以创建AdvancedReActOrchestrator。
+        
         Args:
             skill: 技能定义（SkillConfig对象）
             user_input: 用户输入
@@ -83,9 +132,6 @@ class ReActOrchestrator(BaseOrchestrator):
             context = {}
         
         logger.info(f"ReAct编排器执行: {skill.name}")
-        
-        # 简化版本：直接调用Agent（完整的ReAct循环需要更多实现）
-        # TODO: 实现完整的Reason-Act-Observe-Reflect循环
         
         try:
             # 1. 获取Agent
@@ -148,6 +194,11 @@ class ReActOrchestrator(BaseOrchestrator):
                 return {'file': skill.prompt}
         
         return {'use_agent_default': True}
+    
+    # ========================================================================
+    # 以下方法为AdvancedReActOrchestrator预留
+    # 当前的简化版本不使用这些方法，但保留它们作为参考实现
+    # ========================================================================
     
     async def _plan(
         self,
