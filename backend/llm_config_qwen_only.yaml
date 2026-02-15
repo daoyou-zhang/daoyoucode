@@ -15,9 +15,9 @@ providers:
 # 默认配置
 default:
   provider: qwen
-  model: qwen-plus      # 默认使用性价比高的qwen-plus
+  model: qwen-max       # 使用最强模型以获得最好的推理能力
   temperature: 0.7
-  max_tokens: 2000
+  max_tokens: 5000
 
 # 降级策略（可选，建议配置）
 fallback:

@@ -1,7 +1,7 @@
 """
 Skill执行器
 
-统一的Skill执行入口，集成Hook系统和失败恢复
+统一的Skill执行入口，集成Hook系统、失败恢复和超时恢复
 """
 
 from typing import Dict, Any, Optional, Callable
@@ -12,6 +12,7 @@ from .core.orchestrator import get_orchestrator
 from .core.hook import get_hook_manager, HookContext
 from .core.recovery import RecoveryManager, RecoveryConfig
 from .core.task import get_task_manager, TaskStatus
+from .core.timeout_handler import execute_with_timeout_handling, should_enable_timeout_recovery
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,11 @@ async def execute_skill(
     context: Optional[Dict[str, Any]] = None,
     recovery_config: Optional[RecoveryConfig] = None,
     validator: Optional[Callable[[Any], bool]] = None,
-    analyzer: Optional[Callable[[Any, Optional[Exception]], str]] = None
+    analyzer: Optional[Callable[[Any, Optional[Exception]], str]] = None,
+    enable_timeout_recovery: Optional[bool] = None
 ) -> Dict[str, Any]:
     """
-    执行Skill（集成Hook系统和失败恢复）
+    执行Skill（集成Hook系统、失败恢复和超时恢复）
     
     Args:
         skill_name: Skill名称
@@ -36,6 +38,7 @@ async def execute_skill(
         recovery_config: 恢复配置（可选）
         validator: 结果验证函数（可选）
         analyzer: 错误分析函数（可选）
+        enable_timeout_recovery: 是否启用超时恢复（None=自动判断）
     
     Returns:
         执行结果
@@ -46,7 +49,47 @@ async def execute_skill(
     if session_id:
         context['session_id'] = session_id
     
-    # 如果启用了恢复机制，使用RecoveryManager
+    # 判断是否启用超时恢复
+    if enable_timeout_recovery is None:
+        enable_timeout_recovery = should_enable_timeout_recovery(context)
+    
+    # 如果启用超时恢复，使用 timeout_handler
+    if enable_timeout_recovery:
+        logger.info("✅ 启用超时恢复机制")
+        
+        # 如果同时启用了失败恢复，需要嵌套处理
+        if recovery_config or validator or analyzer:
+            recovery_manager = RecoveryManager(recovery_config or RecoveryConfig())
+            
+            async def execute_with_recovery():
+                return await recovery_manager.execute_with_recovery(
+                    _execute_skill_internal,
+                    skill_name=skill_name,
+                    user_input=user_input,
+                    context=context,
+                    validator=validator,
+                    analyzer=analyzer
+                )
+            
+            return await execute_with_timeout_handling(
+                execute_with_recovery,
+                skill_name,
+                user_input,
+                context,
+                enable_recovery=True
+            )
+        else:
+            # 只启用超时恢复
+            return await execute_with_timeout_handling(
+                _execute_skill_internal,
+                skill_name,
+                user_input,
+                context,
+                enable_recovery=True
+            )
+    
+    # 不启用超时恢复
+    # 如果启用了失败恢复，使用RecoveryManager
     if recovery_config or validator or analyzer:
         recovery_manager = RecoveryManager(recovery_config or RecoveryConfig())
         return await recovery_manager.execute_with_recovery(

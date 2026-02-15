@@ -525,6 +525,17 @@ class BaseAgent(ABC):
         except Exception as e:
             self.logger.error(f"执行失败: {e}", exc_info=True)
             
+            # 检查是否是超时错误
+            from ..llm.exceptions import LLMTimeoutError
+            if isinstance(e, LLMTimeoutError):
+                # 超时错误，提供友好的错误消息
+                from .timeout_recovery import get_user_friendly_timeout_message
+                error_message = get_user_friendly_timeout_message(3)  # 假设已重试3次
+                
+                self.logger.warning(f"⚠️ LLM 请求超时: {error_message}")
+            else:
+                error_message = str(e)
+            
             # 失败也记录到任务历史
             self.memory.add_task(user_id, {
                 'agent': self.name,
@@ -536,7 +547,7 @@ class BaseAgent(ABC):
             return AgentResult(
                 success=False,
                 content="",
-                error=str(e),
+                error=error_message,
                 tools_used=tools_used
             )
     
