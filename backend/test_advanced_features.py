@@ -273,6 +273,24 @@ def test_permission_decorator():
 
 
 # ==================== ReAct循环测试 ====================
+# 
+# 这些测试验证ReAct编排器的预留方法。
+# 
+# 背景：
+# - 当前的ReActOrchestrator使用简化版本（LLM自动控制循环）
+# - 预留方法（_plan, _reflect, _execute_plan等）为未来的
+#   AdvancedReActOrchestrator提供参考实现
+# - 这些方法实现了完整的Plan-Execute-Observe-Reflect循环
+# 
+# 测试目的：
+# - 确保预留方法的接口和基本逻辑正确
+# - 为未来实现AdvancedReActOrchestrator提供验证
+# - 防止这些方法被误删
+# 
+# 参考：
+# - backend/daoyoucode/agents/orchestrators/react.py - 实现
+# - backend/AGENT_OPTIMIZATION_PLAN.md - 优化计划说明
+# ==================== ReAct循环测试 ====================
 
 @pytest.mark.asyncio
 async def test_react_orchestrator_creation():

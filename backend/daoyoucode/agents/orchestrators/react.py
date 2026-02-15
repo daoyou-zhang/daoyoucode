@@ -197,7 +197,26 @@ class ReActOrchestrator(BaseOrchestrator):
     
     # ========================================================================
     # 以下方法为AdvancedReActOrchestrator预留
-    # 当前的简化版本不使用这些方法，但保留它们作为参考实现
+    # 
+    # 当前的简化版本不使用这些方法，但保留它们作为参考实现。
+    # 这些方法在 test_advanced_features.py 中有完整的单元测试。
+    # 
+    # 使用场景：
+    # - 当需要显式的规划阶段（生成详细的执行计划）
+    # - 当需要显式的反思阶段（分析失败原因并调整策略）
+    # - 当需要更强的错误恢复能力（自动重试和策略调整）
+    # - 当需要用户批准执行计划
+    # - 当需要自动验证执行结果
+    # 
+    # 实现AdvancedReActOrchestrator时，可以：
+    # 1. 继承ReActOrchestrator
+    # 2. 重写execute()方法，调用这些预留方法
+    # 3. 实现完整的Plan-Execute-Observe-Reflect循环
+    # 
+    # 参考：
+    # - REACT_IMPLEMENTATION_STATUS.md - 详细的实现说明
+    # - test_advanced_features.py - 方法的单元测试
+    # - daoyouCodePilot的OrchestratorCoder - 原始实现参考
     # ========================================================================
     
     async def _plan(
@@ -208,16 +227,30 @@ class ReActOrchestrator(BaseOrchestrator):
         last_plan: Optional[ReActPlan] = None
     ) -> Optional[ReActPlan]:
         """
-        生成执行计划
+        [预留方法] 生成执行计划
+        
+        用于AdvancedReActOrchestrator的显式规划阶段。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 分析任务需求
+        - 生成详细的执行步骤
+        - 估算时间和复杂度
+        - 识别潜在风险
+        - 支持基于失败的重新规划
         
         Args:
-            instruction: 指令
-            context: 上下文
-            last_error: 上次错误（如果有）
-            last_plan: 上次计划（如果有）
+            instruction: 任务指令
+            context: 执行上下文
+            last_error: 上次执行的错误信息（用于重新规划）
+            last_plan: 上次的执行计划（用于调整策略）
             
         Returns:
-            执行计划
+            ReActPlan: 执行计划，包含步骤、时间、复杂度、风险
+            None: 如果无法生成计划
+            
+        测试：
+            test_advanced_features.py::test_react_plan_generation
         """
         # 这里应该调用LLM生成计划
         # 简化起见，返回一个示例计划
@@ -249,14 +282,25 @@ class ReActOrchestrator(BaseOrchestrator):
     
     async def _approve(self, plan: ReActPlan, context: Context) -> bool:
         """
-        请求用户批准计划
+        [预留方法] 请求用户批准计划
+        
+        用于AdvancedReActOrchestrator的人工审核阶段。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 展示执行计划给用户
+        - 等待用户确认或拒绝
+        - 支持计划修改建议
         
         Args:
-            plan: 执行计划
-            context: 上下文
+            plan: 待批准的执行计划
+            context: 执行上下文
             
         Returns:
-            是否批准
+            bool: True表示批准，False表示拒绝
+            
+        注意：
+            实际实现需要集成用户交互机制（CLI/Web界面）
         """
         # 这里应该显示计划并请求用户确认
         # 简化起见，直接返回True
@@ -275,16 +319,32 @@ class ReActOrchestrator(BaseOrchestrator):
         parent_task: Task
     ) -> Dict[str, Any]:
         """
-        执行计划
+        [预留方法] 执行计划
+        
+        用于AdvancedReActOrchestrator的计划执行阶段。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 按顺序执行计划中的步骤
+        - 为每个步骤创建子任务
+        - 跟踪执行进度
+        - 处理步骤失败（中断执行）
+        - 记录执行结果
         
         Args:
-            plan: 执行计划
-            context: 上下文
-            agents: Agent列表
-            parent_task: 父任务
+            plan: 要执行的计划
+            context: 执行上下文
+            agents: 可用的Agent列表
+            parent_task: 父任务（用于创建子任务）
             
         Returns:
-            执行结果
+            Dict包含：
+            - steps: 每个步骤的执行结果
+            - completed: 成功完成的步骤数
+            - total: 总步骤数
+            
+        注意：
+            步骤失败时会立即中断，不会继续执行后续步骤
         """
         results = []
         
@@ -347,15 +407,30 @@ class ReActOrchestrator(BaseOrchestrator):
         agents: Optional[List[BaseAgent]]
     ) -> Any:
         """
-        执行单个步骤
+        [预留方法] 执行单个步骤
+        
+        用于AdvancedReActOrchestrator的步骤执行。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 根据步骤类型选择执行方式
+        - 调用相应的Agent或工具
+        - 返回步骤执行结果
         
         Args:
-            step: 步骤定义
-            context: 上下文
-            agents: Agent列表
+            step: 步骤定义，包含action和description
+            context: 执行上下文
+            agents: 可用的Agent列表
             
         Returns:
-            步骤结果
+            Any: 步骤执行结果（格式取决于步骤类型）
+            
+        测试：
+            test_advanced_features.py::test_react_step_execution
+            
+        注意：
+            当前实现是示例，实际使用时需要根据action类型
+            调用相应的Agent或工具
         """
         action = step.get('action')
         
@@ -375,14 +450,30 @@ class ReActOrchestrator(BaseOrchestrator):
         context: Context
     ) -> Dict[str, Any]:
         """
-        观察执行结果
+        [预留方法] 观察执行结果
+        
+        用于AdvancedReActOrchestrator的结果观察阶段。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 检查执行结果是否成功
+        - 识别失败的步骤
+        - 自动验证结果（如果启用）
+        - 生成观察报告
         
         Args:
-            result: 执行结果
-            context: 上下文
+            result: 执行结果（来自_execute_plan）
+            context: 执行上下文
             
         Returns:
-            观察结果
+            Dict包含：
+            - success: 是否成功
+            - error: 错误信息（如果失败）
+            - failed_step: 失败的步骤编号
+            - verification: 验证结果（如果启用auto_verify）
+            
+        测试：
+            test_advanced_features.py::test_react_observation
         """
         steps = result.get('steps', [])
         failed_steps = [s for s in steps if not s.get('success')]
@@ -420,14 +511,33 @@ class ReActOrchestrator(BaseOrchestrator):
         context: Context
     ) -> Dict[str, Any]:
         """
-        验证执行结果
+        [预留方法] 验证执行结果
+        
+        用于AdvancedReActOrchestrator的自动验证阶段。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 运行诊断工具检查代码问题
+        - 运行测试验证功能
+        - 检查文件变更是否符合预期
+        - 生成验证报告
         
         Args:
             result: 执行结果
-            context: 上下文
+            context: 执行上下文
             
         Returns:
-            验证结果
+            Dict包含：
+            - success: 验证是否通过
+            - diagnostics: 诊断结果
+            - tests: 测试结果
+            - error: 错误信息（如果验证失败）
+            
+        注意：
+            当前实现是示例，实际使用时需要集成：
+            - 代码诊断工具（linter, type checker）
+            - 测试框架（pytest, unittest）
+            - 文件变更检查
         """
         # TODO: 实现验证逻辑
         # 1. 运行诊断工具
@@ -450,18 +560,37 @@ class ReActOrchestrator(BaseOrchestrator):
         attempt: int
     ) -> Optional[str]:
         """
-        反思失败原因并生成新指令
+        [预留方法] 反思失败原因并生成新指令
+        
+        用于AdvancedReActOrchestrator的反思阶段。
+        当前简化版本不使用此方法，但保留作为参考实现。
+        
+        功能：
+        - 分析失败原因（使用FeedbackLoop）
+        - 识别错误类型和根因
+        - 生成恢复建议
+        - 调整执行策略
+        - 生成新的指令用于重试
         
         Args:
-            original_instruction: 原始指令
-            current_instruction: 当前指令
+            original_instruction: 最初的任务指令
+            current_instruction: 当前尝试的指令
             error: 错误信息
-            plan: 失败的计划
-            context: 上下文
-            attempt: 尝试次数
+            plan: 失败的执行计划
+            context: 执行上下文
+            attempt: 当前尝试次数（用于限制重试）
             
         Returns:
-            新指令，或None表示无法恢复
+            str: 新的指令用于重试
+            None: 如果无法恢复（达到最大重试次数或无法生成策略）
+            
+        测试：
+            test_advanced_features.py::test_react_reflection
+            
+        注意：
+            - 使用FeedbackLoop进行失败分析
+            - 需要LLM生成新的指令
+            - 应该限制最大反思次数（max_reflections）
         """
         logger.info(f"反思失败原因 (尝试 {attempt})")
         
