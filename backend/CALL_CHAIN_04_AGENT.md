@@ -42,7 +42,7 @@ async def execute(
 
 ---
 
-#### 4.2 记忆加载
+#### 4.2 记忆加载（智能加载）
 
 **代码**:
 ```python
@@ -50,26 +50,63 @@ async def execute(
 session_id = context.get('session_id', 'default')
 user_id = context.get('user_id', session_id)
 
-# 1. 对话历史（LLM层记忆）
-history = self.memory.get_conversation_history(session_id, limit=3)
+# ========== 1. 判断是否为追问 ==========
+is_followup = False
+confidence = 0.0
+if session_id != 'default':
+    is_followup, confidence, reason = await self.memory.is_followup(
+        session_id, user_input
+    )
+
+# ========== 2. 智能加载对话历史（LLM层记忆）==========
+memory_context = await self.memory.load_context_smart(
+    session_id=session_id,
+    user_id=user_id,
+    user_input=user_input,
+    is_followup=is_followup,
+    confidence=confidence
+)
+
+# 提取加载的历史
+history = memory_context.get('history', [])
 if history:
     context['conversation_history'] = history
+    # 日志：策略、历史轮数、成本、是否筛选
 
-# 2. 用户偏好（Agent层记忆）
+# 提取摘要（如果有）
+summary = memory_context.get('summary')
+if summary:
+    context['conversation_summary'] = summary
+
+# ========== 3. 用户偏好（Agent层记忆，轻量级）==========
 prefs = self.memory.get_preferences(user_id)
 if prefs:
     context['user_preferences'] = prefs
 
-# 3. 任务历史（Agent层记忆）
+# ========== 4. 任务历史（Agent层记忆，最近5个）==========
 task_history = self.memory.get_task_history(user_id, limit=5)
 if task_history:
     context['recent_tasks'] = task_history
 ```
 
+**智能加载策略**:
+- **new_conversation** - 新对话（成本0）
+- **simple_followup** - 简单追问（加载2轮）
+- **medium_followup** - 中等追问（加载3轮）
+- **complex_followup** - 复杂追问（摘要+2轮）
+- **cross_session** - 跨会话（向量检索）
+
 **记忆类型**:
-- **对话历史** - 最近3轮对话
+- **对话历史** - 智能加载（2-3轮，节省50-70% token）
+- **对话摘要** - 长对话的摘要信息
 - **用户偏好** - 用户的编程语言偏好等
 - **任务历史** - 最近5个任务
+
+**性能优化**:
+- 根据追问类型动态调整加载量
+- 关键词筛选相关对话
+- 使用摘要代替早期对话
+- 节省50-70%的token成本
 
 ---
 
@@ -253,15 +290,30 @@ async def _call_llm_with_tools(
 
 **代码**:
 ```python
-# 1. 保存对话（LLM层记忆）
+# ========== 1. 保存对话（LLM层记忆）==========
 self.memory.add_conversation(
     session_id,
     user_input,
     response,
-    metadata={'agent': self.name}
+    metadata={'agent': self.name},
+    user_id=user_id  # 维护user_id到session_id的映射
 )
 
-# 2. 保存任务（Agent层记忆）
+# ========== 2. 检查是否需要生成摘要 ==========
+history_after = self.memory.get_conversation_history(session_id)
+current_round = len(history_after)
+
+if self.memory.long_term_memory.should_generate_summary(session_id, current_round):
+    # 每5轮自动生成摘要
+    from ..llm import get_client_manager
+    client_manager = get_client_manager()
+    llm_client = client_manager.get_client(llm_config.get('model'))
+    
+    summary = await self.memory.long_term_memory.generate_summary(
+        session_id, history_after, llm_client
+    )
+
+# ========== 3. 保存任务（Agent层记忆）==========
 self.memory.add_task(user_id, {
     'agent': self.name,
     'input': user_input[:200],
@@ -270,10 +322,24 @@ self.memory.add_task(user_id, {
     'tools_used': tools_used
 })
 
-# 3. 学习用户偏好
+# ========== 4. 学习用户偏好 ==========
 if 'python' in user_input.lower():
     self.memory.remember_preference(user_id, 'preferred_language', 'python')
+elif 'javascript' in user_input.lower():
+    self.memory.remember_preference(user_id, 'preferred_language', 'javascript')
+
+# ========== 5. 检查是否需要更新用户画像 ==========
+await self._check_and_update_profile(user_id, session_id)
+# 首次：10轮对话后
+# 更新：每20轮对话
 ```
+
+**持久化**:
+- 用户偏好 → `~/.daoyoucode/memory/preferences.json`
+- 任务历史 → `~/.daoyoucode/memory/tasks.json`
+- 对话摘要 → `~/.daoyoucode/memory/summaries.json`
+- 用户画像 → `~/.daoyoucode/memory/profiles.json`
+- 用户会话映射 → `~/.daoyoucode/memory/user_sessions.json`
 
 ---
 

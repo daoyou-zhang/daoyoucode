@@ -55,6 +55,96 @@ class BaseAgent(ABC):
         from ..tools.postprocessor import get_tool_postprocessor
         self.tool_postprocessor = get_tool_postprocessor()
         self.logger.debug("工具后处理器已就绪")
+        
+        # 用户画像缓存（按需加载，避免每轮都读取）
+        self._user_profile_cache: Dict[str, Dict[str, Any]] = {}
+    
+    def get_user_profile(self, user_id: str, force_reload: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        获取用户画像（带缓存）
+        
+        Args:
+            user_id: 用户ID
+            force_reload: 是否强制重新加载
+        
+        Returns:
+            用户画像字典，如果不存在返回None
+        """
+        if force_reload or user_id not in self._user_profile_cache:
+            profile = self.memory.long_term_memory.get_user_profile(user_id)
+            if profile:
+                self._user_profile_cache[user_id] = profile
+                self.logger.debug(f"加载用户画像: {user_id}")
+        
+        return self._user_profile_cache.get(user_id)
+    
+    async def _check_and_update_profile(self, user_id: str, session_id: str):
+        """
+        检查并更新用户画像
+        
+        Args:
+            user_id: 用户ID
+            session_id: 当前会话ID
+        """
+        try:
+            # 获取用户的总对话数
+            tasks = self.memory.get_task_history(user_id, limit=1000)
+            total_conversations = len(tasks)
+            
+            # 检查是否需要更新
+            should_update = self.memory.long_term_memory.should_update_profile(
+                user_id, total_conversations
+            )
+            
+            if should_update:
+                self.logger.info(f"🔄 触发用户画像更新: user_id={user_id}, conversations={total_conversations}")
+                
+                # 异步更新（不阻塞当前请求）
+                # 这里简化实现，实际应该放到后台任务队列
+                await self._update_user_profile_async(user_id)
+        
+        except Exception as e:
+            self.logger.warning(f"检查用户画像更新失败: {e}")
+    
+    async def _update_user_profile_async(self, user_id: str):
+        """
+        异步更新用户画像
+        
+        Args:
+            user_id: 用户ID
+        """
+        try:
+            # 收集用户的所有会话
+            all_sessions = self.memory.get_user_sessions(user_id)
+            
+            if not all_sessions:
+                self.logger.warning(f"用户 {user_id} 没有会话记录，跳过画像更新")
+                return
+            
+            # 获取LLM客户端
+            from ..llm import get_client_manager
+            client_manager = get_client_manager()
+            llm_client = client_manager.get_client(self.config.model)
+            
+            # 构建用户画像
+            profile = await self.memory.long_term_memory.build_user_profile(
+                user_id=user_id,
+                all_sessions=all_sessions,
+                llm_client=llm_client
+            )
+            
+            # 清除缓存，下次访问时会重新加载
+            if user_id in self._user_profile_cache:
+                del self._user_profile_cache[user_id]
+            
+            self.logger.info(
+                f"✅ 用户画像已更新: user_id={user_id}, "
+                f"sessions={len(all_sessions)}, "
+                f"topics={len(profile.get('common_topics', []))}"
+            )
+        
+        except Exception as e:
+            self.logger.error(f"更新用户画像失败: {e}", exc_info=True)
     
     async def execute(
         self,
@@ -84,26 +174,63 @@ class BaseAgent(ABC):
         
         # 提取session_id和user_id
         session_id = context.get('session_id', 'default')
-        user_id = context.get('user_id', session_id)
+        
+        # 获取user_id（优先级：context > user_manager > session_id）
+        user_id = context.get('user_id')
+        if not user_id:
+            # 从用户管理器获取
+            from ..memory import get_current_user_id
+            user_id = get_current_user_id()
+        
+        # 确保user_id在context中（供后续使用）
+        context['user_id'] = user_id
         
         tools_used = []
         
         try:
-            # ========== 1. 获取记忆 ==========
+            # ========== 1. 获取记忆（智能加载）==========
             
-            # 1.1 对话历史（LLM层记忆）
-            history = self.memory.get_conversation_history(session_id, limit=3)
+            # 1.1 判断是否为追问
+            is_followup = False
+            confidence = 0.0
+            if session_id != 'default':
+                is_followup, confidence, reason = await self.memory.is_followup(
+                    session_id, user_input
+                )
+                self.logger.debug(f"追问判断: {is_followup} (置信度: {confidence:.2f}, 原因: {reason})")
+            
+            # 1.2 智能加载对话历史（LLM层记忆）
+            memory_context = await self.memory.load_context_smart(
+                session_id=session_id,
+                user_id=user_id,
+                user_input=user_input,
+                is_followup=is_followup,
+                confidence=confidence
+            )
+            
+            # 提取加载的历史
+            history = memory_context.get('history', [])
             if history:
                 context['conversation_history'] = history
-                self.logger.debug(f"加载了 {len(history)} 轮对话历史")
+                self.logger.info(
+                    f"📚 智能加载: 策略={memory_context['strategy']}, "
+                    f"历史={len(history)}轮, 成本={memory_context['cost']}, "
+                    f"筛选={'是' if memory_context.get('filtered') else '否'}"
+                )
             
-            # 1.2 用户偏好（Agent层记忆）
+            # 提取摘要（如果有）
+            summary = memory_context.get('summary')
+            if summary:
+                context['conversation_summary'] = summary
+                self.logger.info(f"📝 加载摘要: {len(summary)}字符")
+            
+            # 1.3 用户偏好（Agent层记忆，轻量级）
             prefs = self.memory.get_preferences(user_id)
             if prefs:
                 context['user_preferences'] = prefs
                 self.logger.debug(f"加载了用户偏好: {list(prefs.keys())}")
             
-            # 1.3 任务历史（Agent层记忆）
+            # 1.4 任务历史（Agent层记忆，最近5个）
             task_history = self.memory.get_task_history(user_id, limit=5)
             if task_history:
                 context['recent_tasks'] = task_history
@@ -125,11 +252,11 @@ class BaseAgent(ABC):
                     for h in history:
                         initial_messages.append({
                             "role": "user",
-                            "content": h.get('user', '')  # 修正：使用'user'而不是'user_message'
+                            "content": h.get('user', '')
                         })
                         initial_messages.append({
                             "role": "assistant",
-                            "content": h.get('ai', '')  # 修正：使用'ai'而不是'ai_response'
+                            "content": h.get('ai', '')
                         })
                 
                 # 添加当前用户输入
@@ -154,10 +281,33 @@ class BaseAgent(ABC):
                 session_id,
                 user_input,
                 response,
-                metadata={'agent': self.name}
+                metadata={'agent': self.name},
+                user_id=user_id  # 传递user_id以维护映射
             )
             
-            # 5.2 保存任务（Agent层记忆）
+            # 5.2 检查是否需要生成摘要
+            history_after = self.memory.get_conversation_history(session_id)
+            current_round = len(history_after)
+            
+            if self.memory.long_term_memory.should_generate_summary(session_id, current_round):
+                self.logger.info(f"🔄 触发摘要生成: session={session_id}, round={current_round}")
+                try:
+                    # 获取LLM客户端
+                    from ..llm import get_client_manager
+                    client_manager = get_client_manager()
+                    llm_client = client_manager.get_client(
+                        llm_config.get('model') if llm_config else self.config.model
+                    )
+                    
+                    # 生成摘要
+                    summary = await self.memory.long_term_memory.generate_summary(
+                        session_id, history_after, llm_client
+                    )
+                    self.logger.info(f"✅ 摘要已生成: {len(summary)}字符")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ 摘要生成失败: {e}")
+            
+            # 5.3 保存任务（Agent层记忆）
             self.memory.add_task(user_id, {
                 'agent': self.name,
                 'input': user_input[:200],  # 限制长度
@@ -166,12 +316,15 @@ class BaseAgent(ABC):
                 'tools_used': tools_used
             })
             
-            # 5.3 学习用户偏好（Agent层记忆）
+            # 5.4 学习用户偏好（Agent层记忆）
             # 例如：如果用户经常问Python问题，记住这个偏好
             if 'python' in user_input.lower():
                 self.memory.remember_preference(user_id, 'preferred_language', 'python')
             elif 'javascript' in user_input.lower() or 'js' in user_input.lower():
                 self.memory.remember_preference(user_id, 'preferred_language', 'javascript')
+            
+            # 5.5 检查是否需要更新用户画像
+            await self._check_and_update_profile(user_id, session_id)
             
             return AgentResult(
                 success=True,

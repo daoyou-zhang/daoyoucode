@@ -9,65 +9,114 @@
 
 ### 调用流程
 
-#### 7.1 Memory管理器
+#### 7.1 Memory管理器（增强版）
 
 **代码**:
 ```python
 class MemoryManager:
-    """记忆管理器（单例）"""
+    """
+    统一的记忆管理器（单例）
+    
+    职责：
+    1. 管理对话历史（LLM层）
+    2. 管理用户偏好（Agent层）
+    3. 管理任务历史（Agent层）
+    4. 判断追问
+    5. 智能加载上下文
+    6. 生成对话摘要
+    7. 构建用户画像
+    8. 提供多智能体共享接口
+    """
     
     def __init__(self):
-        # 初始化存储后端（SQLite）
-        self.db_path = Path(".daoyoucode/memory/memory.db")
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path))
-        self._init_tables()
-    
-    def _init_tables(self):
-        """初始化数据库表"""
-        # 对话历史表
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                user_message TEXT NOT NULL,
-                ai_response TEXT NOT NULL,
-                timestamp REAL NOT NULL,
-                metadata TEXT
-            )
-        """)
+        self.storage = MemoryStorage()
+        self.detector = FollowupDetector()
         
-        # 用户偏好表
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS preferences (
-                user_id TEXT NOT NULL,
-                key TEXT NOT NULL,
-                value TEXT NOT NULL,
-                PRIMARY KEY (user_id, key)
-            )
-        """)
+        # 长期记忆和智能加载
+        from .long_term_memory import LongTermMemory
+        from .smart_loader import SmartLoader
         
-        # 任务历史表
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                task_data TEXT NOT NULL,
-                timestamp REAL NOT NULL
-            )
-        """)
-        
-        self.conn.commit()
+        self.long_term_memory = LongTermMemory(storage=self.storage)
+        self.smart_loader = SmartLoader()
 ```
 
-**职责**:
-- 管理所有记忆数据
-- 提供统一的存储接口
-- 支持多种记忆类型
+**存储策略**:
+- **内存存储（临时）**：对话历史、共享上下文
+- **持久化存储（永久）**：用户偏好、任务历史、摘要、画像、会话映射
+
+**存储位置**:
+```
+~/.daoyoucode/memory/
+├── preferences.json      # 用户偏好
+├── tasks.json           # 任务历史
+├── summaries.json       # 对话摘要
+├── profiles.json        # 用户画像
+└── user_sessions.json   # 用户会话映射
+```
 
 ---
 
-#### 7.2 对话历史（LLM层记忆）
+#### 7.2 智能加载（核心功能）
+
+**入口函数**:
+```python
+async def load_context_smart(
+    self,
+    session_id: str,
+    user_id: str,
+    user_input: str,
+    is_followup: bool = False,
+    confidence: float = 0.0
+) -> Dict[str, Any]:
+    """
+    智能加载上下文
+    
+    Returns:
+        {
+            'strategy': 'medium_followup',
+            'history': [...],  # 智能筛选的对话
+            'summary': '...',  # 对话摘要（如果有）
+            'cost': 2,
+            'filtered': True
+        }
+    """
+```
+
+**加载策略**:
+
+| 策略 | 触发条件 | 加载内容 | 成本 |
+|------|---------|---------|------|
+| new_conversation | 首轮对话 | 无 | 0 |
+| simple_followup | 简单追问 | 最近2轮 | 1 |
+| medium_followup | 中等追问 | 最近3轮 | 2 |
+| complex_followup | 复杂追问 | 摘要+2轮 | 3 |
+| cross_session | 跨会话 | 向量检索 | 5 |
+
+**智能筛选**:
+```python
+# 提取关键词
+keywords = self._extract_keywords(current_message)
+# ['memory', '系统', '功能']
+
+# 筛选相关对话
+relevant = []
+for conv in history:
+    if any(kw in conv['user'].lower() for kw in keywords):
+        relevant.append(conv)
+
+# 组合：相关对话 + 最近对话
+combined = relevant + recent[-limit:]
+```
+
+**性能优化**:
+- 节省50-70%的token成本
+- 关键词筛选相关对话
+- 使用摘要代替早期对话
+- 动态调整加载量
+
+---
+
+#### 7.3 对话历史管理
 
 **添加对话**:
 ```python
@@ -76,27 +125,27 @@ def add_conversation(
     session_id: str,
     user_message: str,
     ai_response: str,
-    metadata: Optional[Dict] = None
+    metadata: Optional[Dict] = None,
+    user_id: Optional[str] = None
 ):
-    """添加对话到历史"""
-    import time
-    import json
+    """
+    添加对话到历史
     
-    self.conn.execute(
-        """
-        INSERT INTO conversations 
-        (session_id, user_message, ai_response, timestamp, metadata)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            session_id,
-            user_message,
-            ai_response,
-            time.time(),
-            json.dumps(metadata or {})
-        )
+    Args:
+        session_id: 会话ID
+        user_message: 用户消息
+        ai_response: AI响应
+        metadata: 元数据
+        user_id: 用户ID（用于维护映射）
+    """
+    # 保存到内存（临时）
+    self.storage.add_conversation(
+        session_id, user_message, ai_response, metadata, user_id
     )
-    self.conn.commit()
+    
+    # 维护user_id到session_id的映射（持久化）
+    if user_id:
+        self.storage._register_session(user_id, session_id)
 ```
 
 **获取对话历史**:
@@ -104,43 +153,27 @@ def add_conversation(
 def get_conversation_history(
     self,
     session_id: str,
-    limit: int = 10
+    limit: Optional[int] = None
 ) -> List[Dict]:
     """获取对话历史"""
-    cursor = self.conn.execute(
-        """
-        SELECT user_message, ai_response, timestamp, metadata
-        FROM conversations
-        WHERE session_id = ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-        """,
-        (session_id, limit)
-    )
-    
-    rows = cursor.fetchall()
-    
-    # 反转顺序（最旧的在前）
-    history = []
-    for row in reversed(rows):
-        history.append({
-            'user': row[0],
-            'ai': row[1],
-            'timestamp': row[2],
-            'metadata': json.loads(row[3])
-        })
-    
-    return history
+    return self.storage.get_conversation_history(session_id, limit)
 ```
 
-**使用场景**:
-- Agent执行前：加载最近3轮对话
-- Agent执行后：保存当前对话
-- 用于构建LLM的messages参数
+**数据格式**:
+```python
+[
+    {
+        'user': '这个项目是做什么的？',
+        'ai': '这是一个AI代码助手...',
+        'timestamp': '2026-02-15T12:00:00',
+        'metadata': {'agent': 'MainAgent'}
+    }
+]
+```
 
 ---
 
-#### 7.3 用户偏好（Agent层记忆）
+#### 7.4 用户偏好（Agent层记忆）
 
 **记住偏好**:
 ```python
@@ -148,29 +181,18 @@ def remember_preference(
     self,
     user_id: str,
     key: str,
-    value: str
+    value: Any
 ):
-    """记住用户偏好"""
-    self.conn.execute(
-        """
-        INSERT OR REPLACE INTO preferences (user_id, key, value)
-        VALUES (?, ?, ?)
-        """,
-        (user_id, key, value)
-    )
-    self.conn.commit()
+    """记住用户偏好（持久化）"""
+    self.storage.add_preference(user_id, key, value)
+    # 自动保存到 ~/.daoyoucode/memory/preferences.json
 ```
 
 **获取偏好**:
 ```python
-def get_preferences(self, user_id: str) -> Dict[str, str]:
+def get_preferences(self, user_id: str) -> Dict[str, Any]:
     """获取用户偏好"""
-    cursor = self.conn.execute(
-        "SELECT key, value FROM preferences WHERE user_id = ?",
-        (user_id,)
-    )
-    
-    return {row[0]: row[1] for row in cursor.fetchall()}
+    return self.storage.get_preferences(user_id)
 ```
 
 **示例偏好**:
@@ -179,66 +201,22 @@ def get_preferences(self, user_id: str) -> Dict[str, str]:
 memory.remember_preference(user_id, 'preferred_language', 'python')
 
 # 代码风格偏好
-memory.remember_preference(user_id, 'code_style', 'pep8')
+memory.remember_preference(user_id, 'code_style', 'functional')
 
 # 详细程度偏好
 memory.remember_preference(user_id, 'verbosity', 'concise')
 ```
 
----
-
-#### 7.4 任务历史（Agent层记忆）
-
-**添加任务**:
-```python
-def add_task(self, user_id: str, task_data: Dict):
-    """添加任务到历史"""
-    import time
-    import json
-    
-    self.conn.execute(
-        """
-        INSERT INTO tasks (user_id, task_data, timestamp)
-        VALUES (?, ?, ?)
-        """,
-        (user_id, json.dumps(task_data), time.time())
-    )
-    self.conn.commit()
-```
-
-**获取任务历史**:
-```python
-def get_task_history(
-    self,
-    user_id: str,
-    limit: int = 10
-) -> List[Dict]:
-    """获取任务历史"""
-    cursor = self.conn.execute(
-        """
-        SELECT task_data, timestamp
-        FROM tasks
-        WHERE user_id = ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-        """,
-        (user_id, limit)
-    )
-    
-    return [
-        {**json.loads(row[0]), 'timestamp': row[1]}
-        for row in cursor.fetchall()
-    ]
-```
-
-**任务数据示例**:
-```python
+**持久化**:
+```json
 {
-    'agent': 'MainAgent',
-    'input': '如何实现Agent系统？',
-    'result': 'Agent系统主要包括...',
-    'success': True,
-    'tools_used': ['repo_map', 'read_file']
+  "user-123": {
+    "preferred_language": {
+      "value": "python",
+      "timestamp": "2026-02-15T12:00:00",
+      "count": 5
+    }
+  }
 }
 ```
 

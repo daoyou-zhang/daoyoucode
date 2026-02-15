@@ -29,7 +29,14 @@ class MemoryManager:
         self.storage = MemoryStorage()
         self.detector = FollowupDetector()
         
-        logger.info("记忆管理器已初始化")
+        # ========== 新增：长期记忆和智能加载 ==========
+        from .long_term_memory import LongTermMemory
+        from .smart_loader import SmartLoader
+        
+        self.long_term_memory = LongTermMemory(storage=self.storage)
+        self.smart_loader = SmartLoader()
+        
+        logger.info("记忆管理器已初始化（增强版）")
     
     # ========== LLM层记忆（对话历史）==========
     
@@ -38,14 +45,25 @@ class MemoryManager:
         session_id: str,
         user_message: str,
         ai_response: str,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        user_id: Optional[str] = None
     ):
-        """添加对话"""
+        """
+        添加对话
+        
+        Args:
+            session_id: 会话ID
+            user_message: 用户消息
+            ai_response: AI响应
+            metadata: 元数据
+            user_id: 用户ID（可选，用于维护映射）
+        """
         self.storage.add_conversation(
             session_id,
             user_message,
             ai_response,
-            metadata
+            metadata,
+            user_id=user_id
         )
     
     def get_conversation_history(
@@ -150,6 +168,100 @@ class MemoryManager:
     ) -> SharedMemoryInterface:
         """创建共享记忆接口"""
         return SharedMemoryInterface(self, session_id, agent_names)
+    
+    # ========== 用户会话映射 ==========
+    
+    def get_user_sessions(self, user_id: str) -> List[str]:
+        """
+        获取用户的所有会话ID
+        
+        Args:
+            user_id: 用户ID
+        
+        Returns:
+            会话ID列表
+        """
+        return self.storage.get_user_sessions(user_id)
+    
+    def get_session_user(self, session_id: str) -> Optional[str]:
+        """
+        获取会话对应的用户ID
+        
+        Args:
+            session_id: 会话ID
+        
+        Returns:
+            用户ID
+        """
+        return self.storage.get_session_user(session_id)
+    
+    # ========== 新增：智能加载接口 ==========
+    
+    async def load_context_smart(
+        self,
+        session_id: str,
+        user_id: str,
+        user_input: str,
+        is_followup: bool = False,
+        confidence: float = 0.0
+    ) -> Dict[str, Any]:
+        """
+        智能加载上下文（核心方法）
+        
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID
+            user_input: 用户输入
+            is_followup: 是否为追问
+            confidence: 追问置信度
+        
+        Returns:
+            加载的上下文数据
+        """
+        # 获取历史数量
+        history = self.get_conversation_history(session_id)
+        history_count = len(history)
+        
+        # 检查是否有摘要
+        has_summary = self.long_term_memory.get_summary(session_id) is not None
+        
+        # 决定加载策略
+        strategy, config = await self.smart_loader.decide_load_strategy(
+            is_followup=is_followup,
+            confidence=confidence,
+            history_count=history_count,
+            has_summary=has_summary,
+            current_message=user_input
+        )
+        
+        # 加载上下文
+        context = await self.smart_loader.load_context(
+            strategy_name=strategy,
+            strategy_config=config,
+            memory_manager=self,
+            session_id=session_id,
+            user_id=user_id,
+            current_message=user_input
+        )
+        
+        return context
+    
+    def format_context_for_prompt(
+        self,
+        context: Dict[str, Any],
+        current_message: str
+    ) -> str:
+        """
+        格式化上下文为LLM prompt
+        
+        Args:
+            context: 加载的上下文
+            current_message: 当前消息
+        
+        Returns:
+            格式化的prompt文本
+        """
+        return self.smart_loader.format_context_for_prompt(context, current_message)
     
     # ========== 工具方法 ==========
     
