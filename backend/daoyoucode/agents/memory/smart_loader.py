@@ -6,6 +6,7 @@
 2. 分层加载 - 根据对话深度选择策略
 3. 成本优化 - 避免每次都加载所有记忆
 4. 树结构 - 支持基于对话树的智能检索
+5. 可配置 - 支持从配置文件加载策略
 
 加载策略：
 - 新对话：不加载任何记忆（成本0）
@@ -34,14 +35,16 @@ class SmartLoader:
     2. 最小化LLM prompt长度
     3. 降低成本
     4. 支持基于树结构的智能检索
+    5. 支持策略配置化
     """
     
-    def __init__(self, enable_tree: bool = True):
+    def __init__(self, enable_tree: bool = True, config_path: Optional[str] = None):
         """
         初始化智能加载器
         
         Args:
             enable_tree: 是否启用对话树（默认启用）
+            config_path: 策略配置文件路径（可选）
         """
         self.enable_tree = enable_tree
         
@@ -53,45 +56,15 @@ class SmartLoader:
             logger.info("对话树已启用")
         
         # 加载策略配置
-        self.config = {
-            # 新对话：不加载
-            'new_conversation': {
-                'load_history': False,
-                'load_summary': False,
-                'load_profile': False,
-                'cost': 0
-            },
-            # 简单追问（2轮内）
-            'simple_followup': {
-                'load_history': True,
-                'history_limit': 2,
-                'load_summary': False,
-                'load_profile': False,
-                'cost': 1
-            },
-            # 中等追问（3-5轮）
-            'medium_followup': {
-                'load_history': True,
-                'history_limit': 3,
-                'load_summary': False,
-                'cost': 2
-            },
-            # 复杂追问（>5轮）
-            'complex_followup': {
-                'load_history': True,
-                'history_limit': 2,  # 只加载最近2轮
-                'load_summary': True,  # 加载摘要代替早期对话
-                'cost': 3
-            },
-            # 跨session（需要向量检索）
-            'cross_session': {
-                'load_history': True,
-                'history_limit': 3,
-                'load_summary': True,
-                'use_vector_search': True,  # 使用向量检索
-                'cost': 5
-            }
-        }
+        from .load_strategy_config import get_load_strategy_config
+        self.strategy_config = get_load_strategy_config(config_path)
+        self.config = self.strategy_config.get_all_strategies()
+        
+        logger.info(
+            f"智能加载器已初始化: "
+            f"策略数={len(self.config)}, "
+            f"配置文件={'是' if config_path else '否（使用默认）'}"
+        )
         
         # 统计
         self.stats = {
@@ -465,6 +438,44 @@ class SmartLoader:
             return "\n\n".join(parts)
         else:  # 无上下文
             return f"用户问题：{current_message}"
+    
+    def reload_config(self, config_path: Optional[str] = None) -> bool:
+        """
+        重新加载配置（热重载）
+        
+        Args:
+            config_path: 配置文件路径（可选）
+        
+        Returns:
+            是否重载成功
+        """
+        if config_path:
+            from .load_strategy_config import LoadStrategyConfig
+            self.strategy_config = LoadStrategyConfig(config_path)
+        else:
+            success = self.strategy_config.reload()
+            if not success:
+                return False
+        
+        self.config = self.strategy_config.get_all_strategies()
+        logger.info(f"✅ 策略配置已重载: {len(self.config)} 个策略")
+        return True
+    
+    def get_strategy_info(self, strategy_name: str) -> Optional[Dict[str, Any]]:
+        """
+        获取策略信息
+        
+        Args:
+            strategy_name: 策略名称
+        
+        Returns:
+            策略配置字典
+        """
+        return self.config.get(strategy_name)
+    
+    def list_strategies(self) -> List[str]:
+        """列出所有可用策略"""
+        return list(self.config.keys())
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""

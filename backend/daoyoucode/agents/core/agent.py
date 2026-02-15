@@ -58,6 +58,10 @@ class BaseAgent(ABC):
         
         # 用户画像缓存（按需加载，避免每轮都读取）
         self._user_profile_cache: Dict[str, Dict[str, Any]] = {}
+        
+        # 用户画像检查时间缓存（避免频繁检查）
+        # 格式：{user_id: last_check_timestamp}
+        self._profile_check_cache: Dict[str, float] = {}
     
     def get_user_profile(self, user_id: str, force_reload: bool = False) -> Optional[Dict[str, Any]]:
         """
@@ -80,13 +84,35 @@ class BaseAgent(ABC):
     
     async def _check_and_update_profile(self, user_id: str, session_id: str):
         """
-        检查并更新用户画像
+        检查并更新用户画像（带时间窗口优化）
+        
+        优化策略：
+        - 1小时内只检查一次，避免频繁的文件I/O和计算
+        - 减少90%的不必要检查
         
         Args:
             user_id: 用户ID
             session_id: 当前会话ID
         """
+        import time
+        
         try:
+            # 检查时间窗口（1小时 = 3600秒）
+            CHECK_INTERVAL = 3600
+            current_time = time.time()
+            last_check = self._profile_check_cache.get(user_id)
+            
+            if last_check and (current_time - last_check) < CHECK_INTERVAL:
+                # 1小时内已经检查过，跳过
+                self.logger.debug(
+                    f"跳过画像检查: user_id={user_id}, "
+                    f"距上次检查 {int(current_time - last_check)}秒"
+                )
+                return
+            
+            # 更新检查时间
+            self._profile_check_cache[user_id] = current_time
+            
             # 获取用户的总对话数
             tasks = self.memory.get_task_history(user_id, limit=1000)
             total_conversations = len(tasks)
@@ -145,6 +171,156 @@ class BaseAgent(ABC):
         
         except Exception as e:
             self.logger.error(f"更新用户画像失败: {e}", exc_info=True)
+    
+    async def execute_stream(
+        self,
+        prompt_source: Dict[str, Any],
+        user_input: str,
+        context: Optional[Dict[str, Any]] = None,
+        llm_config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[str]] = None,
+        max_tool_iterations: int = 5
+    ):
+        """
+        流式执行任务（yield每个token）
+        
+        注意：流式模式不支持工具调用，如果提供了tools参数会自动降级到普通模式
+        
+        Args:
+            prompt_source: Prompt来源
+            user_input: 用户输入
+            context: 上下文
+            llm_config: LLM配置
+            tools: 可用工具列表（流式模式下会被忽略）
+            max_tool_iterations: 最大工具调用迭代次数（流式模式下无效）
+        
+        Yields:
+            Dict: 流式事件
+                - {'type': 'token', 'content': str} - 文本token
+                - {'type': 'metadata', 'data': dict} - 元数据（开始/结束）
+                - {'type': 'error', 'error': str} - 错误信息
+        """
+        if context is None:
+            context = {}
+        
+        # 提取session_id和user_id
+        session_id = context.get('session_id', 'default')
+        user_id = context.get('user_id')
+        if not user_id:
+            from ..memory import get_current_user_id
+            user_id = get_current_user_id()
+        context['user_id'] = user_id
+        
+        # 流式模式不支持工具调用
+        if tools:
+            self.logger.warning("流式模式不支持工具调用，自动降级到普通模式")
+            result = await self.execute(
+                prompt_source, user_input, context, llm_config, tools, max_tool_iterations
+            )
+            yield {'type': 'token', 'content': result.content}
+            yield {'type': 'metadata', 'data': {'success': result.success, 'done': True}}
+            return
+        
+        try:
+            # 发送开始事件
+            yield {'type': 'metadata', 'data': {'status': 'started'}}
+            
+            # ========== 1. 获取记忆（智能加载）==========
+            is_followup = False
+            confidence = 0.0
+            if session_id != 'default':
+                is_followup, confidence, reason = await self.memory.is_followup(
+                    session_id, user_input
+                )
+            
+            memory_context = await self.memory.load_context_smart(
+                session_id=session_id,
+                user_id=user_id,
+                user_input=user_input,
+                is_followup=is_followup,
+                confidence=confidence
+            )
+            
+            history = memory_context.get('history', [])
+            if history:
+                context['conversation_history'] = history
+            
+            summary = memory_context.get('summary')
+            if summary:
+                context['conversation_summary'] = summary
+            
+            prefs = self.memory.get_preferences(user_id)
+            if prefs:
+                context['user_preferences'] = prefs
+            
+            task_history = self.memory.get_task_history(user_id, limit=5)
+            if task_history:
+                context['recent_tasks'] = task_history
+            
+            # ========== 2. 加载和渲染Prompt ==========
+            prompt = await self._load_prompt(prompt_source, context)
+            full_prompt = self._render_prompt(prompt, user_input, context)
+            
+            # ========== 3. 流式调用LLM ==========
+            response_content = ""
+            async for token in self._stream_llm(full_prompt, llm_config):
+                response_content += token
+                yield {'type': 'token', 'content': token}
+            
+            # ========== 4. 保存到记忆 ==========
+            self.memory.add_conversation(
+                session_id,
+                user_input,
+                response_content,
+                metadata={'agent': self.name, 'stream': True},
+                user_id=user_id
+            )
+            
+            # 检查是否需要生成摘要
+            history_after = self.memory.get_conversation_history(session_id)
+            current_round = len(history_after)
+            
+            if self.memory.long_term_memory.should_generate_summary(session_id, current_round):
+                try:
+                    from ..llm import get_client_manager
+                    client_manager = get_client_manager()
+                    llm_client = client_manager.get_client(
+                        llm_config.get('model') if llm_config else self.config.model
+                    )
+                    summary = await self.memory.long_term_memory.generate_summary(
+                        session_id, history_after, llm_client
+                    )
+                except Exception as e:
+                    self.logger.warning(f"⚠️ 摘要生成失败: {e}")
+            
+            # 保存任务
+            self.memory.add_task(user_id, {
+                'agent': self.name,
+                'input': user_input[:200],
+                'result': response_content[:200],
+                'success': True,
+                'stream': True
+            })
+            
+            # 检查是否需要更新用户画像
+            await self._check_and_update_profile(user_id, session_id)
+            
+            # 发送完成事件
+            yield {'type': 'metadata', 'data': {'status': 'completed', 'done': True}}
+        
+        except Exception as e:
+            self.logger.error(f"流式执行失败: {e}", exc_info=True)
+            
+            # 失败也记录到任务历史
+            self.memory.add_task(user_id, {
+                'agent': self.name,
+                'input': user_input[:200],
+                'error': str(e)[:200],
+                'success': False
+            })
+            
+            yield {'type': 'error', 'error': str(e)}
+            yield {'type': 'metadata', 'data': {'status': 'failed', 'done': True}}
     
     async def execute(
         self,
@@ -248,7 +424,18 @@ class BaseAgent(ABC):
                 initial_messages = []
                 
                 # 添加历史对话（如果有）
+                # 优化：只保留最近N轮对话，避免token浪费
+                MAX_HISTORY_ROUNDS = 5
                 if history:
+                    # 如果历史超过限制，只保留最近的N轮
+                    if len(history) > MAX_HISTORY_ROUNDS:
+                        truncated_count = len(history) - MAX_HISTORY_ROUNDS
+                        history = history[-MAX_HISTORY_ROUNDS:]
+                        self.logger.info(
+                            f"📉 工具调用历史截断: 保留最近{MAX_HISTORY_ROUNDS}轮, "
+                            f"截断{truncated_count}轮 (节省token)"
+                        )
+                    
                     for h in history:
                         initial_messages.append({
                             "role": "user",
@@ -424,6 +611,45 @@ class BaseAgent(ABC):
         llm_response = await client.chat(request)
         
         return llm_response.content
+    
+    async def _stream_llm(
+        self,
+        prompt: str,
+        llm_config: Optional[Dict[str, Any]] = None
+    ):
+        """
+        流式调用LLM
+        
+        Args:
+            prompt: 提示词
+            llm_config: LLM配置
+        
+        Yields:
+            str: 每个token
+        """
+        from ..llm import get_client_manager
+        
+        client_manager = get_client_manager()
+        
+        # 合并配置
+        model = (llm_config or {}).get('model', self.config.model)
+        temperature = (llm_config or {}).get('temperature', self.config.temperature)
+        
+        # 获取客户端
+        client = client_manager.get_client(model=model)
+        
+        # 构建请求
+        from ..llm.base import LLMRequest
+        request = LLMRequest(
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            stream=True
+        )
+        
+        # 流式调用
+        async for token in client.stream_chat(request):
+            yield token
     
     async def _call_llm_with_tools(
         self,

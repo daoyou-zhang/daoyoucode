@@ -29,6 +29,7 @@ class LongTermMemory:
     2. 自动摘要：每5轮对话生成摘要
     3. 关键提取：结构化信息提取
     4. 用户画像：偏好、历史问题
+    5. 缓存层：减少文件I/O
     """
     
     def __init__(self, storage=None):
@@ -42,7 +43,12 @@ class LongTermMemory:
         self.summary_interval = 5  # 每N轮生成一次摘要（可配置）
         self.summary_min_messages = 3  # 最少需要N轮才生成摘要
         
-        logger.info("长期记忆管理器已初始化")
+        # 缓存层
+        from ..core.cache import get_profile_cache, get_summary_cache
+        self.profile_cache = get_profile_cache()
+        self.summary_cache = get_summary_cache()
+        
+        logger.info("长期记忆管理器已初始化（带缓存）")
     
     async def generate_summary(
         self,
@@ -105,6 +111,9 @@ class LongTermMemory:
             if self.storage:
                 self.storage.save_summary(session_id, summary)
             
+            # 缓存摘要（TTL: 30分钟）
+            self.summary_cache.set(session_id, summary, ttl=1800)
+            
             logger.info(f"✅ 生成对话摘要: session={session_id}, length={len(summary)}")
             return summary
         
@@ -113,11 +122,32 @@ class LongTermMemory:
             return ""
     
     def get_summary(self, session_id: str) -> Optional[str]:
-        """获取会话摘要"""
+        """
+        获取会话摘要（带缓存）
+        
+        Args:
+            session_id: 会话ID
+        
+        Returns:
+            摘要文本
+        """
+        # 尝试从缓存获取
+        cached = self.summary_cache.get(session_id)
+        if cached is not None:
+            logger.debug(f"摘要缓存命中: {session_id}")
+            return cached
+        
+        # 从存储获取
         if not self.storage:
             return None
         
-        return self.storage.get_summary(session_id)
+        summary = self.storage.get_summary(session_id)
+        
+        # 缓存结果（TTL: 30分钟）
+        if summary:
+            self.summary_cache.set(session_id, summary, ttl=1800)
+        
+        return summary
     
     async def extract_key_info(
         self,
@@ -277,6 +307,9 @@ class LongTermMemory:
         # 10. 保存到存储
         if self.storage:
             self.storage.save_user_profile(user_id, profile)
+        
+        # 缓存画像（TTL: 1小时）
+        self.profile_cache.set(user_id, profile, ttl=3600)
         
         logger.info(
             f"✅ 构建用户画像: user_id={user_id}, "
@@ -538,11 +571,32 @@ class LongTermMemory:
         return current_conversation_count - last_count >= 20
     
     def get_user_profile(self, user_id: str) -> Optional[Dict]:
-        """获取用户画像"""
+        """
+        获取用户画像（带缓存）
+        
+        Args:
+            user_id: 用户ID
+        
+        Returns:
+            用户画像字典
+        """
+        # 尝试从缓存获取
+        cached = self.profile_cache.get(user_id)
+        if cached is not None:
+            logger.debug(f"画像缓存命中: {user_id}")
+            return cached
+        
+        # 从存储获取
         if not self.storage:
             return None
         
-        return self.storage.get_user_profile(user_id)
+        profile = self.storage.get_user_profile(user_id)
+        
+        # 缓存结果（TTL: 1小时）
+        if profile:
+            self.profile_cache.set(user_id, profile, ttl=3600)
+        
+        return profile
     
     def should_generate_summary(
         self,

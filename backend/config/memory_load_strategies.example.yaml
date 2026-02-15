@@ -1,0 +1,86 @@
+# Memory加载策略配置示例
+#
+# 这个文件定义了不同场景下的记忆加载策略
+# 可以根据实际需求调整各个策略的参数
+
+strategies:
+  # 新对话：不加载任何记忆
+  new_conversation:
+    load_history: false
+    load_summary: false
+    load_profile: false
+    cost: 0
+    description: "新对话，不加载任何记忆"
+  
+  # 简单追问：加载最近2轮
+  simple_followup:
+    load_history: true
+    history_limit: 2
+    load_summary: false
+    load_profile: false
+    cost: 1
+    description: "简单追问，加载最近2轮对话"
+  
+  # 中等追问：加载最近3轮
+  medium_followup:
+    load_history: true
+    history_limit: 3
+    load_summary: false
+    load_profile: false
+    cost: 2
+    description: "中等追问，加载最近3轮对话"
+  
+  # 复杂追问：加载摘要+最近2轮
+  complex_followup:
+    load_history: true
+    history_limit: 2
+    load_summary: true  # 使用摘要代替早期对话
+    load_profile: false
+    cost: 3
+    description: "复杂追问，加载摘要+最近2轮"
+  
+  # 跨session：使用向量检索
+  cross_session:
+    load_history: true
+    history_limit: 3
+    load_summary: true
+    use_vector_search: true
+    load_profile: true
+    cost: 5
+    description: "跨session，使用向量检索+用户画像"
+  
+  # 自定义策略示例：高性能模式（最小化加载）
+  performance_mode:
+    load_history: true
+    history_limit: 1  # 只加载最近1轮
+    load_summary: false
+    load_profile: false
+    cost: 0.5
+    description: "高性能模式，最小化记忆加载"
+  
+  # 自定义策略示例：完整上下文模式（最大化加载）
+  full_context_mode:
+    load_history: true
+    history_limit: 10  # 加载最近10轮
+    load_summary: true
+    load_profile: true
+    use_vector_search: true
+    cost: 10
+    description: "完整上下文模式，最大化记忆加载"
+
+# 配置说明：
+#
+# load_history: 是否加载对话历史
+# history_limit: 加载多少轮历史（如果load_history=true）
+# load_summary: 是否加载对话摘要
+# load_profile: 是否加载用户画像
+# use_vector_search: 是否使用向量检索（跨session场景）
+# cost: 策略成本（用于统计和优化）
+# description: 策略描述（可选）
+#
+# 调优建议：
+# 1. history_limit越大，上下文越完整，但token消耗越多
+# 2. load_summary可以用较少token提供早期对话信息
+# 3. load_profile适合需要个性化的场景
+# 4. use_vector_search适合跨session检索
+# 5. 根据实际场景调整cost值，用于监控和优化

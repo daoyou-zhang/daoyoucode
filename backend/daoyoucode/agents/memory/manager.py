@@ -9,6 +9,7 @@ import logging
 from .storage import MemoryStorage
 from .detector import FollowupDetector
 from .shared import SharedMemoryInterface
+from ..core.cache import get_profile_cache, get_summary_cache, get_history_cache, get_preference_cache
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class MemoryManager:
     3. 管理任务历史（Agent层）
     4. 判断追问
     5. 提供多智能体共享接口
+    6. 缓存层（减少文件I/O）
     """
     
     def __init__(self, enable_tree: bool = True):
@@ -34,6 +36,12 @@ class MemoryManager:
         """
         self.storage = MemoryStorage()
         self.detector = FollowupDetector()
+        
+        # ========== 缓存层 ==========
+        self.profile_cache = get_profile_cache()
+        self.summary_cache = get_summary_cache()
+        self.history_cache = get_history_cache()
+        self.preference_cache = get_preference_cache()
         
         # ========== 新增：长期记忆和智能加载 ==========
         from .long_term_memory import LongTermMemory
@@ -49,9 +57,9 @@ class MemoryManager:
         if enable_tree:
             from .conversation_tree import get_conversation_tree
             self._conversation_tree = get_conversation_tree(enabled=True)
-            logger.info("记忆管理器已初始化（增强版 + 对话树）")
+            logger.info("记忆管理器已初始化（增强版 + 对话树 + 缓存层）")
         else:
-            logger.info("记忆管理器已初始化（增强版）")
+            logger.info("记忆管理器已初始化（增强版 + 缓存层）")
     
     # ========== LLM层记忆（对话历史）==========
     
@@ -94,14 +102,44 @@ class MemoryManager:
             metadata,
             user_id=user_id
         )
+        
+        # 清除历史缓存（因为数据已更新）
+        # 清除所有相关的缓存键
+        for limit in [None, 1, 2, 3, 5, 10]:
+            cache_key = f"{session_id}:{limit or 'all'}"
+            self.history_cache.delete(cache_key)
     
     def get_conversation_history(
         self,
         session_id: str,
         limit: Optional[int] = None
     ) -> List[Dict]:
-        """获取对话历史"""
-        return self.storage.get_conversation_history(session_id, limit)
+        """
+        获取对话历史（带缓存）
+        
+        Args:
+            session_id: 会话ID
+            limit: 限制数量
+        
+        Returns:
+            对话历史列表
+        """
+        # 构建缓存键
+        cache_key = f"{session_id}:{limit or 'all'}"
+        
+        # 尝试从缓存获取
+        cached = self.history_cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"历史缓存命中: {session_id}")
+            return cached
+        
+        # 从存储获取
+        history = self.storage.get_conversation_history(session_id, limit)
+        
+        # 缓存结果（TTL: 5分钟）
+        self.history_cache.set(cache_key, history, ttl=300)
+        
+        return history
     
     async def is_followup(
         self,
@@ -120,15 +158,45 @@ class MemoryManager:
         key: str,
         value: Any
     ):
-        """记住用户偏好"""
+        """
+        记住用户偏好
+        
+        Args:
+            user_id: 用户ID
+            key: 偏好键
+            value: 偏好值
+        """
         self.storage.add_preference(user_id, key, value)
+        
+        # 清除偏好缓存（因为数据已更新）
+        self.preference_cache.delete(user_id)
     
     def get_preferences(
         self,
         user_id: str
     ) -> Dict[str, Any]:
-        """获取用户偏好"""
-        return self.storage.get_preferences(user_id)
+        """
+        获取用户偏好（带缓存）
+        
+        Args:
+            user_id: 用户ID
+        
+        Returns:
+            用户偏好字典
+        """
+        # 尝试从缓存获取
+        cached = self.preference_cache.get(user_id)
+        if cached is not None:
+            logger.debug(f"偏好缓存命中: {user_id}")
+            return cached
+        
+        # 从存储获取
+        prefs = self.storage.get_preferences(user_id)
+        
+        # 缓存结果（TTL: 1小时）
+        self.preference_cache.set(user_id, prefs, ttl=3600)
+        
+        return prefs
     
     # ========== Agent层记忆（任务历史）==========
     

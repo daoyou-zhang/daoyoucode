@@ -642,6 +642,32 @@ class ConversationTree:
             }
         }
     
+    def visualize(self, format: str = 'ascii', **kwargs) -> str:
+        """
+        可视化对话树
+        
+        Args:
+            format: 格式（mermaid/ascii/json/html）
+            **kwargs: 其他参数
+        
+        Returns:
+            可视化字符串
+        """
+        from .tree_visualizer import visualize_tree
+        return visualize_tree(self, format=format, **kwargs)
+    
+    def export_visualization(self, filepath: str, format: str = 'auto'):
+        """
+        导出可视化到文件
+        
+        Args:
+            filepath: 文件路径
+            format: 格式（auto/mermaid/ascii/json/html）
+        """
+        from .tree_visualizer import TreeVisualizer
+        visualizer = TreeVisualizer(self)
+        visualizer.export_to_file(filepath, format=format)
+    
     def load_from_history(self, history: List[Dict[str, Any]]):
         """
         从历史对话中重建树结构
