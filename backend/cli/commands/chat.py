@@ -316,13 +316,20 @@ def handle_chat(user_input: str, ui_context: dict):
     """处理对话 - 通过Skill系统"""
     from cli.ui.console import console
     import asyncio
+    import os
     
     # 准备基本上下文（传递给Skill系统）
+    # 将 repo 路径转换为绝对路径
+    repo_path = os.path.abspath(ui_context["repo"])
+    
     context = {
         "session_id": ui_context["session_id"],
-        "repo": ui_context["repo"],
+        "repo": repo_path,
         "model": ui_context["model"],
-        "initial_files": ui_context.get("initial_files", [])
+        "initial_files": ui_context.get("initial_files", []),
+        # 添加明确的说明
+        "working_directory": repo_path,
+        "repo_root": repo_path,
     }
     
     try:

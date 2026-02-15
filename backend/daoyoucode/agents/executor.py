@@ -132,7 +132,7 @@ async def _execute_skill_internal(
         
         # 4. 创建任务
         # 智能截断描述：保留开头和结尾，中间用...连接
-        task_description = self._truncate_description(user_input, max_length=500)
+        task_description = _truncate_description(user_input, max_length=500)
         
         task = task_manager.create_task(
             description=task_description,

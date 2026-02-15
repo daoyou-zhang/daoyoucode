@@ -456,7 +456,9 @@ class BaseAgent(ABC):
                     initial_messages,  # 传递包含历史的消息列表
                     tools,
                     llm_config,
-                    max_tool_iterations
+                    max_tool_iterations,
+                    context=context,  # 传递 context
+                    history=history   # 传递 history
                 )
             else:
                 response = await self._call_llm(full_prompt, llm_config)
@@ -656,7 +658,9 @@ class BaseAgent(ABC):
         initial_messages: List[Dict[str, Any]],  # 改为接受消息列表
         tool_names: List[str],
         llm_config: Optional[Dict[str, Any]] = None,
-        max_iterations: int = 5
+        max_iterations: int = 5,
+        context: Optional[Dict[str, Any]] = None,  # 添加 context 参数
+        history: Optional[List[Dict[str, Any]]] = None  # 添加 history 参数
     ) -> tuple[str, List[str]]:
         """
         调用LLM并支持工具调用
@@ -666,11 +670,14 @@ class BaseAgent(ABC):
             tool_names: 可用工具名称列表
             llm_config: LLM配置
             max_iterations: 最大迭代次数
+            context: 执行上下文（用于后处理）
+            history: 对话历史（用于后处理）
         
         Returns:
             (最终响应, 使用的工具列表)
         """
         import json
+        import time  # 添加 time 导入
         
         # 使用已初始化的工具注册表
         tool_registry = self._tool_registry
@@ -721,15 +728,28 @@ class BaseAgent(ABC):
             tool_args = json.loads(function_call['arguments'])
             
             self.logger.info(f"调用工具: {tool_name}, 参数: {tool_args}")
-            print(f"\n🔧 执行工具: {tool_name}")  # 添加控制台输出
-            print(f"   参数: {tool_args}")
             tools_used.append(tool_name)
             
-            # 执行工具
+            # 使用美观的UI显示
+            from ..ui import get_tool_display
+            display = get_tool_display()
+            
+            # 显示工具开始
+            display.show_tool_start(tool_name, tool_args)
+            
+            # 执行工具（带进度显示）
+            start_time = time.time()
             try:
-                print(f"   ⏳ 正在执行...")  # 添加进度提示
-                tool_result = await tool_registry.execute_tool(tool_name, **tool_args)
-                print(f"   ✓ 执行完成")  # 添加完成提示
+                with display.show_progress(tool_name) as progress:
+                    task = progress.add_task(f"正在执行 {tool_name}...", total=100)
+                    
+                    # 模拟进度
+                    progress.update(task, advance=30)
+                    tool_result = await tool_registry.execute_tool(tool_name, **tool_args)
+                    progress.update(task, advance=70)
+                
+                duration = time.time() - start_time
+                display.show_success(tool_name, duration)
                 
                 # ========== 智能后处理 ==========
                 if tool_result.success:
@@ -741,26 +761,32 @@ class BaseAgent(ABC):
                             break
                     
                     # 后处理
-                    if user_query:
+                    if user_query and context:  # 确保 context 存在
                         tool_result = await self.tool_postprocessor.process(
                             tool_name=tool_name,
                             result=tool_result,
                             user_query=user_query,
                             context={
-                                'session_id': context.get('session_id'),
-                                'conversation_history': history,
+                                'session_id': context.get('session_id') if context else None,
+                                'conversation_history': history if history else [],
                             }
                         )
                 
                 # 提取实际内容
                 if tool_result.success:
                     tool_result_str = str(tool_result.content) if tool_result.content else "工具执行成功，但没有返回内容"
+                    
+                    # 显示结果预览（可选）
+                    # display.show_result_preview(tool_result_str, max_lines=3)
                 else:
                     tool_result_str = f"Error: {tool_result.error}"
+                    display.show_warning(tool_name, f"工具返回错误: {tool_result.error}")
             except Exception as e:
-                print(f"   ✗ 执行失败: {e}")  # 添加失败提示
+                duration = time.time() - start_time
+                display.show_error(tool_name, e, duration)
+                
                 tool_result_str = f"Error: {str(e)}"
-                self.logger.error(f"工具执行失败: {e}")
+                self.logger.error(f"工具执行失败: {e}", exc_info=True)
             
             # 添加到消息历史
             messages.append({

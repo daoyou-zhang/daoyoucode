@@ -77,7 +77,7 @@ class RepoMapTool(BaseTool):
                     "chat_files": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "对话中提到的文件列表（权重×50）"
+                        "description": "对话中提到的文件列表（权重×50）。如果为空，会自动扩大token预算以提供更全面的项目视图"
                     },
                     "mentioned_idents": {
                         "type": "array",
@@ -86,8 +86,13 @@ class RepoMapTool(BaseTool):
                     },
                     "max_tokens": {
                         "type": "integer",
-                        "description": "最大token数量",
-                        "default": 2000
+                        "description": "最大token数量（默认3000）。如果chat_files为空，会自动扩大到6000",
+                        "default": 3000
+                    },
+                    "auto_scale": {
+                        "type": "boolean",
+                        "description": "是否自动调整token预算（默认true）。当chat_files为空时，自动扩大预算以提供更全面的视图",
+                        "default": True
                     }
                 },
                 "required": ["repo_path"]
@@ -99,7 +104,8 @@ class RepoMapTool(BaseTool):
         repo_path: str,
         chat_files: Optional[List[str]] = None,
         mentioned_idents: Optional[List[str]] = None,
-        max_tokens: int = 2000
+        max_tokens: int = 3000,
+        auto_scale: bool = True
     ) -> ToolResult:
         """
         生成RepoMap
@@ -109,6 +115,7 @@ class RepoMapTool(BaseTool):
             chat_files: 对话中的文件（权重×50）
             mentioned_idents: 提到的标识符（权重×10）
             max_tokens: 最大token数量
+            auto_scale: 是否自动调整token预算
             
         Returns:
             ToolResult
@@ -124,6 +131,23 @@ class RepoMapTool(BaseTool):
             
             chat_files = chat_files or []
             mentioned_idents = mentioned_idents or []
+            
+            # 智能调整token预算（借鉴aider）
+            original_max_tokens = max_tokens
+            if auto_scale:
+                if not chat_files or len(chat_files) == 0:
+                    # 没有对话文件，扩大预算（2倍，最多6000）
+                    max_tokens = min(max_tokens * 2, 6000)
+                    logger.info(
+                        f"🔍 智能调整: 无对话文件，扩大token预算 "
+                        f"{original_max_tokens} → {max_tokens} "
+                        f"(提供更全面的项目视图)"
+                    )
+                else:
+                    logger.info(
+                        f"📁 智能调整: 有 {len(chat_files)} 个对话文件，"
+                        f"使用标准token预算 {max_tokens}"
+                    )
             
             # 初始化缓存
             self._init_cache(repo_path)
@@ -159,7 +183,11 @@ class RepoMapTool(BaseTool):
                 metadata={
                     'repo_path': str(repo_path),
                     'file_count': len(definitions),
-                    'definition_count': sum(len(defs) for defs in definitions.values())
+                    'definition_count': sum(len(defs) for defs in definitions.values()),
+                    'max_tokens': max_tokens,
+                    'original_max_tokens': original_max_tokens,
+                    'auto_scaled': auto_scale and (max_tokens != original_max_tokens),
+                    'chat_files_count': len(chat_files)
                 }
             )
             
