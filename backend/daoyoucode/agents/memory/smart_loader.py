@@ -5,12 +5,18 @@
 1. 按需加载 - 只在需要时加载
 2. 分层加载 - 根据对话深度选择策略
 3. 成本优化 - 避免每次都加载所有记忆
+4. 树结构 - 支持基于对话树的智能检索
 
 加载策略：
 - 新对话：不加载任何记忆（成本0）
 - 简单追问：只加载最近2轮（成本低）
 - 复杂追问：加载相关分支 + 摘要（成本中）
 - 跨session：加载用户画像（成本高，但必要）
+
+树结构支持：
+- 自动检测话题切换
+- 维护多分支对话
+- 智能检索相关分支
 """
 
 from typing import Dict, List, Optional, Any, Tuple, Set
@@ -27,9 +33,25 @@ class SmartLoader:
     1. 根据对话深度决定加载策略
     2. 最小化LLM prompt长度
     3. 降低成本
+    4. 支持基于树结构的智能检索
     """
     
-    def __init__(self):
+    def __init__(self, enable_tree: bool = True):
+        """
+        初始化智能加载器
+        
+        Args:
+            enable_tree: 是否启用对话树（默认启用）
+        """
+        self.enable_tree = enable_tree
+        
+        # 对话树（可选）
+        self._conversation_tree = None
+        if enable_tree:
+            from .conversation_tree import get_conversation_tree
+            self._conversation_tree = get_conversation_tree(enabled=True)
+            logger.info("对话树已启用")
+        
         # 加载策略配置
         self.config = {
             # 新对话：不加载
@@ -191,7 +213,8 @@ class SmartLoader:
             'summary': None,
             'profile': None,
             'cost': strategy_config.get('cost', 0),
-            'filtered': False
+            'filtered': False,
+            'tree_based': False
         }
         
         # 1. 加载历史对话
@@ -201,8 +224,37 @@ class SmartLoader:
             # 获取全部历史
             full_history = memory_manager.get_conversation_history(session_id, limit=50)
             
-            # 如果历史较多，尝试智能筛选
-            if current_message and full_history and len(full_history) > limit:
+            # 如果启用了对话树，使用树结构检索
+            if self.enable_tree and self._conversation_tree and current_message:
+                # 从历史重建树结构（如果还没有）
+                if not self._conversation_tree._nodes:
+                    self._conversation_tree.load_from_history(full_history)
+                
+                # 使用树结构检索
+                relevant_history = self._conversation_tree.get_relevant_conversations(
+                    current_message=current_message,
+                    limit=limit,
+                    strategy='auto'  # 自动选择最佳策略
+                )
+                
+                if relevant_history:
+                    context['history'] = relevant_history
+                    context['tree_based'] = True
+                    context['filtered'] = True
+                    
+                    tree_stats = self._conversation_tree.get_tree_stats()
+                    logger.info(
+                        f"🌳 树结构检索: 从{len(full_history)}轮中筛选出{len(relevant_history)}轮, "
+                        f"分支数={tree_stats['total_branches']}, "
+                        f"当前分支={tree_stats['current_branch_id']}"
+                    )
+                else:
+                    # 降级：使用最近N轮
+                    context['history'] = full_history[-limit:]
+                    logger.debug(f"📚 降级加载最近{limit}轮")
+            
+            # 如果历史较多，尝试关键词筛选（降级方案）
+            elif current_message and full_history and len(full_history) > limit:
                 relevant_history = await self._filter_relevant_history(
                     current_message=current_message,
                     full_history=full_history,
@@ -213,7 +265,7 @@ class SmartLoader:
                     context['history'] = relevant_history
                     context['filtered'] = True
                     logger.info(
-                        f"🌳 智能筛选: 从{len(full_history)}轮中筛选出{len(relevant_history)}轮相关对话"
+                        f"🔍 关键词筛选: 从{len(full_history)}轮中筛选出{len(relevant_history)}轮相关对话"
                     )
                 else:
                     # 降级：使用最近N轮

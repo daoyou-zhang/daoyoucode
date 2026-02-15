@@ -25,7 +25,13 @@ class MemoryManager:
     5. 提供多智能体共享接口
     """
     
-    def __init__(self):
+    def __init__(self, enable_tree: bool = True):
+        """
+        初始化记忆管理器
+        
+        Args:
+            enable_tree: 是否启用对话树（默认启用）
+        """
         self.storage = MemoryStorage()
         self.detector = FollowupDetector()
         
@@ -34,9 +40,18 @@ class MemoryManager:
         from .smart_loader import SmartLoader
         
         self.long_term_memory = LongTermMemory(storage=self.storage)
-        self.smart_loader = SmartLoader()
+        self.smart_loader = SmartLoader(enable_tree=enable_tree)
         
-        logger.info("记忆管理器已初始化（增强版）")
+        # ========== 对话树（可选）==========
+        self.enable_tree = enable_tree
+        self._conversation_tree = None
+        
+        if enable_tree:
+            from .conversation_tree import get_conversation_tree
+            self._conversation_tree = get_conversation_tree(enabled=True)
+            logger.info("记忆管理器已初始化（增强版 + 对话树）")
+        else:
+            logger.info("记忆管理器已初始化（增强版）")
     
     # ========== LLM层记忆（对话历史）==========
     
@@ -58,6 +73,20 @@ class MemoryManager:
             metadata: 元数据
             user_id: 用户ID（可选，用于维护映射）
         """
+        # 如果启用了对话树，先添加到树中
+        if self.enable_tree and self._conversation_tree:
+            node = self._conversation_tree.add_conversation(
+                user_message=user_message,
+                ai_response=ai_response,
+                detect_topic_switch=True
+            )
+            
+            # 使用树节点的元数据
+            if metadata is None:
+                metadata = {}
+            metadata.update(node.to_dict()['metadata'])
+        
+        # 添加到存储
         self.storage.add_conversation(
             session_id,
             user_message,
@@ -271,7 +300,13 @@ class MemoryManager:
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
-        return self.storage.get_stats()
+        stats = self.storage.get_stats()
+        
+        # 添加对话树统计
+        if self.enable_tree and self._conversation_tree:
+            stats['tree'] = self._conversation_tree.get_tree_stats()
+        
+        return stats
 
 
 # 单例模式
