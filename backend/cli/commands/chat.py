@@ -29,6 +29,17 @@ def main(
     """
     from cli.ui.console import console
     import uuid
+    import os
+    
+    # 如果repo是"."，自动检测项目根目录
+    # CLI通常在backend/目录运行，项目根目录是上一级
+    if str(repo) == ".":
+        current_dir = os.getcwd()
+        # 如果当前目录是backend，使用上一级
+        if os.path.basename(current_dir) == "backend":
+            repo = Path(os.path.dirname(current_dir))
+        else:
+            repo = Path(current_dir)
     
     # 显示欢迎横幅
     show_banner(model, repo, files)
@@ -342,6 +353,11 @@ def handle_chat(user_input: str, ui_context: dict):
         # 初始化Agent系统（包括工具注册、Agent注册、编排器注册）
         from daoyoucode.agents.init import initialize_agent_system
         initialize_agent_system()
+        
+        # 设置工具注册表的工作目录
+        from daoyoucode.agents.tools.registry import get_tool_registry
+        registry = get_tool_registry()
+        registry.set_working_directory(repo_path)
         
         # 配置LLM客户端
         from daoyoucode.agents.llm.client_manager import get_client_manager

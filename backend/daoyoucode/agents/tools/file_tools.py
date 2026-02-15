@@ -33,12 +33,14 @@ class ReadFileTool(BaseTool):
             encoding: 编码格式
         """
         try:
-            path = Path(file_path)
+            # 使用 resolve_path 解析路径
+            path = self.resolve_path(file_path)
+            
             if not path.exists():
                 return ToolResult(
                     success=False,
                     content=None,
-                    error=f"File not found: {file_path}"
+                    error=f"File not found: {file_path} (resolved to {path})"
                 )
             
             with open(path, 'r', encoding=encoding) as f:
@@ -190,12 +192,14 @@ class ListFilesTool(BaseTool):
             max_depth: 最大递归深度
         """
         try:
-            path = Path(directory)
+            # 使用 resolve_path 解析路径
+            path = self.resolve_path(directory)
+            
             if not path.exists():
                 return ToolResult(
                     success=False,
                     content=None,
-                    error=f"Directory not found: {directory}"
+                    error=f"Directory not found: {directory} (resolved to {path})"
                 )
             
             if not path.is_dir():

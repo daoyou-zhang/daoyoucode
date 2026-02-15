@@ -595,16 +595,93 @@ class GetRepoStructureTool(BaseTool):
     获取仓库结构（简化版RepoMap）
     
     只返回文件树，不做智能排序
+    支持智能注释，帮助理解目录含义
     """
     
     # 目录结构也需要限制
     MAX_OUTPUT_LINES = 500
     MAX_OUTPUT_CHARS = 8000
     
+    # 智能注释映射
+    DIRECTORY_ANNOTATIONS = {
+        'backend': '后端代码',
+        'frontend': '前端代码',
+        'src': '源代码',
+        'lib': '库文件',
+        'tests': '测试代码',
+        'test': '测试代码',
+        'docs': '文档',
+        'doc': '文档',
+        'scripts': '脚本工具',
+        'script': '脚本工具',
+        'config': '配置文件',
+        'conf': '配置文件',
+        'agents': 'Agent系统',
+        'agent': 'Agent系统',
+        'tools': '工具模块',
+        'tool': '工具模块',
+        'memory': '记忆系统',
+        'orchestrators': '编排器',
+        'orchestrator': '编排器',
+        'llm': 'LLM客户端',
+        'cli': '命令行界面',
+        'api': 'API接口',
+        'models': '数据模型',
+        'model': '数据模型',
+        'utils': '工具函数',
+        'util': '工具函数',
+        'core': '核心组件',
+        'common': '公共模块',
+        'shared': '共享模块',
+        'components': '组件',
+        'component': '组件',
+        'services': '服务',
+        'service': '服务',
+        'controllers': '控制器',
+        'controller': '控制器',
+        'views': '视图',
+        'view': '视图',
+        'templates': '模板',
+        'template': '模板',
+        'static': '静态资源',
+        'assets': '资源文件',
+        'public': '公开资源',
+        'private': '私有模块',
+        'internal': '内部模块',
+        'external': '外部模块',
+        'vendor': '第三方库',
+        'node_modules': '依赖包',
+        'dist': '构建产物',
+        'build': '构建产物',
+        'out': '输出目录',
+        'bin': '可执行文件',
+        'pkg': '包文件',
+        'examples': '示例代码',
+        'example': '示例代码',
+        'demo': '演示代码',
+        'plugins': '插件',
+        'plugin': '插件',
+        'extensions': '扩展',
+        'extension': '扩展',
+        'middleware': '中间件',
+        'handlers': '处理器',
+        'handler': '处理器',
+        'routes': '路由',
+        'route': '路由',
+        'database': '数据库',
+        'db': '数据库',
+        'migrations': '数据迁移',
+        'migration': '数据迁移',
+        'seeds': '数据种子',
+        'seed': '数据种子',
+        'fixtures': '测试数据',
+        'fixture': '测试数据',
+    }
+    
     def __init__(self):
         super().__init__(
             name="get_repo_structure",
-            description="获取仓库目录结构"
+            description="获取仓库目录结构，支持智能注释"
         )
     
     def get_function_schema(self) -> Dict[str, Any]:
@@ -628,6 +705,11 @@ class GetRepoStructureTool(BaseTool):
                         "type": "boolean",
                         "description": "是否显示文件（否则只显示目录）",
                         "default": True
+                    },
+                    "annotate": {
+                        "type": "boolean",
+                        "description": "是否添加智能注释（帮助理解目录含义）",
+                        "default": True
                     }
                 },
                 "required": ["repo_path"]
@@ -638,7 +720,8 @@ class GetRepoStructureTool(BaseTool):
         self,
         repo_path: str,
         max_depth: int = 3,
-        show_files: bool = True
+        show_files: bool = True,
+        annotate: bool = True
     ) -> ToolResult:
         """
         获取仓库结构
@@ -647,6 +730,7 @@ class GetRepoStructureTool(BaseTool):
             repo_path: 仓库根目录
             max_depth: 最大深度
             show_files: 是否显示文件
+            annotate: 是否添加智能注释
             
         Returns:
             ToolResult
@@ -661,7 +745,7 @@ class GetRepoStructureTool(BaseTool):
                 )
             
             lines = [f"{repo_path.name}/"]
-            self._build_tree(repo_path, lines, "", max_depth, show_files)
+            self._build_tree(repo_path, lines, "", max_depth, show_files, annotate)
             
             return ToolResult(
                 success=True,
@@ -669,7 +753,8 @@ class GetRepoStructureTool(BaseTool):
                 metadata={
                     'repo_path': str(repo_path),
                     'max_depth': max_depth,
-                    'show_files': show_files
+                    'show_files': show_files,
+                    'annotate': annotate
                 }
             )
             
@@ -688,6 +773,7 @@ class GetRepoStructureTool(BaseTool):
         prefix: str,
         max_depth: int,
         show_files: bool,
+        annotate: bool,
         current_depth: int = 0
     ):
         """递归构建树"""
@@ -711,7 +797,29 @@ class GetRepoStructureTool(BaseTool):
             next_prefix = prefix + ("    " if is_last else "│   ")
             
             if item.is_dir():
-                lines.append(f"{prefix}{current_prefix}{item.name}/")
-                self._build_tree(item, lines, next_prefix, max_depth, show_files, current_depth + 1)
+                # 添加注释
+                dir_display = f"{item.name}/"
+                if annotate:
+                    annotation = self._get_annotation(item.name)
+                    if annotation:
+                        dir_display = f"{item.name}/  # {annotation}"
+                
+                lines.append(f"{prefix}{current_prefix}{dir_display}")
+                self._build_tree(item, lines, next_prefix, max_depth, show_files, annotate, current_depth + 1)
             elif show_files:
                 lines.append(f"{prefix}{current_prefix}{item.name}")
+    
+    def _get_annotation(self, dir_name: str) -> Optional[str]:
+        """获取目录注释"""
+        dir_lower = dir_name.lower()
+        
+        # 精确匹配
+        if dir_lower in self.DIRECTORY_ANNOTATIONS:
+            return self.DIRECTORY_ANNOTATIONS[dir_lower]
+        
+        # 部分匹配
+        for pattern, annotation in self.DIRECTORY_ANNOTATIONS.items():
+            if pattern in dir_lower:
+                return annotation
+        
+        return None

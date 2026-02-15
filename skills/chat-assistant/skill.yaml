@@ -10,7 +10,7 @@ agent: MainAgent
 
 # Prompt配置
 prompt:
-  file: prompts/chat_assistant.md
+  file: prompts/chat_assistant.md  # 改进版本（结合 DaoyouCode 和 Oh-My-OpenCode 最佳实践）
 
 # LLM配置
 llm:

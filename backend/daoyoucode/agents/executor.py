@@ -80,6 +80,23 @@ async def _execute_skill_internal(
     """
     session_id = context.get('session_id')
     
+    # 设置工具注册表的工作目录（如果context中有）
+    logger.info(f"Context keys: {list(context.keys())}")
+    logger.info(f"working_directory in context: {'working_directory' in context}")
+    logger.info(f"repo in context: {'repo' in context}")
+    
+    if 'working_directory' in context or 'repo' in context:
+        from .tools.registry import get_tool_registry
+        registry = get_tool_registry()
+        working_dir = context.get('working_directory') or context.get('repo')
+        if working_dir:
+            logger.info(f"设置工具工作目录: {working_dir}")
+            registry.set_working_directory(working_dir)
+        else:
+            logger.warning("working_dir is None!")
+    else:
+        logger.warning("No working_directory or repo in context!")
+    
     # 获取任务管理器
     task_manager = get_task_manager()
     

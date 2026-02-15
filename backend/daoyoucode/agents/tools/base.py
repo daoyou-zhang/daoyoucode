@@ -7,6 +7,7 @@
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,39 @@ class BaseTool(ABC):
         self.name = name
         self.description = description
         self.logger = logging.getLogger(f"tool.{name}")
+        self._working_directory = None  # 工作目录
+    
+    def set_working_directory(self, working_dir: str):
+        """设置工作目录"""
+        self._working_directory = working_dir
+        self.logger.debug(f"工具 {self.name} 工作目录设置为: {working_dir}")
+    
+    def resolve_path(self, path: str) -> Path:
+        """
+        解析路径
+        
+        Args:
+            path: 相对或绝对路径
+        
+        Returns:
+            解析后的绝对路径
+        """
+        path_obj = Path(path)
+        
+        # 如果是绝对路径，直接返回
+        if path_obj.is_absolute():
+            return path_obj
+        
+        # 如果有工作目录，相对于工作目录
+        if self._working_directory:
+            resolved = Path(self._working_directory) / path_obj
+            self.logger.debug(f"路径解析: {path} -> {resolved}")
+            return resolved
+        
+        # 否则相对于当前目录
+        resolved = path_obj.resolve()
+        self.logger.debug(f"路径解析（使用当前目录）: {path} -> {resolved}")
+        return resolved
     
     @abstractmethod
     async def execute(self, **kwargs) -> ToolResult:
@@ -154,10 +188,22 @@ class ToolRegistry:
     
     def __init__(self):
         self._tools: Dict[str, BaseTool] = {}
+        self._working_directory = None
+    
+    def set_working_directory(self, working_dir: str):
+        """设置工作目录"""
+        self._working_directory = working_dir
+        logger.info(f"工具注册表工作目录设置为: {working_dir}")
+        # 传递给所有已注册的工具
+        for tool in self._tools.values():
+            tool.set_working_directory(working_dir)
     
     def register(self, tool: BaseTool):
         """注册工具"""
         self._tools[tool.name] = tool
+        # 如果已经设置了工作目录，传递给新工具
+        if self._working_directory:
+            tool.set_working_directory(self._working_directory)
         logger.info(f"已注册工具: {tool.name}")
     
     def get_tool(self, name: str) -> Optional[BaseTool]:

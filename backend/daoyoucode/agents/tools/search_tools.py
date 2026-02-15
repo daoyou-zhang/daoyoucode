@@ -42,12 +42,14 @@ class TextSearchTool(BaseTool):
             max_results: 最大结果数
         """
         try:
-            path = Path(directory)
+            # 使用 resolve_path 解析路径
+            path = self.resolve_path(directory)
+            
             if not path.exists():
                 return ToolResult(
                     success=False,
                     content=None,
-                    error=f"Directory not found: {directory}"
+                    error=f"Directory not found: {directory} (resolved to {path})"
                 )
             
             results = []

@@ -99,11 +99,14 @@ class LongTermMemory:
         
         try:
             # 调用LLM生成摘要
-            response = await llm_client.chat(
-                messages=[{"role": "user", "content": summary_prompt}],
+            from ..llm.base import LLMRequest
+            request = LLMRequest(
+                prompt=summary_prompt,
+                model=llm_client.model,
                 temperature=0.3,
                 max_tokens=300
             )
+            response = await llm_client.chat(request)
             
             summary = response.content.strip()
             

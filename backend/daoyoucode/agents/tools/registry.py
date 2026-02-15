@@ -59,6 +59,9 @@ def _register_builtin_tools():
         RepoMapTool,
         GetRepoStructureTool
     )
+    from .project_docs_tools import (
+        DiscoverProjectDocsTool
+    )
     from .lsp_tools import (
         LSPDiagnosticsTool,
         LSPGotoDefinitionTool,
@@ -100,7 +103,7 @@ def _register_builtin_tools():
     except Exception as e:
         logger.error(f"注册SearchReplaceTool失败: {e}")
     
-    # RepoMap工具（2个）
+    # RepoMap工具（3个）
     try:
         _tool_registry.register(RepoMapTool())
         logger.info("✓ RepoMapTool注册成功")
@@ -114,6 +117,12 @@ def _register_builtin_tools():
         logger.info("✓ GetRepoStructureTool注册成功")
     except Exception as e:
         logger.error(f"注册GetRepoStructureTool失败: {e}")
+    
+    try:
+        _tool_registry.register(DiscoverProjectDocsTool())
+        logger.info("✓ DiscoverProjectDocsTool注册成功")
+    except Exception as e:
+        logger.error(f"注册DiscoverProjectDocsTool失败: {e}")
     
     # LSP工具（6个）
     try:
