@@ -63,6 +63,34 @@
 
 ---
 
+### 5. [模型配置架构说明.md](./模型配置架构说明.md) ⭐
+**模型配置最佳实践**
+- 模型配置应该在Skill配置文件中
+- 配置优先级和架构流程
+- 代码实现详解
+- 常见问题和解决方案
+
+**适合**：
+- 配置Skill使用的模型
+- 理解模型配置架构
+- 解决模型配置问题
+
+---
+
+### 6. [如何配置模型.md](./如何配置模型.md) 🚀
+**快速配置指南**
+- 3步配置模型
+- 常见场景和示例
+- 常见错误和解决方案
+- 完整示例和检查清单
+
+**适合**：
+- 快速上手配置模型
+- 查找配置示例
+- 解决配置问题
+
+---
+
 ## 🚀 快速开始
 
 ### 1. 查看所有命令
@@ -94,25 +122,85 @@ python backend/daoyoucode.py chat --skill librarian
 
 ## 📖 核心概念
 
-### Agent（智能体）
-- 执行具体任务的智能体
-- 每个Agent有不同的职责和工具集
-- 10个内置Agent
-
-### Skill（技能）
-- 配置文件，定义使用哪些Agent、工具和编排器
+### 1. Skill（技能）- CLI传参的对象 ⭐
+- **配置文件**，定义使用哪些Agent、工具和编排器
+- **CLI通过`--skill`参数指定Skill**
 - 12个内置Skill
 - 可自定义Skill
 
-### Orchestrator（编排器）
+**Skill配置示例**：
+```yaml
+name: sisyphus-orchestrator
+orchestrator: multi_agent        # 指定编排器
+agents:                          # 指定Agent列表
+  - sisyphus
+  - code_analyzer
+tools:                           # 指定工具列表
+  - repo_map
+  - read_file
+```
+
+### 2. Orchestrator（编排器）- Skill指定的协调者
 - 负责协调多个Agent的工作方式
+- **由Skill配置文件指定**（orchestrator字段）
 - 7个内置编排器
 - 支持4种协作模式
 
-### Tool（工具）
+### 3. Agent（智能体）- 执行者
+- 执行具体任务的智能体
+- **由Skill配置文件指定**（agents字段）
+- 每个Agent有不同的职责和工具集
+- 10个内置Agent
+
+### 4. Tool（工具）- Agent使用的功能
 - Agent使用的具体功能
+- **由Skill配置文件指定**（tools字段）
 - 26个内置工具
 - 涵盖文件操作、搜索、Git、LSP、AST等
+
+---
+
+## 🏗️ 架构关系图
+
+```
+用户执行命令
+ ↓
+python daoyoucode.py chat --skill sisyphus-orchestrator
+                            ↓
+                    Skill配置文件
+                    (skills/sisyphus-orchestrator/skill.yaml)
+                            ↓
+        ┌───────────────────┼───────────────────┐
+        ↓                   ↓                   ↓
+  orchestrator:       agents:              tools:
+  multi_agent         - sisyphus           - repo_map
+                      - code_analyzer      - read_file
+                      - programmer         - text_search
+                            ↓
+                    编排器（Orchestrator）
+                    协调Agent工作方式
+                            ↓
+        ┌───────────────────┼───────────────────┐
+        ↓                   ↓                   ↓
+    Agent1              Agent2              Agent3
+    (sisyphus)      (code_analyzer)     (programmer)
+        ↓                   ↓                   ↓
+    使用工具            使用工具            使用工具
+        ↓                   ↓                   ↓
+                    返回结果给用户
+```
+
+**关键点**：
+1. ✅ CLI传的是**Skill名称**（不是Agent名称）
+2. ✅ Skill配置文件指定使用哪个**编排器**
+3. ✅ Skill配置文件指定使用哪些**Agent**
+4. ✅ 编排器负责协调Agent的工作方式
+5. ✅ Agent使用工具完成具体任务
+
+**编排器的意义**：
+- 决定Agent的**协作方式**（顺序、并行、辩论、主从）
+- 控制Agent的**执行流程**（重试、超时、回滚）
+- 管理Agent的**结果聚合**（如何组合多个Agent的输出）
 
 ---
 

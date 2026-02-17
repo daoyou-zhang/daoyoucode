@@ -15,7 +15,7 @@ class TestExpertAgent(BaseAgent):
         config = AgentConfig(
             name="test_expert",
             description="测试编写和修复专家，TDD工作流支持",
-            model="deepseek-coder",
+            model="qwen-coder-plus",  # 改用qwen-coder-plus（已配置）
             temperature=0.3,
             system_prompt=""  # Prompt由Skill配置文件管理
         )

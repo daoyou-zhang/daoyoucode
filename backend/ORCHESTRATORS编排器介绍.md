@@ -4,6 +4,94 @@
 
 ---
 
+## ❓ 编排器的意义
+
+很多人会问：**CLI传参是Skill，那编排器有什么意义？**
+
+答案：**编排器决定Agent的协作方式！**
+
+### 架构关系
+
+```
+CLI --skill sisyphus-orchestrator
+    ↓
+Skill配置文件
+    ├─ orchestrator: multi_agent    ← 指定编排器
+    ├─ agents: [sisyphus, ...]      ← 指定Agent列表
+    └─ tools: [repo_map, ...]       ← 指定工具列表
+    ↓
+编排器（Orchestrator）
+    ↓
+协调Agent工作方式
+    ├─ 顺序执行？并行执行？
+    ├─ 如何重试？如何超时？
+    └─ 如何聚合结果？
+```
+
+### 编排器的3大职责
+
+1. **决定协作方式**
+   - 顺序执行（sequential）
+   - 并行执行（parallel）
+   - 辩论模式（debate）
+   - 主从协作（main_with_helpers）
+
+2. **控制执行流程**
+   - 重试机制（失败后重试）
+   - 超时控制（避免卡死）
+   - 失败回滚（恢复状态）
+
+3. **管理结果聚合**
+   - 如何组合多个Agent的输出
+   - 如何处理冲突
+   - 如何生成最终答案
+
+### 举例说明
+
+**同样的Agent列表，不同的编排器，结果完全不同**：
+
+```yaml
+# 配置1：使用simple编排器
+orchestrator: simple
+agents:
+  - programmer
+# 结果：只执行programmer，其他Agent被忽略
+
+# 配置2：使用multi_agent编排器（顺序模式）
+orchestrator: multi_agent
+collaboration_mode: sequential
+agents:
+  - code_analyzer
+  - programmer
+  - test_expert
+# 结果：code_analyzer → programmer → test_expert（顺序执行）
+
+# 配置3：使用multi_agent编排器（并行模式）
+orchestrator: multi_agent
+collaboration_mode: parallel
+agents:
+  - code_analyzer
+  - programmer
+  - test_expert
+# 结果：3个Agent同时执行，然后聚合结果
+
+# 配置4：使用multi_agent编排器（主从模式）
+orchestrator: multi_agent
+collaboration_mode: main_with_helpers
+agents:
+  - sisyphus        # 主Agent
+  - code_analyzer   # 辅助Agent
+  - programmer      # 辅助Agent
+# 结果：辅助Agent先执行，主Agent看到结果后决策
+```
+
+**所以编排器的意义是**：
+- ✅ 不是简单地"调用Agent"
+- ✅ 而是"如何协调多个Agent工作"
+- ✅ 决定了系统的智能程度和效率
+
+---
+
 ## 编排器总览
 
 | 编排器 | Agent数 | 复杂度 | 特点 |

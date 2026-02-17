@@ -9,7 +9,7 @@ prompt:
   file: prompts/test.md
 
 llm:
-  model: deepseek-coder
+  model: qwen-coder-plus  # 使用已配置的模型
   temperature: 0.3
   max_tokens: 4000
 

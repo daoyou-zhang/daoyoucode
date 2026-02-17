@@ -44,6 +44,16 @@ def initialize_agent_system():
     orchestrator_registry = get_orchestrator_registry()
     logger.info(f"✓ 编排器已注册: {len(orchestrator_registry.list_orchestrators())} 个")
     
+    # 4. 注册内置中间件
+    from .core.middleware import register_middleware
+    from .middleware.context import ContextMiddleware
+    from .middleware.followup import FollowupMiddleware
+    
+    register_middleware('context_management', ContextMiddleware)
+    register_middleware('memory_integration', ContextMiddleware)  # 暂时使用ContextMiddleware
+    register_middleware('followup', FollowupMiddleware)
+    logger.info("✓ 中间件已注册")
+    
     _initialized = True
     logger.info("Agent系统初始化完成")
     

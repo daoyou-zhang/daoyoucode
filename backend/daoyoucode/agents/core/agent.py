@@ -739,7 +739,26 @@ class BaseAgent(ABC):
             
             # 🆕 安全解析 JSON，处理空字符串和格式错误
             try:
-                tool_args = json.loads(function_call['arguments'])
+                args_str = function_call['arguments'].strip()
+                
+                # 尝试提取JSON部分（处理LLM添加额外文本的情况）
+                if args_str.startswith('{'):
+                    # 找到第一个完整的JSON对象
+                    brace_count = 0
+                    json_end = -1
+                    for i, char in enumerate(args_str):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                json_end = i + 1
+                                break
+                    
+                    if json_end > 0:
+                        args_str = args_str[:json_end]
+                
+                tool_args = json.loads(args_str)
             except json.JSONDecodeError as e:
                 self.logger.error(f"❌ JSON 解析失败: {e}")
                 self.logger.error(f"原始内容: '{function_call['arguments']}'")

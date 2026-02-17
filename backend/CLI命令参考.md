@@ -66,9 +66,23 @@ python backend/daoyoucode.py chat --skill oracle --model qwen-max main.py
 
 **参数**：
 - `--skill, -s` - 使用的Skill（默认：chat-assistant）
+  - **注意**：传的是Skill名称，不是Agent名称！
+  - Skill配置文件指定使用哪些Agent和编排器
 - `--model, -m` - 使用的模型（默认：qwen-max）
 - `--repo, -r` - 仓库路径（默认：.）
 - `--examples` - 显示使用示例
+
+**Skill、Agent、编排器的关系**：
+```
+CLI --skill sisyphus-orchestrator
+    ↓
+Skill配置文件（skills/sisyphus-orchestrator/skill.yaml）
+    ↓
+指定编排器：orchestrator: multi_agent
+指定Agent列表：agents: [sisyphus, code_analyzer, programmer, ...]
+    ↓
+编排器协调这些Agent工作
+```
 
 **交互式命令**：
 - `/skill [name]` - 切换Skill

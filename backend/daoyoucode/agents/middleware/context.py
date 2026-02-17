@@ -16,7 +16,7 @@ class ContextMiddleware(BaseMiddleware):
     ) -> Dict[str, Any]:
         """处理上下文管理"""
         try:
-            from ai.memory.context_manager import ContextManager
+            from ..core.context import ContextManager
             
             manager = ContextManager()
             session_id = context.get('session_id')
