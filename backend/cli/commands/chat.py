@@ -80,18 +80,41 @@ def determine_repo_path(files: Optional[List[Path]], repo_arg: Path) -> Path:
 def main(
     files: Optional[List[Path]] = typer.Argument(None, help="要加载的文件"),
     model: str = typer.Option("qwen-plus", "--model", "-m", help="使用的模型"),
+    skill: str = typer.Option("chat-assistant", "--skill", "-s", help="使用的Skill"),
     repo: Path = typer.Option(".", "--repo", "-r", help="仓库路径"),
     subtree_only: bool = typer.Option(False, "--subtree-only", help="只扫描当前目录及其子目录"),
 ):
     """
-    启动交互式对话
+    启动交互式对话 - DaoyouCode的主要功能
     
+    \b
     示例:
-        daoyoucode chat                          # 在当前 git 仓库工作
-        daoyoucode chat main.py utils.py         # 从文件推断仓库
-        daoyoucode chat --model deepseek-coder   # 指定模型
-        daoyoucode chat --repo /path/to/project  # 指定仓库路径
-        daoyoucode chat --subtree-only           # 只扫描当前目录
+        daoyoucode chat                                    # 默认chat模式
+        daoyoucode chat --skill sisyphus-orchestrator      # 使用sisyphus编排
+        daoyoucode chat --skill oracle                     # 使用oracle咨询
+        daoyoucode chat --skill librarian                  # 使用librarian搜索
+        daoyoucode chat main.py utils.py                   # 加载文件
+        daoyoucode chat --model deepseek-coder             # 指定模型
+    
+    \b
+    说明:
+        启动交互式对话，可以指定Skill、模型和文件。
+        在对话中可以使用 /skill 切换Skill，/help 查看所有命令。
+    
+    \b
+    推荐Skill:
+        • chat-assistant (默认) - 日常对话和代码咨询
+        • sisyphus-orchestrator - 复杂任务（重构+测试等）
+        • oracle - 架构分析和技术建议（只读）
+        • librarian - 文档搜索和代码查找（只读）
+    
+    \b
+    交互式命令:
+        /skill [name]  - 切换Skill
+        /model [name]  - 切换模型
+        /add <file>    - 添加文件
+        /help          - 显示帮助
+        /exit          - 退出对话
     """
     from cli.ui.console import console
     import uuid
@@ -101,7 +124,7 @@ def main(
     repo_path = determine_repo_path(files, repo)
     
     # 显示欢迎横幅
-    show_banner(model, repo_path, files, subtree_only)
+    show_banner(model, repo_path, files, skill, subtree_only)
     
     # 生成会话ID（用于记忆系统）
     session_id = str(uuid.uuid4())
@@ -110,6 +133,7 @@ def main(
     ui_context = {
         "session_id": session_id,
         "model": model,
+        "skill": skill,  # ← 添加skill
         "repo": str(repo_path),
         "initial_files": [str(f) for f in files] if files else [],
         "subtree_only": subtree_only,
@@ -142,7 +166,7 @@ def main(
         raise typer.Exit(1)
 
 
-def show_banner(model: str, repo: Path, files: Optional[List[Path]], subtree_only: bool = False):
+def show_banner(model: str, repo: Path, files: Optional[List[Path]], skill: str, subtree_only: bool = False):
     """显示欢迎横幅"""
     from cli.ui.console import console
     import os
@@ -170,6 +194,7 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], subtree_onl
     
     info_panel = f"""
 [bold]当前配置[/bold]
+• Skill: [cyan]{skill}[/cyan]
 • 模型: [cyan]{model}[/cyan]
 • 仓库: [dim]{repo}[/dim]
 • 文件: [dim]{len(files) if files else 0} 个[/dim]{scope_info}
@@ -179,6 +204,7 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], subtree_onl
     # 显示提示
     console.print("\n[yellow]💡 提示:[/yellow]")
     console.print("  • 输入 [cyan]/help[/cyan] 查看所有命令")
+    console.print("  • 输入 [cyan]/skill[/cyan] 切换Skill")
     console.print("  • 输入 [cyan]/exit[/cyan] 退出对话")
     console.print("  • 按 [cyan]Ctrl+C[/cyan] 也可退出")
 
@@ -214,6 +240,14 @@ def handle_command(cmd: str, ui_context: dict) -> bool:
     elif command == "/session":
         console.print(f"[cyan]会话ID: {ui_context['session_id']}[/cyan]")
     
+    elif command == "/skill" or command == "/s":
+        if not args:
+            # 显示当前Skill和可用Skill
+            show_skills(ui_context)
+        else:
+            # 切换Skill
+            switch_skill(args, ui_context)
+    
     else:
         console.print(f"[red]未知命令: {command}[/red]")
         console.print("[dim]输入 /help 查看所有命令[/dim]")
@@ -232,6 +266,10 @@ def show_help():
   /exit, /quit     退出对话
   /clear           清空对话历史
   /history         查看对话历史
+
+[bold]Skill管理[/bold]
+  /skill [name]    切换Skill（不带参数显示列表）
+  /s [name]        /skill的简写
 
 [bold]文件管理[/bold]
   /add <file>      添加文件到上下文
@@ -450,10 +488,13 @@ def handle_chat(user_input: str, ui_context: dict):
         # 通过Skill系统执行
         from daoyoucode.agents.executor import execute_skill
         
+        # 使用动态Skill
+        skill_name = ui_context.get('skill', 'chat-assistant')
+        
         console.print("[bold blue]🤔 AI正在思考...[/bold blue]")
         
         result = loop.run_until_complete(execute_skill(
-            skill_name="chat_assistant",
+            skill_name=skill_name,  # ← 动态Skill
             user_input=user_input,
             session_id=context["session_id"],
             context=context
@@ -709,3 +750,66 @@ def handle_chat_with_agent(user_input: str, context: dict) -> str:
     except Exception as e:
         console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
         return generate_mock_response(user_input, context)
+
+
+
+def show_skills(ui_context: dict):
+    """显示Skill列表"""
+    from cli.ui.console import console
+    from rich.table import Table
+    
+    try:
+        from daoyoucode.agents.core.skill import get_skill_loader
+        
+        loader = get_skill_loader()
+        skills = loader.list_skills()
+        
+        current_skill = ui_context.get('skill', 'chat-assistant')
+        
+        console.print("\n[bold cyan]📦 可用Skill[/bold cyan]\n")
+        
+        table = Table(show_header=True, border_style="cyan")
+        table.add_column("", style="dim", width=2)
+        table.add_column("名称", style="cyan")
+        table.add_column("编排器", style="yellow")
+        table.add_column("描述")
+        
+        for skill in skills:
+            marker = "→" if skill['name'] == current_skill else ""
+            table.add_row(
+                marker,
+                skill['name'],
+                skill['orchestrator'],
+                skill['description'][:60] + '...' if len(skill['description']) > 60 else skill['description']
+            )
+        
+        console.print(table)
+        console.print(f"\n[dim]当前Skill: [cyan]{current_skill}[/cyan][/dim]")
+        console.print(f"[dim]使用 [cyan]/skill <name>[/cyan] 切换Skill[/dim]\n")
+    
+    except Exception as e:
+        console.print(f"[red]加载Skill列表失败: {e}[/red]")
+
+
+def switch_skill(skill_name: str, ui_context: dict):
+    """切换Skill"""
+    from cli.ui.console import console
+    
+    try:
+        from daoyoucode.agents.core.skill import get_skill_loader
+        
+        loader = get_skill_loader()
+        skill = loader.get_skill(skill_name)
+        
+        if not skill:
+            console.print(f"[red]Skill不存在: {skill_name}[/red]")
+            console.print("[dim]输入 [cyan]/skill[/cyan] 查看所有可用Skill[/dim]")
+            return
+        
+        ui_context['skill'] = skill_name
+        console.print(f"[green]✓[/green] 已切换到 [cyan]{skill_name}[/cyan]")
+        console.print(f"[dim]{skill.description}[/dim]")
+        console.print(f"[dim]编排器: {skill.orchestrator}[/dim]")
+    
+    except Exception as e:
+        console.print(f"[red]切换Skill失败: {e}[/red]")
