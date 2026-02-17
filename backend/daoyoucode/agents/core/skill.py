@@ -43,6 +43,8 @@ class SkillConfig:
     
     # 工具配置
     tools: List[str] = field(default_factory=list)
+    # 按 Agent 分配工具（仅 multi_agent 使用）：agent 名 -> 工具名列表，未列出的 Agent 用 tools
+    agent_tools: Dict[str, List[str]] = field(default_factory=dict)
     
     # 权限配置
     permissions: Dict = field(default_factory=dict)
@@ -57,6 +59,10 @@ class SkillConfig:
     # 元数据
     metadata: Dict = field(default_factory=dict)
     skill_path: Path = None
+    # 可选：了解项目预取触发词（字符串列表），用户输入包含任一词即预取三层
+    project_understanding_triggers: List[str] = field(default_factory=list)
+    # 为 true 时用 LLM 判断「是否想了解项目/架构」意图，不依赖触发词；与 triggers 二选一或并用（intent 优先）
+    project_understanding_use_intent: bool = False
 
 
 class SkillLoader:
@@ -136,12 +142,15 @@ class SkillLoader:
             llm=config.get('llm', {}),
             middleware=config.get('middleware', []),
             tools=config.get('tools', []),
+            agent_tools=config.get('agent_tools', {}),
             permissions=config.get('permissions', {}),
             hooks=config.get('hooks', []),
             inputs=config.get('inputs', []),
             outputs=config.get('outputs', []),
             metadata=config.get('metadata', {}),
-            skill_path=skill_path
+            skill_path=skill_path,
+            project_understanding_triggers=config.get('project_understanding_triggers', []),
+            project_understanding_use_intent=config.get('project_understanding_use_intent', False)
         )
     
     def get_skill(self, name: str) -> Optional[SkillConfig]:

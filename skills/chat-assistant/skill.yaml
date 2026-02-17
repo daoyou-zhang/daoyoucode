@@ -10,16 +10,31 @@ agent: MainAgent
 prompt:
   file: prompts/chat_assistant.md  # 改进版本（结合 DaoyouCode 和 Oh-My-OpenCode 最佳实践）
 
+# 「了解项目」预取：用 LLM 判断意图（如「我想知道架构」也会触发），不再依赖写死触发词
+project_understanding_use_intent: true
+# 当 project_understanding_use_intent 为 false 时生效的触发词（可选兜底）
+project_understanding_triggers:
+  - 了解
+  - 看看项目
+  - 项目怎么样
+  - 项目是啥
+  - 介绍项目
+  - 这是什么项目
+  - 说说项目
+  - 项目结构
+
 # LLM配置
 llm:
   model: qwen-max
   temperature: 0.7
   max_tokens: 4000
 
-# 可用工具（ReAct编排器会自动管理）
+# 可用工具（ReAct编排器会自动管理；「了解项目」必须用三层：discover_project_docs → get_repo_structure → repo_map）
 tools:
-  - repo_map              # 生成代码地图
-  - get_repo_structure    # 获取目录结构
+  - discover_project_docs # 项目文档（README 等），了解项目先调
+  - get_repo_structure    # 目录树
+  - repo_map              # 代码地图
+  - semantic_code_search  # 按问题语义检索相关代码（Cursor 同级）
   - read_file             # 读取文件
   - text_search           # 文本搜索（修正：原来是grep_search）
   - regex_search          # 正则搜索

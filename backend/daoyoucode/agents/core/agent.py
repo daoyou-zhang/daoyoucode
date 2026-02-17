@@ -442,6 +442,9 @@ class BaseAgent(ABC):
 5. 单文件符号（AST 深度）
    - 已知文件时可调用 get_file_symbols(file_path) 获取类/函数/方法及行号。
 
+6. 不要重复调用
+   - 同一轮对话中不要用相同参数重复调用同一工具（如多次 repo_map(repo_path=".")）；若已获得该工具结果，请直接基于结果回答。
+
 记住：当前工作目录就是项目根目录，不需要猜测路径！
 
 ---
@@ -745,6 +748,8 @@ class BaseAgent(ABC):
         
         # 使用初始消息作为起点
         messages = initial_messages.copy()
+        # 同轮去重：相同 (工具名, 参数) 在本轮已执行过则直接复用结果，避免模型重复调用（如连续 5 次 repo_map）
+        same_call_cache = {}
         
         # 工具调用循环
         for iteration in range(max_iterations):
@@ -819,6 +824,24 @@ class BaseAgent(ABC):
                     # 继续下一次迭代
                     continue
             
+            # 同轮去重：若本轮回已用相同参数调用过该工具，直接复用上次结果并提示模型基于结果回答
+            try:
+                args_key = json.dumps(tool_args, sort_keys=True)
+            except Exception:
+                args_key = str(tool_args)
+            cache_key = (tool_name, args_key)
+            if cache_key in same_call_cache:
+                self.logger.info(f"同轮去重: {tool_name} 与上次参数相同，复用结果，避免重复执行")
+                tools_used.append(tool_name)
+                from ..ui import get_tool_display
+                display = get_tool_display()
+                display.show_tool_start(tool_name, tool_args)
+                display.show_success(tool_name, 0)  # 显示完成，避免 UI 悬空
+                tool_result_str = same_call_cache[cache_key] + "\n\n[系统提示：上文为本轮回调相同参数的结果，请直接基于该结果回答，不要再次调用同一工具。]"
+                messages.append({"role": "assistant", "content": None, "function_call": function_call})
+                messages.append({"role": "function", "name": tool_name, "content": tool_result_str})
+                continue
+            
             self.logger.info(f"调用工具: {tool_name}, 参数: {tool_args}")
             tools_used.append(tool_name)
             
@@ -867,7 +890,7 @@ class BaseAgent(ABC):
                 # 提取实际内容
                 if tool_result.success:
                     tool_result_str = str(tool_result.content) if tool_result.content else "工具执行成功，但没有返回内容"
-                    
+                    same_call_cache[cache_key] = tool_result_str
                     # 显示结果预览（可选）
                     # display.show_result_preview(tool_result_str, max_lines=3)
                 else:

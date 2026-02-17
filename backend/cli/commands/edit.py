@@ -94,18 +94,25 @@ def show_diff_preview(files: List[Path], instruction: str):
         console.print()
 
 
-def apply_changes(files: List[Path]):
-    """应用修改"""
-    from cli.ui.console import console
-    
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("[cyan]🔨 应用修改...", total=None)
-        time.sleep(1)  # 模拟应用
-        progress.update(task, description="[green]✓[/green] 修改已应用")
+def _revert_edited_files(repo_path: str, edit_files: List[str], console) -> None:
+    """用户拒绝保留时，用 git checkout 回滚已编辑文件（Cursor 同级：拒绝即回滚）"""
+    import subprocess
+    from pathlib import Path
+    root = Path(repo_path)
+    for rel in edit_files:
+        path = root / rel
+        if not path.exists():
+            continue
+        try:
+            subprocess.run(
+                ["git", "checkout", "--", str(path)],
+                cwd=str(root),
+                capture_output=True,
+                timeout=5,
+            )
+        except Exception as e:
+            console.print(f"[dim]回滚 {rel} 失败: {e}[/dim]")
+    console.print("[yellow]已尝试回滚上述文件，请用 git status 确认。[/yellow]\n")
 
 
 def show_success(files: List[Path]):
@@ -215,10 +222,10 @@ def execute_edit_via_skill(
         show_diff_preview_real(files, content)
 
         if not yes:
-            if not typer.confirm("\n应用这些修改？"):
-                console.print("\n[yellow]已取消修改[/yellow]\n")
+            if not typer.confirm("\n是否保留这些修改？（选否将尝试用 git 回滚已改文件）"):
+                _revert_edited_files(repo_path, edit_files, console)
                 raise typer.Exit(0)
-        apply_changes(files)
+        # 修改已由 Agent 通过工具直接写入，此处仅做成功提示
         show_success(files)
     except Exception as e:
         console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")

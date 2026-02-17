@@ -22,14 +22,60 @@ prompt:
 llm:
   model: qwen-max
   temperature: 0.3
-  max_tokens: 4000
+  max_tokens: 8000
 
-# 主Agent只需要少量工具（任务分解和协调用）
+# 默认工具（未在 agent_tools 中列出的 Agent 使用）
 tools:
-  - repo_map              # 生成代码地图
-  - get_repo_structure    # 获取目录结构
-  - text_search           # 快速搜索
-  - read_file             # 读取文件（了解上下文）
+  - repo_map
+  - get_repo_structure
+  - text_search
+  - read_file
+
+# 按 Agent 分配工具（最优调度：各智能体仅获得其职责所需工具）
+agent_tools:
+  sisyphus:           # 主编排：只需理解与协调
+    - repo_map
+    - get_repo_structure
+    - text_search
+    - read_file
+  code_analyzer:      # 架构分析：读 + 地图 + LSP/符号
+    - read_file
+    - repo_map
+    - get_repo_structure
+    - text_search
+    - regex_search
+    - get_file_symbols
+    - lsp_diagnostics
+    - lsp_find_references
+    - lsp_symbols
+  programmer:         # 编程：读写 + 搜索 + Git + 编辑
+    - read_file
+    - write_file
+    - list_files
+    - get_file_info
+    - text_search
+    - regex_search
+    - get_file_symbols
+    - git_status
+    - git_diff
+    - search_replace
+  refactor_master:    # 重构：读写 + 搜索 + 编辑 + Git
+    - read_file
+    - write_file
+    - list_files
+    - text_search
+    - regex_search
+    - search_replace
+    - get_file_symbols
+    - git_status
+    - git_diff
+  test_expert:        # 测试：读写 + 搜索 + 运行测试/ lint
+    - read_file
+    - write_file
+    - list_files
+    - text_search
+    - run_test
+    - run_lint
 
 # 中间件
 middleware:

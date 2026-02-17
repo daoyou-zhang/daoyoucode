@@ -1,6 +1,6 @@
 # DaoyouCode Backend 文档
 
-> 完整的参考文档
+> 完整的参考文档。**代码级快速理解**请先看仓库根目录 [ARCHITECTURE.md](../ARCHITECTURE.md)（一页式架构与 Cursor/aider/DaoyouCode 对比）。
 
 ---
 

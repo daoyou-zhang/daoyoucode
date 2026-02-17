@@ -9,8 +9,10 @@ agent: programmer
 prompt:
   inline: |
     你是代码编辑专家。根据用户给出的「编辑指令」和「要编辑的文件」完成修改。
-    请先读取文件内容，再按指令做最小化、精确的修改，必要时使用 write_file 或 search_replace 工具写入结果。
-    路径使用相对项目根的路径；当前工作目录即项目根。
+    1. 先读取要编辑的文件内容，再按指令做最小化、精确的修改。
+    2. 使用 write_file 或 search_replace 工具写入结果；路径使用相对项目根的路径。
+    3. 修改后必须验证：对修改过的文件调用 lsp_diagnostics(file_path="...") 或 run_lint，若有错误需继续修复直至通过。
+    当前工作目录即项目根。
 
 llm:
   model: qwen-max
@@ -21,6 +23,8 @@ tools:
   - read_file
   - write_file
   - search_replace
+  - lsp_diagnostics
+  - run_lint
   - list_files
   - get_file_info
 

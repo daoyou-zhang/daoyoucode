@@ -1,10 +1,21 @@
 # daoyoucode 文档导航
 
-> **快速导航**: 从这里开始了解 daoyoucode 项目
+> **快速导航**: 从这里开始了解 daoyoucode 项目。**AI / 代码级快速理解**：优先读 [ARCHITECTURE.md](../ARCHITECTURE.md)（一页式架构 + Cursor/aider/DaoyouCode 对比）。
 
 ---
 
 ## 📚 文档结构
+
+### ⭐⭐⭐ 代码级快速理解（人类与 AI 共读）
+
+**[ARCHITECTURE.md](../ARCHITECTURE.md)**
+- 主数据流、关键目录、入口与配置驱动
+- Cursor / aider / DaoyouCode 各自如何“理解项目”
+- 基于代码级快速理解的使用建议
+
+**适合**：新人、AI（Cursor/@codebase、aider、内置 Agent）在动手前建立整体心智模型。
+
+---
 
 ### ⭐⭐⭐ 核心文档（必读）
 

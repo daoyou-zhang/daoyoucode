@@ -77,7 +77,8 @@ def _register_builtin_tools():
         AstGrepSearchTool,
         AstGrepReplaceTool
     )
-    
+    from .codebase_search_tool import SemanticCodeSearchTool
+
     # 文件操作工具（6个）
     _tool_registry.register(ReadFileTool())
     _tool_registry.register(WriteFileTool())
@@ -135,6 +136,13 @@ def _register_builtin_tools():
         logger.info("✓ DiscoverProjectDocsTool注册成功")
     except Exception as e:
         logger.error(f"注册DiscoverProjectDocsTool失败: {e}")
+
+    # 语义代码检索（Cursor 同级按问检索）
+    try:
+        _tool_registry.register(SemanticCodeSearchTool())
+        logger.info("✓ SemanticCodeSearchTool注册成功")
+    except Exception as e:
+        logger.error(f"注册SemanticCodeSearchTool失败: {e}")
     
     # LSP工具（6个）
     try:

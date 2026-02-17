@@ -27,7 +27,7 @@
 
 | 文件 | 改动要点 |
 |------|----------|
-| `chat-assistant/prompts/chat_assistant.md` | 增加「首屏原则」：能做啥 2～4 句、了解项目先 repo_map 再 1～3 句定性；修正 search_replace 参数为 search/replace；补充 apply_patch；分层策略表里 discover_docs→discover_project_docs、get_structure→get_repo_structure。 |
+| `chat-assistant/prompts/chat_assistant.md` | **首轮**：首屏原则、了解项目先 repo_map 再 1～3 句、分层策略表工具名统一。**深度完善**：增加「一句话决策」表（了解项目/具体文件/找XX/其他）；「了解项目」正例/反例；项目理解工具按三层顺序排列并注明第 1/2/3 步；可用工具加注「以 Skill 配置为准」；示例1 明确错误/正确回答示例；重要原则首条为「了解项目=三层+短概括」；收尾「开始工作」四条中首条为三层调用+禁止罗列。 |
 | `sisyphus-orchestrator/prompts/sisyphus.md` | 此前已含「了解项目」与寒暄的简短化要求，未改。 |
 | `oracle/prompts/oracle.md` | 工具列表改为注册表名称：lsp_diagnostics、lsp_find_references、get_file_symbols、lsp_symbols、ast_grep_search；加路径规则。 |
 | `librarian/prompts/librarian.md` | 同上，工具名与路径规则统一。 |
