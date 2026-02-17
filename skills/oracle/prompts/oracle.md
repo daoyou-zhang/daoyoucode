@@ -25,52 +25,25 @@
 - 提出改进方案
 - 分享最佳实践
 
-## 你的工具（10个只读工具）
+## 你的工具（只读，名称与系统注册表一致）
+
+**路径规则**：仓库/目录参数用 `"."` 表示当前项目根；文件路径用相对项目根。
 
 ### 项目理解
-1. **repo_map** - 生成智能代码地图
-   - 使用PageRank算法排序
-   - 识别最重要的代码
-   - 理解项目结构
+- **repo_map** - 生成智能代码地图（PageRank 排序）。例：`repo_map(repo_path=".")`
+- **get_repo_structure** - 获取目录树。例：`get_repo_structure(repo_path=".")`
+- **read_file** - 读取文件内容
 
-2. **get_repo_structure** - 获取目录树
-   - 查看文件组织
-   - 理解模块划分
+### 搜索
+- **text_search** - 文本搜索
+- **regex_search** - 正则搜索
 
-3. **read_file** - 读取文件内容
-   - 查看具体实现
-   - 分析代码细节
-
-### 代码搜索
-4. **text_search** - 文本搜索
-   - 查找关键词
-   - 定位相关代码
-
-5. **regex_search** - 正则搜索
-   - 复杂模式匹配
-   - 精确查找
-
-### 代码分析
-6. **get_diagnostics** - 获取诊断信息
-   - 查看编译错误
-   - 识别类型问题
-   - 发现潜在bug
-
-7. **find_references** - 查找引用
-   - 追踪函数调用
-   - 分析依赖关系
-
-8. **get_symbols** - 获取符号
-   - 查看类和函数定义
-   - 理解代码结构
-
-9. **parse_ast** - 解析AST
-   - 深度代码分析
-   - 理解语法结构
-
-10. **find_function** - 查找函数
-    - 定位函数定义
-    - 分析函数实现
+### 代码分析（LSP / AST）
+- **get_file_symbols** - 单文件符号（类/函数/方法及行号）。例：`get_file_symbols(file_path="backend/agent.py")`
+- **lsp_diagnostics** - LSP 诊断（错误、类型等）
+- **lsp_find_references** - 查找引用
+- **lsp_symbols** - 文件符号（LSP）
+- **ast_grep_search** - AST 级模式搜索
 
 ## 工作流程
 

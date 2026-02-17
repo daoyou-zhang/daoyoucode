@@ -505,18 +505,13 @@ class LongTermMemory:
             for c in sampled
         ])
         
-        prompt = f"""
-分析以下用户的对话记录，提取用户画像信息：
+        prompt = f"""分析以下对话记录，提取用户画像。只输出一个 JSON 对象，不要任何解释、不要 markdown 代码块、不要其他文字。
 
+对话记录：
 {conv_text}
 
-请以JSON格式返回：
-{{
-    "interests": ["兴趣1", "兴趣2"],
-    "learning_goals": ["目标1", "目标2"],
-    "pain_points": ["痛点1", "痛点2"],
-    "communication_style": "简洁/详细/技术性"
-}}
+必须只输出如下格式的单一 JSON（不要换行外的内容）：
+{{"interests": [], "learning_goals": [], "pain_points": [], "communication_style": "简洁"}}
 """
         
         try:
@@ -535,39 +530,38 @@ class LongTermMemory:
                 logger.warning("LLM返回空响应，跳过深度分析")
                 return {}
             
-            # 解析JSON响应
+            # 解析JSON响应（LLM 常返回说明+JSON，需稳健提取）
             import json
             
-            # 尝试提取JSON部分（处理LLM添加额外文本的情况）
             content = response.content.strip()
-            
-            # 如果以```json开头，提取JSON部分
-            if content.startswith('```json'):
-                content = content[7:]  # 移除```json
-                if content.endswith('```'):
-                    content = content[:-3]  # 移除```
-                content = content.strip()
+            # 去掉 ```json ... ``` 包裹
+            if '```json' in content:
+                start = content.find('```json') + 7
+                end = content.find('```', start)
+                content = content[start:end].strip() if end > start else content
             elif content.startswith('```'):
                 content = content[3:]
                 if content.endswith('```'):
                     content = content[:-3]
                 content = content.strip()
-            
-            # 找到第一个完整的JSON对象
-            if content.startswith('{'):
+            # 从第一个 { 开始找完整 JSON 对象（兼容前面有说明文字）
+            first_brace = content.find('{')
+            if first_brace >= 0:
                 brace_count = 0
                 json_end = -1
-                for i, char in enumerate(content):
-                    if char == '{':
+                for i in range(first_brace, len(content)):
+                    if content[i] == '{':
                         brace_count += 1
-                    elif char == '}':
+                    elif content[i] == '}':
                         brace_count -= 1
                         if brace_count == 0:
                             json_end = i + 1
                             break
-                
-                if json_end > 0:
-                    content = content[:json_end]
+                if json_end > first_brace:
+                    content = content[first_brace:json_end]
+            if not content.strip().startswith('{'):
+                logger.warning("LLM深度分析未返回有效JSON，跳过")
+                return {}
             
             analysis = json.loads(content)
             
@@ -579,7 +573,13 @@ class LongTermMemory:
             }
         
         except json.JSONDecodeError as e:
-            logger.warning(f"LLM深度分析JSON解析失败: {e}, 响应内容: {response.content[:100] if response and response.content else '(空)'}")
+            preview = "(空)"
+            try:
+                if response and getattr(response, 'content', None):
+                    preview = (response.content[:80] + "…") if len(response.content) > 80 else response.content
+            except Exception:
+                pass
+            logger.warning(f"LLM深度分析JSON解析失败: {e}, 响应预览: {preview}")
             return {}
         except Exception as e:
             logger.warning(f"LLM深度分析失败: {e}")

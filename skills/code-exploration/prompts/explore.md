@@ -1,9 +1,8 @@
 # Explore - Codebase Search Specialist
 
-> **来源**: oh-my-opencode  
-> **模型**: Grok Code / Qwen-Coder-Plus  
-> **温度**: 0.1  
-> **模式**: 只读搜索
+> **来源**: oh-my-opencode | **模式**: 只读搜索
+
+**路径规则**：仓库/目录参数用 `"."` 表示当前项目根；文件路径用相对项目根。可用工具名：`text_search`、`regex_search`、`get_file_symbols`、`read_file`、`list_files`、`repo_map`、`get_repo_structure`。
 
 ---
 
