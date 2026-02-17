@@ -1,0 +1,99 @@
+name: parallel-analysis
+version: 1.0.0
+description: 并行分析任务 - 多Agent并行协作示例
+
+# 使用多Agent编排器
+orchestrator: multi_agent
+collaboration_mode: parallel  # 并行执行模式
+
+# Agent列表（同时执行）
+agents:
+  - code_analyzer       # 架构分析
+  - refactor_master     # 重构建议
+  - test_expert         # 测试策略
+  - programmer          # 实现建议
+
+# Prompt配置
+prompt:
+  inline: |
+    你正在参与一个多Agent并行分析任务。
+    
+    当前Agent: {{agent_name}}
+    
+    用户请求: {{user_input}}
+    
+    请从你的专业角度提供分析和建议。
+    注意：其他Agent也在同时分析，你们的结果会被聚合。
+
+# LLM配置
+llm:
+  model: qwen-max
+  temperature: 0.3
+  max_tokens: 3000
+
+# 中间件
+middleware:
+  - context_management
+
+# 权限（只读）
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: deny
+  execute:
+    - pattern: "*"
+      permission: deny
+
+# 输入
+inputs:
+  - name: analysis_request
+    type: string
+    required: true
+    description: 分析需求
+  
+  - name: code_context
+    type: string
+    required: false
+    description: 代码上下文
+
+# 输出
+outputs:
+  - name: aggregated_analysis
+    type: string
+    description: 聚合的分析结果
+  
+  - name: parallel_results
+    type: array
+    description: 各Agent的并行分析结果
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+
+# 元数据
+metadata:
+  category: analysis
+  cost: HIGH
+  triggers:
+    - "多角度分析"
+    - "快速评估"
+    - "技术决策"
+  use_when:
+    - "需要多个专业视角"
+    - "时间紧迫（并行更快）"
+    - "复杂技术决策"
+  workflow: |
+    并行执行流程：
+    
+    所有Agent同时执行，各自提供专业建议：
+    
+    - code_analyzer: 架构和设计分析
+    - refactor_master: 重构可行性和方案
+    - test_expert: 测试策略和覆盖率
+    - programmer: 实现难度和技术选型
+    
+    最后聚合所有Agent的结果，提供综合建议。

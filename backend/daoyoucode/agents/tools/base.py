@@ -14,6 +14,139 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class ToolContext:
+    """
+    工具上下文
+    
+    包含工具执行所需的所有环境信息，确保路径处理的一致性。
+    参考 daoyouCodePilot 和 aider 的设计。
+    
+    Attributes:
+        repo_path: 仓库根路径（绝对路径）
+        session_id: 会话ID
+        user_id: 用户ID（可选）
+        subtree_only: 是否只扫描当前目录及其子目录（参考 aider）
+        cwd: 当前工作目录（用于 subtree_only 过滤）
+    """
+    repo_path: Path
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    subtree_only: bool = False
+    cwd: Optional[Path] = None
+    
+    def __post_init__(self):
+        """确保 repo_path 是绝对路径"""
+        if not self.repo_path.is_absolute():
+            self.repo_path = self.repo_path.resolve()
+        
+        # 如果启用 subtree_only 但没有设置 cwd，使用当前目录
+        if self.subtree_only and self.cwd is None:
+            self.cwd = Path.cwd()
+        
+        # 确保 cwd 是绝对路径
+        if self.cwd and not self.cwd.is_absolute():
+            self.cwd = self.cwd.resolve()
+    
+    def should_include_path(self, path: str) -> bool:
+        """
+        判断路径是否应该被包含（用于 subtree_only 过滤）
+        
+        参考 aider 的实现：
+        - 如果 subtree_only=False，包含所有路径
+        - 如果 subtree_only=True，只包含 cwd 及其子目录下的路径
+        
+        Args:
+            path: 要检查的路径（相对或绝对）
+        
+        Returns:
+            是否应该包含该路径
+        """
+        if not self.subtree_only:
+            return True
+        
+        if not self.cwd:
+            return True
+        
+        # 转换为绝对路径
+        path_obj = Path(path)
+        if not path_obj.is_absolute():
+            path_obj = self.repo_path / path
+        
+        try:
+            # 检查路径是否在 cwd 下
+            path_obj.relative_to(self.cwd)
+            return True
+        except ValueError:
+            # 不在 cwd 下
+            return False
+    
+    def abs_path(self, path: str) -> Path:
+        """
+        将相对路径转换为绝对路径
+        
+        Args:
+            path: 相对路径或绝对路径
+        
+        Returns:
+            绝对路径
+        
+        Examples:
+            >>> ctx = ToolContext(repo_path=Path("/project"))
+            >>> ctx.abs_path("backend/file.py")
+            Path("/project/backend/file.py")
+        """
+        path_obj = Path(path)
+        if path_obj.is_absolute():
+            return path_obj
+        return self.repo_path / path
+    
+    def rel_path(self, path: str) -> str:
+        """
+        将绝对路径转换为相对于 repo_path 的路径
+        
+        Args:
+            path: 绝对路径或相对路径
+        
+        Returns:
+            相对于 repo_path 的路径
+        
+        Examples:
+            >>> ctx = ToolContext(repo_path=Path("/project"))
+            >>> ctx.rel_path("/project/backend/file.py")
+            "backend/file.py"
+            >>> ctx.rel_path("backend/file.py")
+            "backend/file.py"
+        """
+        path_obj = Path(path)
+        
+        # 如果已经是相对路径，直接返回
+        if not path_obj.is_absolute():
+            return str(path_obj)
+        
+        # 转换为相对路径
+        try:
+            return str(path_obj.relative_to(self.repo_path))
+        except ValueError:
+            # 不在 repo_path 下，返回原路径
+            logger.warning(f"Path {path} is not under repo_path {self.repo_path}")
+            return str(path_obj)
+    
+    def normalize_path(self, path: str) -> str:
+        """
+        标准化路径：确保返回相对于 repo_path 的路径
+        
+        这是工具返回路径时应该使用的方法。
+        
+        Args:
+            path: 任意路径
+        
+        Returns:
+            相对于 repo_path 的标准路径
+        """
+        return self.rel_path(path)
+
+
+@dataclass
 class ToolResult:
     """工具执行结果"""
     success: bool
@@ -34,39 +167,55 @@ class BaseTool(ABC):
         self.name = name
         self.description = description
         self.logger = logging.getLogger(f"tool.{name}")
-        self._working_directory = None  # 工作目录
+        self._working_directory = None  # 工作目录（向后兼容）
+        self._context: Optional[ToolContext] = None  # 新的上下文对象
+    
+    def set_context(self, context: ToolContext):
+        """设置工具上下文（新方法）"""
+        self._context = context
+        # 同时设置 working_directory 以保持向后兼容
+        self._working_directory = str(context.repo_path)
+        self.logger.debug(f"工具 {self.name} 上下文设置为: repo_path={context.repo_path}")
     
     def set_working_directory(self, working_dir: str):
-        """设置工作目录"""
+        """设置工作目录（向后兼容）"""
         self._working_directory = working_dir
+        # 如果没有 context，创建一个
+        if not self._context:
+            self._context = ToolContext(repo_path=Path(working_dir))
         self.logger.debug(f"工具 {self.name} 工作目录设置为: {working_dir}")
+    
+    @property
+    def context(self) -> ToolContext:
+        """获取工具上下文"""
+        if not self._context:
+            # 如果没有设置，使用当前目录
+            self._context = ToolContext(repo_path=Path.cwd())
+        return self._context
     
     def resolve_path(self, path: str) -> Path:
         """
-        解析路径
+        解析路径（使用 ToolContext）
         
         Args:
             path: 相对或绝对路径
         
         Returns:
-            解析后的绝对路径
+            绝对路径
         """
-        path_obj = Path(path)
+        return self.context.abs_path(path)
+    
+    def normalize_path(self, path: str) -> str:
+        """
+        标准化路径（使用 ToolContext）
         
-        # 如果是绝对路径，直接返回
-        if path_obj.is_absolute():
-            return path_obj
+        Args:
+            path: 任意路径
         
-        # 如果有工作目录，相对于工作目录
-        if self._working_directory:
-            resolved = Path(self._working_directory) / path_obj
-            self.logger.debug(f"路径解析: {path} -> {resolved}")
-            return resolved
-        
-        # 否则相对于当前目录
-        resolved = path_obj.resolve()
-        self.logger.debug(f"路径解析（使用当前目录）: {path} -> {resolved}")
-        return resolved
+        Returns:
+            相对于 repo_path 的标准路径
+        """
+        return self.context.normalize_path(path)
     
     @abstractmethod
     async def execute(self, **kwargs) -> ToolResult:
@@ -188,21 +337,44 @@ class ToolRegistry:
     
     def __init__(self):
         self._tools: Dict[str, BaseTool] = {}
-        self._working_directory = None
+        self._working_directory = None  # 向后兼容
+        self._context: Optional[ToolContext] = None  # 新的上下文对象
+    
+    def set_context(self, context: ToolContext):
+        """设置工具上下文（新方法）"""
+        self._context = context
+        self._working_directory = str(context.repo_path)  # 向后兼容
+        logger.info(f"工具注册表上下文设置为: repo_path={context.repo_path}")
+        # 传递给所有已注册的工具
+        for tool in self._tools.values():
+            tool.set_context(context)
     
     def set_working_directory(self, working_dir: str):
-        """设置工作目录"""
+        """设置工作目录（向后兼容）"""
         self._working_directory = working_dir
+        # 创建或更新 context
+        if not self._context:
+            self._context = ToolContext(repo_path=Path(working_dir))
         logger.info(f"工具注册表工作目录设置为: {working_dir}")
         # 传递给所有已注册的工具
         for tool in self._tools.values():
             tool.set_working_directory(working_dir)
     
+    @property
+    def context(self) -> ToolContext:
+        """获取工具上下文"""
+        if not self._context:
+            # 如果没有设置，使用当前目录
+            self._context = ToolContext(repo_path=Path.cwd())
+        return self._context
+    
     def register(self, tool: BaseTool):
         """注册工具"""
         self._tools[tool.name] = tool
-        # 如果已经设置了工作目录，传递给新工具
-        if self._working_directory:
+        # 如果已经设置了上下文，传递给新工具
+        if self._context:
+            tool.set_context(self._context)
+        elif self._working_directory:
             tool.set_working_directory(self._working_directory)
         logger.info(f"已注册工具: {tool.name}")
     

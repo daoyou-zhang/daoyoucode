@@ -121,8 +121,10 @@ class RepoMapTool(BaseTool):
             ToolResult
         """
         try:
-            repo_path = Path(repo_path).resolve()
-            if not repo_path.exists():
+            # 使用 resolve_path 解析路径（使用 ToolContext）
+            repo_path_resolved = self.resolve_path(repo_path)
+            
+            if not repo_path_resolved.exists():
                 return ToolResult(
                     success=False,
                     content=None,
@@ -150,17 +152,18 @@ class RepoMapTool(BaseTool):
                     )
             
             # 初始化缓存
-            self._init_cache(repo_path)
+            self._init_cache(repo_path_resolved)
             
             # 扫描仓库
-            definitions = self._scan_repository(repo_path)
+            definitions = self._scan_repository(repo_path_resolved)
             
             # 构建引用图
-            graph = self._build_reference_graph(definitions, repo_path)
+            graph = self._build_reference_graph(definitions, repo_path_resolved)
             
             # PageRank排序
             ranked = self._pagerank(
                 graph,
+                definitions,  # 传递 definitions
                 chat_files=chat_files,
                 mentioned_idents=mentioned_idents
             )
@@ -181,7 +184,7 @@ class RepoMapTool(BaseTool):
                 success=True,
                 content=repo_map,
                 metadata={
-                    'repo_path': str(repo_path),
+                    'repo_path': str(repo_path_resolved),
                     'file_count': len(definitions),
                     'definition_count': sum(len(defs) for defs in definitions.values()),
                     'max_tokens': max_tokens,
@@ -242,8 +245,20 @@ class RepoMapTool(BaseTool):
             if self._should_ignore(file_path):
                 continue
             
+            # 🆕 subtree_only 过滤
+            rel_path_str = str(file_path.relative_to(repo_path))
+            if not self.context.should_include_path(rel_path_str):
+                logger.debug(f"跳过文件（subtree_only）: {rel_path_str}")
+                continue
+            
+            # 🆕 subtree_only 过滤
+            rel_path_str = str(file_path.relative_to(repo_path))
+            if not self.context.should_include_path(rel_path_str):
+                logger.debug(f"跳过文件（subtree_only）: {rel_path_str}")
+                continue
+            
             # 检查缓存
-            rel_path = str(file_path.relative_to(repo_path))
+            rel_path = rel_path_str
             mtime = file_path.stat().st_mtime
             
             cached = self._get_cached_definitions(rel_path, mtime)
@@ -261,15 +276,25 @@ class RepoMapTool(BaseTool):
         return definitions
     
     def _should_ignore(self, file_path: Path) -> bool:
-        """检查是否应该忽略文件"""
-        ignore_patterns = {
+        """
+        检查是否应该忽略文件
+        
+        忽略规则：
+        1. 常见的构建和依赖目录
+        2. 读取 .daoyoucodeignore 文件（如果存在）
+        """
+        # 常见的构建和依赖目录
+        common_ignore = {
             ".git", "node_modules", "__pycache__", ".venv", "venv",
             "dist", "build", ".next", ".nuxt", "target"
         }
         
         for part in file_path.parts:
-            if part in ignore_patterns:
+            if part in common_ignore:
                 return True
+        
+        # TODO: 读取 .daoyoucodeignore 文件
+        # 这样用户可以自定义忽略规则，不需要硬编码
         
         return False
     
@@ -455,6 +480,7 @@ class RepoMapTool(BaseTool):
     def _pagerank(
         self,
         graph: Dict[str, Dict[str, float]],
+        definitions: Dict[str, List[Dict]],  # 添加 definitions 参数
         chat_files: List[str],
         mentioned_idents: List[str],
         damping: float = 0.85,
@@ -494,11 +520,35 @@ class RepoMapTool(BaseTool):
                 weight *= 50
             
             # 提到的标识符权重×10
-            # （简化：检查文件名是否包含标识符）
-            for ident in mentioned_idents:
-                if ident.lower() in node.lower():
+            # 检查：1) 路径组件  2) 文件中的定义名称
+            if mentioned_idents:
+                # 检查路径组件（如 agents/llm/timeout）
+                path_components = set(Path(node).parts)
+                basename_with_ext = Path(node).name
+                basename_without_ext = Path(node).stem
+                components_to_check = path_components.union({basename_with_ext, basename_without_ext})
+                
+                # 检查路径是否包含提到的标识符
+                matched_path = components_to_check.intersection(set(ident.lower() for ident in mentioned_idents))
+                if matched_path:
                     weight *= 10
-                    break
+                
+                # 检查文件中的定义是否包含提到的标识符
+                if node in definitions:
+                    file_defs = definitions.get(node, [])
+                    def_names = {d['name'].lower() for d in file_defs if d.get('kind') == 'def'}
+                    mentioned_lower = {ident.lower() for ident in mentioned_idents}
+                    
+                    # 精确匹配或部分匹配
+                    if def_names.intersection(mentioned_lower):
+                        weight *= 10
+                    else:
+                        # 部分匹配（如 'timeout' 匹配 'TimeoutError'）
+                        for def_name in def_names:
+                            for ident in mentioned_lower:
+                                if ident in def_name or def_name in ident:
+                                    weight *= 5  # 部分匹配权重较低
+                                    break
             
             personalization[node] = weight
         
@@ -557,8 +607,11 @@ class RepoMapTool(BaseTool):
             if not file_defs:
                 continue
             
+            # 标准化路径（确保返回相对于 repo_path 的路径）
+            normalized_path = self.normalize_path(file_path)
+            
             # 文件头
-            file_line = f"\n{file_path}:"
+            file_line = f"\n{normalized_path}:"
             file_tokens = len(file_line.split())
             
             if current_tokens + file_tokens > max_tokens:

@@ -40,7 +40,7 @@ class LLMClientManager:
                 max_connections=100,           # 最大连接数
                 max_keepalive_connections=20   # 保持活跃的连接数
             ),
-            timeout=httpx.Timeout(60.0)
+            timeout=httpx.Timeout(1800.0)  # 🆕 30 分钟（支持大规模文件读写和复杂任务）
         )
         
         # 提供商配置缓存

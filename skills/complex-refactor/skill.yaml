@@ -1,0 +1,140 @@
+name: complex-refactor
+version: 1.0.0
+description: 复杂重构任务 - 多Agent顺序协作示例
+
+# 使用多Agent编排器
+orchestrator: multi_agent
+collaboration_mode: sequential  # 顺序执行模式
+
+# Agent列表（按执行顺序）
+agents:
+  - code_analyzer       # 1. 先分析架构
+  - refactor_master     # 2. 执行重构
+  - test_expert         # 3. 编写/更新测试
+  - code_analyzer       # 4. 验证重构结果
+
+# Prompt配置
+prompt:
+  inline: |
+    你正在参与一个多Agent协作的重构任务。
+    
+    当前Agent: {{agent_name}}
+    执行顺序: {{agent_index}}/{{total_agents}}
+    
+    前一个Agent的输出:
+    {{previous_output}}
+    
+    请根据你的专业领域完成你的部分工作。
+
+# LLM配置
+llm:
+  model: qwen-coder-plus
+  temperature: 0.2
+  max_tokens: 4000
+
+# 工具配置（每个Agent使用自己的工具集）
+# 工具会根据Agent自动分配（参考 tool_groups.py）
+
+# 中间件
+middleware:
+  - context_management
+  - memory_integration
+
+# 权限
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*.py"
+      permission: ask
+    - pattern: "*.js"
+      permission: ask
+    - pattern: "*.ts"
+      permission: ask
+
+# 输入
+inputs:
+  - name: refactor_request
+    type: string
+    required: true
+    description: 重构需求描述
+  
+  - name: target_files
+    type: array
+    required: false
+    description: 目标文件列表
+  
+  - name: session_id
+    type: string
+    required: false
+    description: 会话ID
+
+# 输出
+outputs:
+  - name: analysis_result
+    type: string
+    description: 架构分析结果（第1步）
+  
+  - name: refactor_result
+    type: string
+    description: 重构执行结果（第2步）
+  
+  - name: test_result
+    type: string
+    description: 测试编写结果（第3步）
+  
+  - name: validation_result
+    type: string
+    description: 验证结果（第4步）
+  
+  - name: sequential_results
+    type: array
+    description: 所有Agent的顺序执行结果
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+  - memory_save
+
+# 元数据
+metadata:
+  category: refactoring
+  cost: HIGH
+  triggers:
+    - "复杂重构"
+    - "架构调整"
+    - "大规模代码改动"
+  use_when:
+    - "需要架构分析 + 重构 + 测试的完整流程"
+    - "重构涉及多个文件"
+    - "需要验证重构结果"
+  workflow: |
+    顺序执行流程：
+    
+    1. code_analyzer（架构分析）
+       - 分析当前代码架构
+       - 识别重构风险
+       - 提供重构建议
+       - 输出：架构分析报告
+    
+    2. refactor_master（执行重构）
+       - 接收架构分析报告
+       - 执行重构操作
+       - 使用LSP工具确保引用正确
+       - 输出：重构后的代码
+    
+    3. test_expert（编写测试）
+       - 接收重构后的代码
+       - 编写/更新测试用例
+       - 运行测试验证
+       - 输出：测试代码和测试结果
+    
+    4. code_analyzer（验证结果）
+       - 接收重构和测试结果
+       - 验证代码质量
+       - 检查是否有遗漏
+       - 输出：最终验证报告
+    
+    每个Agent的输出会传递给下一个Agent作为输入。

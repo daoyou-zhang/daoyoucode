@@ -1,0 +1,132 @@
+name: sisyphus-orchestrator
+version: 1.0.0
+description: 主编排Agent - 智能任务分解和多Agent调度（类似Sisyphus）
+
+# 使用多Agent编排器
+orchestrator: multi_agent
+collaboration_mode: main_with_helpers
+
+# Agent列表（主Agent + 辅助Agent）
+agents:
+  - sisyphus            # 主编排Agent（任务分解和调度）
+  - code_analyzer       # 辅助：架构分析和技术咨询
+  - programmer          # 辅助：代码编写
+  - refactor_master     # 辅助：代码重构
+  - test_expert         # 辅助：测试编写
+
+# Prompt配置
+prompt:
+  file: prompts/sisyphus.md
+
+# LLM配置
+llm:
+  model: qwen-max
+  temperature: 0.3
+  max_tokens: 4000
+
+# 主Agent只需要少量工具（任务分解和协调用）
+tools:
+  - repo_map              # 生成代码地图
+  - get_repo_structure    # 获取目录结构
+  - text_search           # 快速搜索
+  - read_file             # 读取文件（了解上下文）
+
+# 中间件
+middleware:
+  - context_management
+  - memory_integration
+
+# 权限
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: ask
+  execute:
+    - pattern: "*"
+      permission: ask
+
+# 输入
+inputs:
+  - name: user_request
+    type: string
+    required: true
+    description: 用户的复杂任务请求
+  
+  - name: session_id
+    type: string
+    required: false
+    description: 会话ID
+  
+  - name: repo
+    type: string
+    required: false
+    description: 仓库路径
+
+# 输出
+outputs:
+  - name: task_plan
+    type: string
+    description: 任务分解计划
+  
+  - name: execution_result
+    type: string
+    description: 执行结果
+  
+  - name: agents_used
+    type: array
+    description: 使用的Agent列表
+  
+  - name: helper_results
+    type: array
+    description: 辅助Agent的结果
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+  - memory_save
+
+# 元数据
+metadata:
+  category: orchestrator
+  cost: HIGH
+  triggers:
+    - "复杂任务"
+    - "多步骤任务"
+    - "需要多个专业领域"
+  use_when:
+    - "重构 + 测试"
+    - "分析 + 优化"
+    - "探索 + 编写"
+    - "多文件修改"
+  features:
+    - "智能任务分解"
+    - "多Agent协作"
+    - "并行执行"
+    - "结果聚合"
+  
+  # 工作流说明
+  workflow: |
+    1. 主Agent分析用户请求
+    2. 分解为子任务
+    3. 并行调用辅助Agent（如果可以）
+    4. 主Agent看到辅助Agent的结果
+    5. 聚合结果返回用户
+    
+    示例：
+    用户："重构登录模块，添加测试"
+    
+    主Agent分析：
+    - 需要code_analyzer分析架构
+    - 需要refactor_master执行重构
+    - 需要test_expert编写测试
+    
+    执行流程：
+    1. code_analyzer并行执行 → 分析登录模块架构
+    2. 主Agent看到分析结果
+    3. 调用refactor_master → 执行重构
+    4. 调用test_expert → 编写测试
+    5. 主Agent聚合结果 → 返回用户

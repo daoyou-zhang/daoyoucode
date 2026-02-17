@@ -80,7 +80,7 @@ class UnifiedLLMClient(BaseLLMClient):
                 f"{self.base_url}/chat/completions",
                 headers=self._get_headers(),
                 json=payload,
-                timeout=60.0
+                timeout=1800.0  # 🆕 30 分钟（支持大规模文件读写和复杂任务）
             )
             response.raise_for_status()
             data = response.json()
@@ -125,7 +125,7 @@ class UnifiedLLMClient(BaseLLMClient):
                     "max_tokens": request.max_tokens,
                     "stream": True,
                 },
-                timeout=60.0
+                timeout=1800.0  # 🆕 30 分钟（支持大规模文件读写和复杂任务）
             ) as response:
                 async for line in response.aiter_lines():
                     if line.startswith("data:"):

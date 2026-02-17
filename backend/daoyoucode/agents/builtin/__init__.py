@@ -13,6 +13,11 @@ from .code_explorer import CodeExplorerAgent
 from .refactor_master import RefactorMasterAgent
 from .test_expert import TestExpertAgent
 
+# 新增：借鉴oh-my-opencode的高级Agent
+from .sisyphus import SisyphusAgent
+from .oracle import OracleAgent
+from .librarian import LibrarianAgent
+
 
 def register_builtin_agents():
     """注册所有内置Agent"""
@@ -20,13 +25,20 @@ def register_builtin_agents():
     # 主Agent
     register_agent(MainAgent())
     
+    # 编排Agent（借鉴oh-my-opencode）
+    register_agent(SisyphusAgent())          # 主编排Agent
+    
+    # 咨询Agent（借鉴oh-my-opencode）
+    register_agent(OracleAgent())            # 高IQ咨询Agent（只读）
+    register_agent(LibrarianAgent())         # 文档搜索Agent（只读）
+    
     # 基础Agent
     register_agent(TranslatorAgent())
     register_agent(ProgrammerAgent())
     
-    # 编程辅助Agent（借鉴oh-my-opencode）
-    register_agent(CodeAnalyzerAgent())      # Oracle - 架构顾问
-    register_agent(CodeExplorerAgent())      # Explore - 代码搜索
+    # 编程辅助Agent
+    register_agent(CodeAnalyzerAgent())      # 架构分析
+    register_agent(CodeExplorerAgent())      # 代码探索
     register_agent(RefactorMasterAgent())    # 重构专家
     register_agent(TestExpertAgent())        # 测试专家
 
@@ -34,6 +46,9 @@ def register_builtin_agents():
 __all__ = [
     'register_builtin_agents',
     'MainAgent',
+    'SisyphusAgent',
+    'OracleAgent',
+    'LibrarianAgent',
     'TranslatorAgent',
     'ProgrammerAgent',
     'CodeAnalyzerAgent',

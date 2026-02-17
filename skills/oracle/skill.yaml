@@ -1,0 +1,98 @@
+name: oracle
+version: 1.0.0
+description: 高IQ咨询Agent - 架构分析和技术建议（只读）
+
+# 使用简单编排器
+orchestrator: react
+
+# 使用Oracle Agent
+agent: oracle
+
+# Prompt配置
+prompt:
+  file: prompts/oracle.md
+
+# LLM配置
+llm:
+  model: qwen-max  # 使用最强模型
+  temperature: 0.1  # 低温度，更准确
+  max_tokens: 4000
+
+# 工具配置（只读工具）
+tools:
+  - repo_map              # 生成代码地图
+  - get_repo_structure    # 获取目录结构
+  - read_file             # 读取文件
+  - text_search           # 搜索代码
+  - regex_search          # 正则搜索
+  - get_diagnostics       # 获取诊断信息
+  - find_references       # 查找引用
+  - get_symbols           # 获取符号
+  - parse_ast             # 解析AST
+  - find_function         # 查找函数
+
+# 中间件
+middleware:
+  - context_management
+
+# 权限配置（只读）
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: deny  # 禁止写入
+  execute:
+    - pattern: "*"
+      permission: deny  # 禁止执行
+
+# 输入
+inputs:
+  - name: analysis_request
+    type: string
+    required: true
+    description: 分析需求（架构分析、代码审查、性能分析等）
+  
+  - name: code_context
+    type: string
+    required: false
+    description: 要分析的代码上下文
+
+# 输出
+outputs:
+  - name: analysis_result
+    type: string
+    description: 详细的分析报告
+  
+  - name: recommendations
+    type: array
+    description: 改进建议列表
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+
+# 元数据
+metadata:
+  category: advisor
+  cost: HIGH
+  source: oh-my-opencode
+  triggers:
+    - "架构决策"
+    - "代码审查"
+    - "性能分析"
+    - "安全审查"
+    - "技术咨询"
+  use_when:
+    - "复杂架构设计"
+    - "完成重要工作后的自我审查"
+    - "2次以上修复失败后"
+    - "不熟悉的代码模式"
+    - "安全/性能问题"
+  avoid_when:
+    - "简单文件操作"
+    - "第一次尝试修复"
+    - "从已读代码可以回答的问题"
+    - "琐碎决策（变量命名、格式化）"

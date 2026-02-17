@@ -180,7 +180,7 @@ class ListFilesTool(BaseTool):
         directory: str = ".",
         recursive: bool = False,
         pattern: Optional[str] = None,
-        max_depth: int = 3
+        max_depth: Optional[int] = 3  # 🆕 改为 Optional[int]
     ) -> ToolResult:
         """
         列出目录
@@ -189,7 +189,7 @@ class ListFilesTool(BaseTool):
             directory: 目录路径
             recursive: 是否递归
             pattern: 文件名模式（如 *.py）
-            max_depth: 最大递归深度
+            max_depth: 最大递归深度（None 表示无限制）
         """
         try:
             # 使用 resolve_path 解析路径
@@ -212,13 +212,15 @@ class ListFilesTool(BaseTool):
             files = []
             
             if recursive:
-                files = self._list_recursive(path, pattern, max_depth, 0)
+                # 🆕 如果 max_depth 是 None，使用一个很大的数字
+                effective_max_depth = max_depth if max_depth is not None else 999
+                files = self._list_recursive(path, pattern, effective_max_depth, 0)
             else:
                 for item in path.iterdir():
                     if pattern and not item.match(pattern):
                         continue
                     files.append({
-                        'path': str(item),
+                        'path': self.normalize_path(str(item)),  # 标准化路径
                         'name': item.name,
                         'type': 'dir' if item.is_dir() else 'file',
                         'size': item.stat().st_size if item.is_file() else 0
@@ -259,7 +261,7 @@ class ListFilesTool(BaseTool):
                         continue
                 
                 files.append({
-                    'path': str(item),
+                    'path': self.normalize_path(str(item)),  # 标准化路径
                     'name': item.name,
                     'type': 'dir' if item.is_dir() else 'file',
                     'size': item.stat().st_size if item.is_file() else 0,
@@ -284,21 +286,21 @@ class ListFilesTool(BaseTool):
                 "properties": {
                     "directory": {
                         "type": "string",
-                        "description": "目录路径",
+                        "description": "目录路径（相对于项目根目录，使用 '.' 表示当前目录）",
                         "default": "."
                     },
                     "recursive": {
                         "type": "boolean",
-                        "description": "是否递归",
+                        "description": "是否递归列出子目录",
                         "default": False
                     },
                     "pattern": {
                         "type": "string",
-                        "description": "文件名模式（如 *.py）"
+                        "description": "文件名模式（如 '*.py' 或 '**/test_*.py'）"
                     },
                     "max_depth": {
                         "type": "integer",
-                        "description": "最大递归深度",
+                        "description": "最大递归深度（默认3，设置为较大值如999表示无限制）",
                         "default": 3
                     }
                 },

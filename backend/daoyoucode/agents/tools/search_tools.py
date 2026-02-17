@@ -74,7 +74,7 @@ class TextSearchTool(BaseTool):
                             if case_sensitive:
                                 if query in line:
                                     results.append({
-                                        'file': str(file_path),
+                                        'file': self.normalize_path(str(file_path)),  # 标准化路径
                                         'line': line_num,
                                         'content': line.rstrip(),
                                         'match': query
@@ -83,7 +83,7 @@ class TextSearchTool(BaseTool):
                             else:
                                 if query_lower in line.lower():
                                     results.append({
-                                        'file': str(file_path),
+                                        'file': self.normalize_path(str(file_path)),  # 标准化路径
                                         'line': line_num,
                                         'content': line.rstrip(),
                                         'match': query
@@ -238,7 +238,7 @@ class RegexSearchTool(BaseTool):
                             match = regex.search(line)
                             if match:
                                 results.append({
-                                    'file': str(file_path),
+                                    'file': self.normalize_path(str(file_path)),  # 标准化路径
                                     'line': line_num,
                                     'content': line.rstrip(),
                                     'match': match.group(0),

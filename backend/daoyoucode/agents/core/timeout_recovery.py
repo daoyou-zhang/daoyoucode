@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 class TimeoutRecoveryConfig:
     """超时恢复配置"""
     max_retries: int = 3  # 最大重试次数
-    initial_timeout: float = 60.0  # 初始超时时间（秒）
-    timeout_multiplier: float = 1.5  # 每次重试超时时间倍数
-    max_timeout: float = 180.0  # 最大超时时间（秒）
+    initial_timeout: float = 1800.0  # 初始超时时间（秒）- 30分钟，支持多次工具调用和大规模文件操作
+    timeout_multiplier: float = 1.2  # 每次重试超时时间倍数（降低倍数，因为基础时间已经很长）
+    max_timeout: float = 3600.0  # 最大超时时间（秒）- 1小时
     retry_delay: float = 2.0  # 重试延迟（秒）
     enable_prompt_simplification: bool = True  # 是否启用 prompt 简化
     enable_fallback_model: bool = True  # 是否启用备用模型

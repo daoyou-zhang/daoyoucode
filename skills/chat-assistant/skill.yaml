@@ -63,10 +63,10 @@ inputs:
     required: false
     description: 会话ID
   
-  - name: files
+  - name: initial_files
     type: array
     required: false
-    description: 已加载的文件列表
+    description: 打开的编辑器文件列表（优先使用）
   
   - name: repo
     type: string

@@ -179,7 +179,7 @@ class BaseAgent(ABC):
         context: Optional[Dict[str, Any]] = None,
         llm_config: Optional[Dict[str, Any]] = None,
         tools: Optional[List[str]] = None,
-        max_tool_iterations: int = 5
+        max_tool_iterations: int = 15  # 🆕 增加到 15 次
     ):
         """
         流式执行任务（yield每个token）
@@ -329,7 +329,7 @@ class BaseAgent(ABC):
         context: Optional[Dict[str, Any]] = None,
         llm_config: Optional[Dict[str, Any]] = None,
         tools: Optional[List[str]] = None,
-        max_tool_iterations: int = 5
+        max_tool_iterations: int = 15  # 🆕 增加到 15 次
     ) -> AgentResult:
         """
         执行任务
@@ -669,7 +669,7 @@ class BaseAgent(ABC):
         initial_messages: List[Dict[str, Any]],  # 改为接受消息列表
         tool_names: List[str],
         llm_config: Optional[Dict[str, Any]] = None,
-        max_iterations: int = 5,
+        max_iterations: int = 15,  # 🆕 增加到 15 次
         context: Optional[Dict[str, Any]] = None,  # 添加 context 参数
         history: Optional[List[Dict[str, Any]]] = None  # 添加 history 参数
     ) -> tuple[str, List[str]]:
@@ -736,7 +736,39 @@ class BaseAgent(ABC):
             
             # 解析工具调用
             tool_name = function_call['name']
-            tool_args = json.loads(function_call['arguments'])
+            
+            # 🆕 安全解析 JSON，处理空字符串和格式错误
+            try:
+                tool_args = json.loads(function_call['arguments'])
+            except json.JSONDecodeError as e:
+                self.logger.error(f"❌ JSON 解析失败: {e}")
+                self.logger.error(f"原始内容: '{function_call['arguments']}'")
+                
+                # 尝试修复常见问题
+                args_str = function_call['arguments'].strip()
+                
+                if not args_str or args_str == '':
+                    # 空字符串，使用空字典
+                    self.logger.warning("⚠️ Function arguments 为空，使用空字典")
+                    tool_args = {}
+                else:
+                    # 无法修复，跳过这次工具调用
+                    self.logger.error(f"⚠️ 无法解析 function arguments，跳过工具调用: {tool_name}")
+                    
+                    # 添加错误消息到对话历史
+                    messages.append({
+                        "role": "assistant",
+                        "content": None,
+                        "function_call": function_call
+                    })
+                    messages.append({
+                        "role": "function",
+                        "name": tool_name,
+                        "content": f"Error: 无法解析工具参数。请检查参数格式是否正确。"
+                    })
+                    
+                    # 继续下一次迭代
+                    continue
             
             self.logger.info(f"调用工具: {tool_name}, 参数: {tool_args}")
             tools_used.append(tool_name)

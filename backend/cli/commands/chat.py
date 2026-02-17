@@ -14,35 +14,94 @@ from rich.spinner import Spinner
 import time
 
 
+def determine_repo_path(files: Optional[List[Path]], repo_arg: Path) -> Path:
+    """
+    确定仓库路径
+    
+    优先级：
+    1. 如果提供了文件，从文件推断 git 仓库
+    2. 如果提供了 --repo 参数，使用该路径
+    3. 否则，从当前目录向上查找 git 仓库
+    4. 如果找不到 git 仓库，使用当前目录
+    
+    参考：aider 的实现方式
+    """
+    try:
+        import git
+    except ImportError:
+        # 如果没有 gitpython，使用当前目录
+        if str(repo_arg) != ".":
+            return Path(repo_arg).resolve()
+        return Path.cwd()
+    
+    # 1. 从文件推断
+    if files:
+        repo_paths = set()
+        for file in files:
+            file_path = Path(file).resolve()
+            
+            # 如果文件不存在，使用父目录
+            if not file_path.exists() and file_path.parent.exists():
+                file_path = file_path.parent
+            
+            try:
+                repo = git.Repo(file_path, search_parent_directories=True)
+                repo_paths.add(Path(repo.working_tree_dir).resolve())
+            except (git.InvalidGitRepositoryError, FileNotFoundError, git.GitCommandError):
+                # 文件不在 git 仓库中，使用文件所在目录
+                if file_path.is_file():
+                    repo_paths.add(file_path.parent)
+                else:
+                    repo_paths.add(file_path)
+        
+        if len(repo_paths) > 1:
+            from cli.ui.console import console
+            console.print("[red]错误: 提供的文件来自不同的 git 仓库[/red]")
+            raise typer.Exit(1)
+        
+        if repo_paths:
+            return repo_paths.pop()
+    
+    # 2. 使用 --repo 参数
+    if str(repo_arg) != ".":
+        return Path(repo_arg).resolve()
+    
+    # 3. 从当前目录向上查找 git 仓库
+    try:
+        repo = git.Repo(Path.cwd(), search_parent_directories=True)
+        return Path(repo.working_tree_dir).resolve()
+    except (git.InvalidGitRepositoryError, FileNotFoundError, git.GitCommandError):
+        pass
+    
+    # 4. 使用当前目录
+    return Path.cwd()
+
+
 def main(
     files: Optional[List[Path]] = typer.Argument(None, help="要加载的文件"),
     model: str = typer.Option("qwen-plus", "--model", "-m", help="使用的模型"),
     repo: Path = typer.Option(".", "--repo", "-r", help="仓库路径"),
+    subtree_only: bool = typer.Option(False, "--subtree-only", help="只扫描当前目录及其子目录"),
 ):
     """
     启动交互式对话
     
     示例:
-        daoyoucode chat
-        daoyoucode chat main.py utils.py
-        daoyoucode chat --model deepseek-coder
+        daoyoucode chat                          # 在当前 git 仓库工作
+        daoyoucode chat main.py utils.py         # 从文件推断仓库
+        daoyoucode chat --model deepseek-coder   # 指定模型
+        daoyoucode chat --repo /path/to/project  # 指定仓库路径
+        daoyoucode chat --subtree-only           # 只扫描当前目录
     """
     from cli.ui.console import console
     import uuid
     import os
     
-    # 如果repo是"."，自动检测项目根目录
-    # CLI通常在backend/目录运行，项目根目录是上一级
-    if str(repo) == ".":
-        current_dir = os.getcwd()
-        # 如果当前目录是backend，使用上一级
-        if os.path.basename(current_dir) == "backend":
-            repo = Path(os.path.dirname(current_dir))
-        else:
-            repo = Path(current_dir)
+    # 使用新的 repo_path 确定逻辑（参考 aider）
+    repo_path = determine_repo_path(files, repo)
     
     # 显示欢迎横幅
-    show_banner(model, repo, files)
+    show_banner(model, repo_path, files, subtree_only)
     
     # 生成会话ID（用于记忆系统）
     session_id = str(uuid.uuid4())
@@ -51,8 +110,10 @@ def main(
     ui_context = {
         "session_id": session_id,
         "model": model,
-        "repo": str(repo),
-        "initial_files": [str(f) for f in files] if files else []
+        "repo": str(repo_path),
+        "initial_files": [str(f) for f in files] if files else [],
+        "subtree_only": subtree_only,
+        "cwd": str(Path.cwd())  # 保存当前工作目录（用于 subtree_only）
     }
     
     try:
@@ -81,9 +142,10 @@ def main(
         raise typer.Exit(1)
 
 
-def show_banner(model: str, repo: Path, files: Optional[List[Path]]):
+def show_banner(model: str, repo: Path, files: Optional[List[Path]], subtree_only: bool = False):
     """显示欢迎横幅"""
     from cli.ui.console import console
+    import os
     
     banner = """
 ╔══════════════════════════════════════════════════════════╗
@@ -97,11 +159,20 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]]):
     console.print(f"[bold cyan]{banner}[/bold cyan]")
     
     # 显示配置信息
+    scope_info = ""
+    if subtree_only:
+        cwd = Path.cwd()
+        try:
+            rel_cwd = cwd.relative_to(repo)
+            scope_info = f"\n• 扫描范围: [yellow]{rel_cwd}/ (仅当前目录)[/yellow]"
+        except ValueError:
+            scope_info = f"\n• 扫描范围: [yellow]当前目录[/yellow]"
+    
     info_panel = f"""
 [bold]当前配置[/bold]
 • 模型: [cyan]{model}[/cyan]
 • 仓库: [dim]{repo}[/dim]
-• 文件: [dim]{len(files) if files else 0} 个[/dim]
+• 文件: [dim]{len(files) if files else 0} 个[/dim]{scope_info}
 """
     console.print(Panel(info_panel, border_style="cyan", padding=(0, 2)))
     
@@ -338,6 +409,8 @@ def handle_chat(user_input: str, ui_context: dict):
         "repo": repo_path,
         "model": ui_context["model"],
         "initial_files": ui_context.get("initial_files", []),
+        "subtree_only": ui_context.get("subtree_only", False),
+        "cwd": ui_context.get("cwd", os.getcwd()),
         # 添加明确的说明
         "working_directory": repo_path,
         "repo_root": repo_path,
@@ -354,10 +427,18 @@ def handle_chat(user_input: str, ui_context: dict):
         from daoyoucode.agents.init import initialize_agent_system
         initialize_agent_system()
         
-        # 设置工具注册表的工作目录
+        # 设置工具注册表的工作目录（使用新的 ToolContext）
         from daoyoucode.agents.tools.registry import get_tool_registry
+        from daoyoucode.agents.tools.base import ToolContext
+        from pathlib import Path
+        
         registry = get_tool_registry()
-        registry.set_working_directory(repo_path)
+        tool_context = ToolContext(
+            repo_path=Path(repo_path),
+            subtree_only=context.get("subtree_only", False),
+            cwd=Path(context.get("cwd", repo_path)) if context.get("subtree_only") else None
+        )
+        registry.set_context(tool_context)
         
         # 配置LLM客户端
         from daoyoucode.agents.llm.client_manager import get_client_manager

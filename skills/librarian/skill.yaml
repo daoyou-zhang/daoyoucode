@@ -1,0 +1,121 @@
+name: librarian
+version: 1.0.0
+description: 文档和代码搜索Agent - 专注于信息检索和知识搜索
+
+# 使用简单编排器
+orchestrator: react
+
+# 使用Librarian Agent
+agent: librarian
+
+# Prompt配置
+prompt:
+  file: prompts/librarian.md
+
+# LLM配置
+llm:
+  model: qwen-max
+  temperature: 0.1
+  max_tokens: 4000
+
+# 工具配置（搜索和读取工具）
+tools:
+  - repo_map              # 生成代码地图
+  - get_repo_structure    # 获取目录结构
+  - read_file             # 读取文件
+  - text_search           # 文本搜索
+  - regex_search          # 正则搜索
+  - find_references       # 查找引用
+  - get_symbols           # 获取符号
+  - find_function         # 查找函数
+  # 未来可以集成：
+  # - websearch (MCP)     # 网络搜索
+  # - documentation (MCP) # 文档搜索
+
+# 中间件
+middleware:
+  - context_management
+
+# 权限配置（只读）
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: deny  # 禁止写入
+  execute:
+    - pattern: "*"
+      permission: deny  # 禁止执行
+
+# 输入
+inputs:
+  - name: search_query
+    type: string
+    required: true
+    description: 搜索查询（文档、代码、示例等）
+  
+  - name: search_scope
+    type: string
+    required: false
+    description: 搜索范围（project/docs/code/all）
+    default: all
+
+# 输出
+outputs:
+  - name: search_results
+    type: array
+    description: 搜索结果列表
+  
+  - name: relevant_files
+    type: array
+    description: 相关文件列表
+  
+  - name: code_examples
+    type: array
+    description: 代码示例列表
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+
+# 元数据
+metadata:
+  category: search
+  cost: MEDIUM
+  source: oh-my-opencode
+  triggers:
+    - "查找"
+    - "搜索"
+    - "文档"
+    - "示例"
+    - "参考"
+  use_when:
+    - "查找文档"
+    - "搜索代码示例"
+    - "了解最佳实践"
+    - "学习新技术"
+    - "查找API用法"
+  features:
+    - "智能搜索"
+    - "代码定位"
+    - "文档检索"
+    - "示例查找"
+  
+  # 工作流说明
+  workflow: |
+    1. 理解搜索意图
+    2. 选择合适的搜索策略
+    3. 执行搜索
+    4. 过滤和排序结果
+    5. 提供相关上下文
+    
+    示例：
+    用户："如何使用Agent的工具？"
+    
+    Librarian执行：
+    1. text_search "tool" "agent"
+    2. find_function "call_tool"
+    3. read_file 相关文件
+    4. 提供示例和文档链接
