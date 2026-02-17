@@ -67,22 +67,51 @@ def configure_from_file(client_manager, config_path: str = None):
             logger.debug(f"提供商 {provider_name} 未启用")
             continue
         
-        # 检查API密钥
-        api_key = provider_config.get('api_key', '')
-        if not api_key or api_key.startswith('your-'):
+        # 检查API密钥（支持单个或多个，支持多种格式）
+        api_key = provider_config.get('api_key')
+        api_keys = provider_config.get('api_keys')
+        
+        # 处理api_key字段（可能是字符串或列表）
+        if api_key:
+            if isinstance(api_key, list):
+                # api_key是列表，转换为api_keys
+                api_keys = api_key
+                api_key = None
+            elif isinstance(api_key, str):
+                # api_key是字符串，保持不变
+                pass
+        
+        # 验证至少有一个key配置
+        if not api_key and not api_keys:
             logger.warning(f"提供商 {provider_name} 的API密钥未配置")
             continue
+        
+        # 验证key不是占位符
+        if api_key and isinstance(api_key, str) and api_key.startswith('your-'):
+            logger.warning(f"提供商 {provider_name} 的API密钥未配置（占位符）")
+            continue
+        
+        if api_keys:
+            # 过滤掉占位符
+            api_keys = [k for k in api_keys if not k.startswith('your-')]
+            if not api_keys:
+                logger.warning(f"提供商 {provider_name} 的所有API密钥都是占位符")
+                continue
         
         # 配置提供商
         try:
             client_manager.configure_provider(
                 provider=provider_name,
                 api_key=api_key,
+                api_keys=api_keys,
                 base_url=provider_config.get('base_url'),
                 models=provider_config.get('models', [])
             )
             configured_count += 1
-            logger.info(f"✓ 已配置提供商: {provider_name}")
+            
+            # 显示配置的key数量
+            key_count = len(api_keys) if api_keys else 1
+            logger.info(f"✓ 已配置提供商: {provider_name} ({key_count} 个API Key)")
         
         except Exception as e:
             logger.error(f"配置提供商 {provider_name} 失败: {e}")

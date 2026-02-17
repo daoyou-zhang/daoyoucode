@@ -76,6 +76,45 @@ class UnifiedLLMClient(BaseLLMClient):
                 if hasattr(request, 'function_call'):
                     payload["function_call"] = request.function_call
             
+            # 🔍 DEBUG: 打印请求信息
+            logger.info(f"=" * 60)
+            logger.info(f"🔍 LLM请求调试信息")
+            logger.info(f"模型: {request.model}")
+            logger.info(f"API Key: {self.api_key[:15]}...{self.api_key[-4:]}")
+            logger.info(f"消息数量: {len(messages)}")
+            logger.info(f"Functions数量: {len(payload.get('functions', []))}")
+            
+            # 打印消息内容（限制长度）
+            for i, msg in enumerate(messages[:3]):  # 只打印前3条
+                content = str(msg.get('content', ''))[:200]
+                logger.info(f"消息 {i+1} ({msg.get('role')}): {content}...")
+            
+            if len(messages) > 3:
+                logger.info(f"... 还有 {len(messages) - 3} 条消息")
+            
+            # 打印Functions（如果有）
+            if payload.get('functions'):
+                logger.info(f"Functions:")
+                for i, func in enumerate(payload['functions'][:3]):  # 只打印前3个
+                    logger.info(f"  {i+1}. {func.get('name')}")
+                if len(payload['functions']) > 3:
+                    logger.info(f"  ... 还有 {len(payload['functions']) - 3} 个函数")
+            
+            # 计算payload大小
+            import json
+            payload_size = len(json.dumps(payload, ensure_ascii=False))
+            logger.info(f"Payload大小: {payload_size} 字节 ({payload_size/1024:.2f} KB)")
+            
+            # 🔍 DEBUG: 保存完整请求到文件（可选）
+            import os
+            if os.getenv('DEBUG_LLM_REQUEST') == '1':
+                debug_file = f"debug_llm_request_{int(time.time())}.json"
+                with open(debug_file, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+                logger.info(f"💾 完整请求已保存到: {debug_file}")
+            
+            logger.info(f"=" * 60)
+            
             response = await self.http_client.post(
                 f"{self.base_url}/chat/completions",
                 headers=self._get_headers(),
@@ -106,6 +145,41 @@ class UnifiedLLMClient(BaseLLMClient):
         
         except httpx.TimeoutException as e:
             raise LLMTimeoutError(f"请求超时: {e}")
+        except httpx.HTTPStatusError as e:
+            # 🔍 DEBUG: 打印错误响应
+            logger.error(f"=" * 60)
+            logger.error(f"❌ API错误响应")
+            logger.error(f"状态码: {e.response.status_code}")
+            logger.error(f"URL: {e.request.url}")
+            logger.error(f"请求方法: {e.request.method}")
+            
+            # 尝试打印响应内容
+            try:
+                error_body = e.response.text
+                logger.error(f"响应内容: {error_body[:500]}")
+            except:
+                logger.error("无法读取响应内容")
+            
+            logger.error(f"=" * 60)
+            
+            # 提供更详细的错误信息
+            status_code = e.response.status_code
+            if status_code == 500:
+                error_msg = (
+                    f"API服务器错误 (500)。可能原因：\n"
+                    f"1. API配额不足（检查阿里云账户余额）\n"
+                    f"2. 请求格式错误（特别是Function Calling）\n"
+                    f"3. 请求过大（messages历史过长）\n"
+                    f"4. 服务端临时故障（稍后重试）\n"
+                    f"详情: {e}"
+                )
+            elif status_code == 429:
+                error_msg = f"请求频率超限 (429)。请稍后重试。详情: {e}"
+            elif status_code == 401:
+                error_msg = f"API Key无效或过期 (401)。请检查DASHSCOPE_API_KEY环境变量。详情: {e}"
+            else:
+                error_msg = f"HTTP错误 ({status_code}): {e}"
+            raise LLMConnectionError(error_msg)
         except httpx.HTTPError as e:
             raise LLMConnectionError(f"连接错误: {e}")
     

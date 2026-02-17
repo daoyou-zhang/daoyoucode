@@ -65,7 +65,7 @@ class DiscoverProjectDocsTool(BaseTool):
                 "properties": {
                     "repo_path": {
                         "type": "string",
-                        "description": "仓库根目录路径"
+                        "description": "仓库根目录路径。必须使用 '.' 表示当前工作目录，不要使用占位符路径！"
                     },
                     "include_changelog": {
                         "type": "boolean",

@@ -147,7 +147,7 @@ class TextSearchTool(BaseTool):
                     },
                     "directory": {
                         "type": "string",
-                        "description": "搜索目录",
+                        "description": "搜索目录。默认为当前工作目录（'.'），也可以指定子目录的相对路径",
                         "default": "."
                     },
                     "file_pattern": {
@@ -301,7 +301,7 @@ class RegexSearchTool(BaseTool):
                     },
                     "directory": {
                         "type": "string",
-                        "description": "搜索目录",
+                        "description": "搜索目录。默认为当前工作目录（'.'），也可以指定子目录的相对路径",
                         "default": "."
                     },
                     "file_pattern": {

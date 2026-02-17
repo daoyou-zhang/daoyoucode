@@ -1,0 +1,140 @@
+{
+  "model": "qwen-coder-plus",
+  "messages": [
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "temperature": 0.3,
+  "max_tokens": null,
+  "functions": [
+    {
+      "name": "repo_map",
+      "description": "生成代码仓库地图，智能排序最相关的代码定义",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "仓库根目录路径。必须使用 '.' 表示当前工作目录，不要使用占位符路径！"
+          },
+          "chat_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "对话中提到的文件列表（权重×50）。如果为空，会自动扩大token预算以提供更全面的项目视图"
+          },
+          "mentioned_idents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "对话中提到的标识符列表（权重×10）"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "最大token数量（默认3000）。如果chat_files为空，会自动扩大到6000",
+            "default": 3000
+          },
+          "auto_scale": {
+            "type": "boolean",
+            "description": "是否自动调整token预算（默认true）。当chat_files为空时，自动扩大预算以提供更全面的视图",
+            "default": true
+          }
+        },
+        "required": [
+          "repo_path"
+        ]
+      }
+    },
+    {
+      "name": "get_repo_structure",
+      "description": "获取仓库目录结构，支持智能注释",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "仓库根目录路径。必须使用 '.' 表示当前工作目录，不要使用占位符路径！"
+          },
+          "max_depth": {
+            "type": "integer",
+            "description": "最大深度",
+            "default": 3
+          },
+          "show_files": {
+            "type": "boolean",
+            "description": "是否显示文件（否则只显示目录）",
+            "default": true
+          },
+          "annotate": {
+            "type": "boolean",
+            "description": "是否添加智能注释（帮助理解目录含义）",
+            "default": true
+          }
+        },
+        "required": [
+          "repo_path"
+        ]
+      }
+    },
+    {
+      "name": "text_search",
+      "description": "在文件中搜索文本",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "搜索关键词"
+          },
+          "directory": {
+            "type": "string",
+            "description": "搜索目录。默认为当前工作目录（'.'），也可以指定子目录的相对路径",
+            "default": "."
+          },
+          "file_pattern": {
+            "type": "string",
+            "description": "文件名模式（如 *.py）"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "description": "是否区分大小写",
+            "default": false
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "最大结果数",
+            "default": 100
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "读取文件内容",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件的相对路径。例如: 'backend/config.py' 或 'README.md'。不要使用占位符！"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    }
+  ]
+}

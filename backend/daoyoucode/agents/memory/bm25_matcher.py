@@ -56,6 +56,10 @@ class BM25Matcher:
         try:
             import jieba
             import jieba.posseg as pseg
+            
+            # 静默加载jieba（避免输出日志）
+            jieba.setLogLevel(20)  # 设置为INFO级别，避免DEBUG输出
+            
             self.jieba = jieba
             self.pseg = pseg
             self.jieba_available = True

@@ -1,11 +1,12 @@
 """
 LLM客户端管理器（简化版）
 使用 httpx 内置连接池，不需要额外的连接池层
+支持多API Key轮询
 """
 
 import httpx
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from .clients.unified import UnifiedLLMClient
 from .exceptions import LLMError
 
@@ -20,6 +21,7 @@ class LLMClientManager:
     1. 全局共享 httpx.AsyncClient（内置连接池）
     2. 按提供商缓存配置
     3. 轻量级客户端对象创建
+    4. 支持多API Key轮询（Round-robin）
     """
     
     _instance = None
@@ -46,6 +48,9 @@ class LLMClientManager:
         # 提供商配置缓存
         self.provider_configs: Dict[str, Dict] = {}
         
+        # API Key轮询计数器（每个提供商独立计数）
+        self.key_counters: Dict[str, int] = {}
+        
         # 统计信息
         self.stats = {
             'total_requests': 0,
@@ -54,13 +59,14 @@ class LLMClientManager:
         }
         
         self._initialized = True
-        logger.info("LLM客户端管理器已初始化")
+        logger.info("LLM客户端管理器已初始化（支持API Key轮询）")
     
     def configure_provider(
         self,
         provider: str,
-        api_key: str,
-        base_url: str,
+        api_key: Optional[str] = None,
+        api_keys: Optional[List[str]] = None,
+        base_url: str = "",
         models: Optional[list] = None
     ):
         """
@@ -68,16 +74,57 @@ class LLMClientManager:
         
         Args:
             provider: 提供商名称（qwen, deepseek, openai等）
-            api_key: API密钥
+            api_key: 单个API密钥（与api_keys二选一）
+            api_keys: 多个API密钥列表（轮询使用）
             base_url: API端点
             models: 支持的模型列表
         """
+        # 处理API Key（支持单个或多个）
+        if api_keys:
+            keys = api_keys
+        elif api_key:
+            keys = [api_key]
+        else:
+            raise LLMError(f"提供商 {provider} 必须配置 api_key 或 api_keys")
+        
         self.provider_configs[provider] = {
-            'api_key': api_key,
+            'api_keys': keys,  # 统一存储为列表
             'base_url': base_url,
             'models': models or []
         }
-        logger.info(f"已配置提供商: {provider}")
+        
+        # 初始化轮询计数器
+        self.key_counters[provider] = 0
+        
+        logger.info(f"已配置提供商: {provider}, API Key数量: {len(keys)}")
+    
+    def _get_next_api_key(self, provider: str) -> str:
+        """
+        获取下一个API Key（Round-robin轮询）
+        
+        Args:
+            provider: 提供商名称
+        
+        Returns:
+            API Key
+        """
+        config = self.provider_configs[provider]
+        keys = config['api_keys']
+        
+        # 如果只有一个key，直接返回
+        if len(keys) == 1:
+            return keys[0]
+        
+        # 轮询：获取当前计数器对应的key，然后递增计数器
+        current_index = self.key_counters[provider] % len(keys)
+        self.key_counters[provider] += 1
+        
+        selected_key = keys[current_index]
+        
+        # 日志显示使用的是第几个key（避免泄露完整key）
+        logger.debug(f"提供商 {provider}: 使用API Key #{current_index + 1}/{len(keys)} ({selected_key[:10]}...)")
+        
+        return selected_key
     
     def get_client(self, model: str, provider: Optional[str] = None) -> UnifiedLLMClient:
         """
@@ -100,10 +147,13 @@ class LLMClientManager:
         
         config = self.provider_configs[provider]
         
+        # 获取下一个API Key（轮询）
+        api_key = self._get_next_api_key(provider)
+        
         # 创建轻量级客户端（共享HTTP客户端）
         return UnifiedLLMClient(
             http_client=self.http_client,  # 共享连接池
-            api_key=config['api_key'],
+            api_key=api_key,
             base_url=config['base_url'],
             model=model
         )

@@ -530,9 +530,46 @@ class LongTermMemory:
             
             response = await llm_client.chat(request)
             
+            # 检查响应是否为空
+            if not response.content or not response.content.strip():
+                logger.warning("LLM返回空响应，跳过深度分析")
+                return {}
+            
             # 解析JSON响应
             import json
-            analysis = json.loads(response.content)
+            
+            # 尝试提取JSON部分（处理LLM添加额外文本的情况）
+            content = response.content.strip()
+            
+            # 如果以```json开头，提取JSON部分
+            if content.startswith('```json'):
+                content = content[7:]  # 移除```json
+                if content.endswith('```'):
+                    content = content[:-3]  # 移除```
+                content = content.strip()
+            elif content.startswith('```'):
+                content = content[3:]
+                if content.endswith('```'):
+                    content = content[:-3]
+                content = content.strip()
+            
+            # 找到第一个完整的JSON对象
+            if content.startswith('{'):
+                brace_count = 0
+                json_end = -1
+                for i, char in enumerate(content):
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            json_end = i + 1
+                            break
+                
+                if json_end > 0:
+                    content = content[:json_end]
+            
+            analysis = json.loads(content)
             
             return {
                 'interests': analysis.get('interests', []),
@@ -541,6 +578,9 @@ class LongTermMemory:
                 'communication_style': analysis.get('communication_style', 'unknown')
             }
         
+        except json.JSONDecodeError as e:
+            logger.warning(f"LLM深度分析JSON解析失败: {e}, 响应内容: {response.content[:100] if response and response.content else '(空)'}")
+            return {}
         except Exception as e:
             logger.warning(f"LLM深度分析失败: {e}")
             return {}

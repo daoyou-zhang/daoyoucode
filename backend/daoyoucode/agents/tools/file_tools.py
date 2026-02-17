@@ -71,7 +71,7 @@ class ReadFileTool(BaseTool):
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "文件路径"
+                        "description": "文件的相对路径。例如: 'backend/config.py' 或 'README.md'。不要使用占位符！"
                     },
                     "encoding": {
                         "type": "string",

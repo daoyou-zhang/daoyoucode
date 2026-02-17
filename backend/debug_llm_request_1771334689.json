@@ -1,0 +1,11 @@
+{
+  "model": "qwen-max",
+  "messages": [
+    {
+      "role": "user",
+      "content": "\n分析以下用户的对话记录，提取用户画像信息：\n\nUser: 你好啊道友\nAI: 请提供更多信息或具体的任务，以便我能够帮助您。您可以问我关于代码搜索、文件读取、仓库结构获取等方面的问题。...\n\n请以JSON格式返回：\n{\n    \"interests\": [\"兴趣1\", \"兴趣2\"],\n    \"learning_goals\": [\"目标1\", \"目标2\"],\n    \"pain_points\": [\"痛点1\", \"痛点2\"],\n    \"communication_style\": \"简洁/详细/技术性\"\n}\n"
+    }
+  ],
+  "temperature": 0.3,
+  "max_tokens": null
+}
