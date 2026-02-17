@@ -123,20 +123,31 @@ async def _execute_skill_internal(
     """
     session_id = context.get('session_id')
     
-    # 设置工具注册表的工作目录（如果context中有）
-    logger.info(f"Context keys: {list(context.keys())}")
-    logger.info(f"working_directory in context: {'working_directory' in context}")
-    logger.info(f"repo in context: {'repo' in context}")
-    
-    if 'working_directory' in context or 'repo' in context:
-        from .tools.registry import get_tool_registry
-        registry = get_tool_registry()
-        working_dir = context.get('working_directory') or context.get('repo')
-        if working_dir:
-            logger.info(f"设置工具工作目录: {working_dir}")
-            registry.set_working_directory(working_dir)
+    # 统一设置工具上下文：优先用完整 ToolContext，避免覆盖 CLI 传入的 subtree_only/cwd（见优化建议 3.1）
+    from pathlib import Path
+    from .tools.registry import get_tool_registry
+    from .tools.base import ToolContext
+
+    registry = get_tool_registry()
+    working_dir = context.get('working_directory') or context.get('repo')
+    if working_dir:
+        repo_path = Path(working_dir)
+        if not repo_path.is_absolute():
+            repo_path = repo_path.resolve()
+        # 若 context 中有完整信息，统一用 set_context，保持 subtree_only、cwd 贯穿到底
+        if any(context.get(k) is not None for k in ('subtree_only', 'cwd')):
+            cwd = context.get('cwd')
+            tool_context = ToolContext(
+                repo_path=repo_path,
+                session_id=session_id,
+                subtree_only=context.get('subtree_only', False),
+                cwd=Path(cwd).resolve() if cwd else None,
+            )
+            logger.info(f"设置工具上下文: repo_path={repo_path}, subtree_only={tool_context.subtree_only}")
+            registry.set_context(tool_context)
         else:
-            logger.warning("working_dir is None!")
+            logger.info(f"设置工具工作目录: {working_dir}")
+            registry.set_working_directory(str(repo_path))
     else:
         logger.warning("No working_directory or repo in context!")
     

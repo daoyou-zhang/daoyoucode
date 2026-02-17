@@ -42,7 +42,12 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                     context
                 )
         
-        # 2. 获取Agent列表
+        # 2. 只使用已注册的工具名（避免 Skill 配置错误导致不稳定）
+        from ..tools import get_tool_registry
+        _tool_registry = get_tool_registry()
+        skill_tools_filtered = _tool_registry.filter_tool_names(skill.tools if skill.tools else None)
+        
+        # 3. 获取Agent列表
         agents = self._get_agents_from_skill(skill)
         
         if not agents:
@@ -52,12 +57,15 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                 'error': 'No agents configured'
             }
         
-        # 3. 确定协作模式
+        # 4. 确定协作模式
         mode = getattr(skill, 'collaboration_mode', 'main_with_helpers')
         
         self.logger.info(f"协作模式: {mode}, Agent数量: {len(agents)}")
         
-        # 4. 根据模式执行
+        # 为多 Agent 传递过滤后的 tools（用临时属性避免改 SkillConfig 结构）
+        skill._filtered_tools = skill_tools_filtered
+        
+        # 5. 根据模式执行
         if mode == 'sequential':
             result = await self._execute_sequential(agents, user_input, context, skill)
         elif mode == 'parallel':
@@ -103,7 +111,8 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                 prompt_source={'use_agent_default': True},
                 user_input=current_input,
                 context=context,
-                tools=skill.tools if skill.tools else None
+                llm_config=skill.llm,
+                tools=getattr(skill, '_filtered_tools', None) or skill.tools
             )
             
             results.append({
@@ -149,12 +158,14 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         self.logger.info("并行执行模式")
         
         # 并行执行所有Agent
+        _tools = getattr(skill, '_filtered_tools', None) or skill.tools
         tasks = [
             agent.execute(
                 prompt_source={'use_agent_default': True},
                 user_input=user_input,
                 context=context,
-                tools=skill.tools if skill.tools else None
+                llm_config=skill.llm,
+                tools=_tools
             )
             for agent in agents
         ]
@@ -249,7 +260,8 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                     prompt_source={'inline': debate_prompt},
                     user_input=user_input,
                     context=debate_context,
-                    tools=skill.tools if skill.tools else None
+                    llm_config=skill.llm,
+                    tools=getattr(skill, '_filtered_tools', None) or skill.tools
                 )
                 
                 opinion = {
@@ -307,12 +319,14 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         if helper_agents:
             self.logger.info(f"执行 {len(helper_agents)} 个辅助Agent")
             
+            _tools = getattr(skill, '_filtered_tools', None) or skill.tools
             helper_tasks = [
                 agent.execute(
                     prompt_source={'use_agent_default': True},
                     user_input=user_input,
                     context=context,
-                    tools=skill.tools if skill.tools else None
+                    llm_config=skill.llm,
+                    tools=_tools
                 )
                 for agent in helper_agents
             ]
@@ -341,7 +355,7 @@ class MultiAgentOrchestrator(BaseOrchestrator):
             user_input=user_input,
             context=main_context,
             llm_config=skill.llm,
-            tools=skill.tools if skill.tools else None
+            tools=getattr(skill, '_filtered_tools', None) or skill.tools
         )
         
         return {

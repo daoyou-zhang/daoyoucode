@@ -76,44 +76,34 @@ class UnifiedLLMClient(BaseLLMClient):
                 if hasattr(request, 'function_call'):
                     payload["function_call"] = request.function_call
             
-            # 🔍 DEBUG: 打印请求信息
-            logger.info(f"=" * 60)
-            logger.info(f"🔍 LLM请求调试信息")
-            logger.info(f"模型: {request.model}")
-            logger.info(f"API Key: {self.api_key[:15]}...{self.api_key[-4:]}")
-            logger.info(f"消息数量: {len(messages)}")
-            logger.info(f"Functions数量: {len(payload.get('functions', []))}")
-            
-            # 打印消息内容（限制长度）
-            for i, msg in enumerate(messages[:3]):  # 只打印前3条
-                content = str(msg.get('content', ''))[:200]
-                logger.info(f"消息 {i+1} ({msg.get('role')}): {content}...")
-            
-            if len(messages) > 3:
-                logger.info(f"... 还有 {len(messages) - 3} 条消息")
-            
-            # 打印Functions（如果有）
-            if payload.get('functions'):
-                logger.info(f"Functions:")
-                for i, func in enumerate(payload['functions'][:3]):  # 只打印前3个
-                    logger.info(f"  {i+1}. {func.get('name')}")
-                if len(payload['functions']) > 3:
-                    logger.info(f"  ... 还有 {len(payload['functions']) - 3} 个函数")
-            
-            # 计算payload大小
-            import json
-            payload_size = len(json.dumps(payload, ensure_ascii=False))
-            logger.info(f"Payload大小: {payload_size} 字节 ({payload_size/1024:.2f} KB)")
-            
-            # 🔍 DEBUG: 保存完整请求到文件（可选）
+            # 详细请求日志：默认 logger.debug，设置 DEBUG_LLM=1 时用 info 避免生产刷屏（见优化建议 3.5）
             import os
+            _log = logger.info if os.getenv('DEBUG_LLM') == '1' else logger.debug
+            _log("=" * 60)
+            _log("🔍 LLM请求调试信息")
+            _log(f"模型: {request.model}")
+            _log(f"API Key: {self.api_key[:15]}...{self.api_key[-4:]}")
+            _log(f"消息数量: {len(messages)}")
+            _log(f"Functions数量: {len(payload.get('functions', []))}")
+            for i, msg in enumerate(messages[:3]):
+                content = str(msg.get('content', ''))[:200]
+                _log(f"消息 {i+1} ({msg.get('role')}): {content}...")
+            if len(messages) > 3:
+                _log(f"... 还有 {len(messages) - 3} 条消息")
+            if payload.get('functions'):
+                _log("Functions:")
+                for i, func in enumerate(payload['functions'][:3]):
+                    _log(f"  {i+1}. {func.get('name')}")
+                if len(payload['functions']) > 3:
+                    _log(f"  ... 还有 {len(payload['functions']) - 3} 个函数")
+            payload_size = len(json.dumps(payload, ensure_ascii=False))
+            _log(f"Payload大小: {payload_size} 字节 ({payload_size/1024:.2f} KB)")
             if os.getenv('DEBUG_LLM_REQUEST') == '1':
                 debug_file = f"debug_llm_request_{int(time.time())}.json"
                 with open(debug_file, 'w', encoding='utf-8') as f:
                     json.dump(payload, f, ensure_ascii=False, indent=2)
-                logger.info(f"💾 完整请求已保存到: {debug_file}")
-            
-            logger.info(f"=" * 60)
+                _log(f"💾 完整请求已保存到: {debug_file}")
+            _log("=" * 60)
             
             response = await self.http_client.post(
                 f"{self.base_url}/chat/completions",

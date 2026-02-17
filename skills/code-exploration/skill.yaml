@@ -22,14 +22,15 @@ llm:
 middleware:
   - context_management
 
-# 可用工具
+# 可用工具（与 registry 一致，无 find_* 则用 text_search + get_file_symbols）
 tools:
-  - grep_search
-  - find_function
-  - find_class
-  - find_imports
+  - text_search
+  - regex_search
+  - get_file_symbols
   - read_file
   - list_files
+  - repo_map
+  - get_repo_structure
 
 # 权限（只读）
 permissions:

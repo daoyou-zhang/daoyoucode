@@ -197,12 +197,49 @@ class BaseTool(ABC):
         """
         解析路径（使用 ToolContext）
         
+        自动检测并修正常见的占位符路径错误。
+        
         Args:
             path: 相对或绝对路径
         
         Returns:
             绝对路径
         """
+        # 🆕 检测占位符路径
+        placeholder_patterns = [
+            'your-repo-path',
+            'your-project',
+            'your-repo',
+            'path/to/your',
+            'path/to/file',
+            'example/path',
+            'example-path'
+        ]
+        
+        path_lower = path.lower()
+        for pattern in placeholder_patterns:
+            if pattern in path_lower:
+                self.logger.warning(
+                    f"⚠️  检测到占位符路径: {path}\n"
+                    f"   自动修正为: .\n"
+                    f"   提示：请使用 '.' 表示当前工作目录"
+                )
+                # 自动修正为当前工作目录
+                return self.context.repo_path
+        
+        # 🆕 去掉 ./ 前缀（如果路径不存在）
+        if path.startswith('./'):
+            clean_path = path[2:]
+            full_path = self.context.repo_path / clean_path
+            
+            # 如果去掉 ./ 后的路径存在，使用它
+            if not full_path.exists():
+                self.logger.warning(
+                    f"⚠️  路径不存在: {path}\n"
+                    f"   尝试去掉 ./ 前缀: {clean_path}"
+                )
+                path = clean_path
+        
         return self.context.abs_path(path)
     
     def normalize_path(self, path: str) -> str:
@@ -382,6 +419,24 @@ class ToolRegistry:
         """获取工具"""
         return self._tools.get(name)
     
+    def filter_tool_names(self, tool_names: Optional[List[str]]) -> Optional[List[str]]:
+        """
+        只保留已注册的工具名，避免 Skill 配置了不存在的工具导致运行时报错。
+        若过滤后为空，返回 None（表示不限制工具）。
+        """
+        if not tool_names:
+            return None
+        available = set(self._tools.keys())
+        filtered = [n for n in tool_names if n in available]
+        missing = set(tool_names) - available
+        if missing:
+            logger.warning(
+                "Skill 引用了不存在的工具，已忽略: %s（可用: %s）",
+                sorted(missing),
+                ", ".join(sorted(available)[:20]) + ("..." if len(available) > 20 else ""),
+            )
+        return filtered if filtered else None
+
     def list_tools(self) -> List[str]:
         """列出所有工具名称"""
         return list(self._tools.keys())

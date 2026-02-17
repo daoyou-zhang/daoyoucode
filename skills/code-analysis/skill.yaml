@@ -22,6 +22,14 @@ llm:
 middleware:
   - context_management
 
+tools:
+  - read_file
+  - repo_map
+  - get_repo_structure
+  - text_search
+  - regex_search
+  - get_file_symbols
+
 # 权限（只读）
 permissions:
   read:

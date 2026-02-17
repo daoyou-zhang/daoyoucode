@@ -22,17 +22,18 @@ llm:
 middleware:
   - context_management
 
-# 可用工具
+# 可用工具（仅使用注册表中存在的名称，避免运行时报 Tool not found）
 tools:
   - read_file
   - write_file
   - list_files
   - get_file_info
-  - grep_search
-  - find_function
-  - find_class
+  - text_search
+  - regex_search
+  - get_file_symbols
   - git_status
   - git_diff
+  - search_replace
 
 # 输入
 inputs:

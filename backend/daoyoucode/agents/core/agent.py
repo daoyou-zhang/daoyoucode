@@ -418,21 +418,51 @@ class BaseAgent(ABC):
             # ========== 3. 渲染Prompt ==========
             full_prompt = self._render_prompt(prompt, user_input, context)
             
+            # 添加工具使用规则（可配置：context['tool_rules'] 覆盖默认，Skill/编排器可传入）
+            if tools:
+                default_tool_rules = """⚠️ 工具使用规则（必须遵守）：
+
+1. 路径参数使用 '.' 表示当前工作目录
+   - ✅ 正确：repo_map(repo_path=".")
+   - ❌ 错误：repo_map(repo_path="./your-repo-path")
+   - ❌ 错误：repo_map(repo_path="/path/to/repo")
+
+2. 文件路径使用相对路径
+   - ✅ 正确：read_file(file_path="backend/config.py")
+   - ❌ 错误：read_file(file_path="path/to/your/file.txt")
+
+3. 搜索目录使用 '.' 或省略
+   - ✅ 正确：text_search(query="example", directory=".")
+   - ❌ 错误：text_search(query="example", directory="./src")
+
+4. 细粒度编辑与验证（对齐 aider）
+   - 可用 apply_patch(diff="...") 提交 unified diff，便于审计和回滚。
+   - 编辑后建议调用 run_lint 或 run_test 验证，再根据输出修复。
+
+5. 单文件符号（AST 深度）
+   - 已知文件时可调用 get_file_symbols(file_path) 获取类/函数/方法及行号。
+
+记住：当前工作目录就是项目根目录，不需要猜测路径！
+
+---
+
+"""
+                tool_rules = context.get('tool_rules') or default_tool_rules
+                full_prompt = (tool_rules if isinstance(tool_rules, str) else default_tool_rules) + full_prompt
+            
             # ========== 4. 调用LLM ==========
             if tools:
                 # 构建初始消息（包含历史对话）
                 initial_messages = []
-                
-                # 添加历史对话（如果有）
-                # 优化：只保留最近N轮对话，避免token浪费
-                MAX_HISTORY_ROUNDS = 5
+                # 历史轮数可配置：context['max_history_rounds']，默认 5
+                max_history_rounds = context.get('max_history_rounds', 5)
                 if history:
                     # 如果历史超过限制，只保留最近的N轮
-                    if len(history) > MAX_HISTORY_ROUNDS:
-                        truncated_count = len(history) - MAX_HISTORY_ROUNDS
-                        history = history[-MAX_HISTORY_ROUNDS:]
+                    if len(history) > max_history_rounds:
+                        truncated_count = len(history) - max_history_rounds
+                        history = history[-max_history_rounds:]
                         self.logger.info(
-                            f"📉 工具调用历史截断: 保留最近{MAX_HISTORY_ROUNDS}轮, "
+                            f"📉 工具调用历史截断: 保留最近{max_history_rounds}轮, "
                             f"截断{truncated_count}轮 (节省token)"
                         )
                     

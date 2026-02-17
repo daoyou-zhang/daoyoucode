@@ -18,19 +18,16 @@ llm:
   temperature: 0.1
   max_tokens: 4000
 
-# 工具配置（搜索和读取工具）
+# 工具配置（名称与 registry 一致）
 tools:
-  - repo_map              # 生成代码地图
-  - get_repo_structure    # 获取目录结构
-  - read_file             # 读取文件
-  - text_search           # 文本搜索
-  - regex_search          # 正则搜索
-  - find_references       # 查找引用
-  - get_symbols           # 获取符号
-  - find_function         # 查找函数
-  # 未来可以集成：
-  # - websearch (MCP)     # 网络搜索
-  # - documentation (MCP) # 文档搜索
+  - repo_map
+  - get_repo_structure
+  - read_file
+  - text_search
+  - regex_search
+  - get_file_symbols
+  - lsp_find_references
+  - lsp_symbols
 
 # 中间件
 middleware:

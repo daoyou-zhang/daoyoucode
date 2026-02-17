@@ -1,11 +1,9 @@
-name: chat_assistant
+# 名称与 CLI 默认 --skill chat-assistant 对齐，避免找不到 Skill
+name: chat-assistant
 version: 1.0.0
 description: 交互式对话助手，支持代码理解、编写和项目分析
 
-# 使用ReAct编排器（支持工具调用和推理循环）
 orchestrator: react
-
-# 使用MainAgent
 agent: MainAgent
 
 # Prompt配置

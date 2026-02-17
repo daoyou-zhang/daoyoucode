@@ -876,3 +876,65 @@ class GetRepoStructureTool(BaseTool):
                 return annotation
         
         return None
+
+
+class GetFileSymbolsTool(BaseTool):
+    """
+    获取单文件符号表（类/函数/方法等，AST 深度）
+    
+    与 repo_map 互补：已知文件时可直接取该文件的定义列表，便于精确理解代码结构。
+    使用与 RepoMap 相同的 Tree-sitter 解析。
+    """
+
+    def __init__(self):
+        super().__init__(
+            name="get_file_symbols",
+            description="获取指定文件中的符号定义（类、函数、方法等）及行号，基于 AST 解析。"
+        )
+
+    async def execute(self, file_path: str) -> ToolResult:
+        try:
+            path = self.resolve_path(file_path)
+            if not path.exists() or not path.is_file():
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"文件不存在或不是文件: {file_path}"
+                )
+            # 复用 RepoMapTool 的解析逻辑
+            repomap = RepoMapTool()
+            repomap._context = self.context
+            defs = repomap._parse_file(path)
+            defs = [d for d in defs if d.get("kind") == "def"]
+            if not defs:
+                return ToolResult(
+                    success=True,
+                    content="该文件中未解析到符号定义（或语言/解析器不支持）",
+                    metadata={"file_path": str(path), "count": 0}
+                )
+            lines = [f"  {d.get('type', '?')} {d['name']} (line {d['line']})" for d in defs]
+            text = f"# {path.name}\n" + "\n".join(lines)
+            return ToolResult(
+                success=True,
+                content=text,
+                metadata={"file_path": str(path), "count": len(defs)}
+            )
+        except Exception as e:
+            logger.exception("get_file_symbols 失败")
+            return ToolResult(success=False, content=None, error=str(e))
+
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "相对项目根的文件路径"
+                    }
+                },
+                "required": ["file_path"]
+            }
+        }

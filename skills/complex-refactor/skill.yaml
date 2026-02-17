@@ -32,8 +32,18 @@ llm:
   temperature: 0.2
   max_tokens: 4000
 
-# 工具配置（每个Agent使用自己的工具集）
-# 工具会根据Agent自动分配（参考 tool_groups.py）
+tools:
+  - read_file
+  - write_file
+  - list_files
+  - text_search
+  - regex_search
+  - search_replace
+  - get_file_symbols
+  - git_status
+  - git_diff
+  - run_test
+  - run_lint
 
 # 中间件
 middleware:

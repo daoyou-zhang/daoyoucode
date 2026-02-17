@@ -546,3 +546,166 @@ class SearchReplaceTool(BaseTool):
                 "required": ["file_path", "search", "replace"]
             }
         }
+
+
+# ========== Unified Diff (editblock/udiff 式细粒度编辑) ==========
+
+def _parse_unified_diff(diff_text: str) -> List[Dict[str, Any]]:
+    """
+    解析 unified diff，返回 [{"path": str, "hunks": [(old_start, old_count, new_start, new_count, lines)]}, ...]
+    path 为相对路径（已去掉 a/ b/ 前缀）
+    """
+    files = []
+    current_file: Optional[Dict[str, Any]] = None
+    current_hunk: Optional[Tuple] = None
+    for line in diff_text.splitlines(keepends=True):
+        if line.startswith("--- "):
+            # 旧文件路径：--- a/foo.py 或 --- foo.py
+            raw = line[4:].rstrip()
+            path = raw.split("\t")[0].strip()
+            if path.startswith("a/"):
+                path = path[2:]
+            if current_file and current_hunk is not None:
+                current_file["hunks"].append(current_hunk)
+            current_file = {"path": path, "hunks": []}
+            current_hunk = None
+        elif line.startswith("+++ "):
+            # 新文件路径（可选使用）
+            raw = line[4:].rstrip()
+            path = raw.split("\t")[0].strip()
+            if path.startswith("b/"):
+                path = path[2:]
+            if current_file:
+                current_file["path"] = path
+            current_hunk = None
+        elif line.startswith("@@ "):
+            if current_file is None:
+                continue
+            if current_hunk is not None:
+                current_file["hunks"].append(current_hunk)
+            # @@ -old_start,old_count +new_start,new_count @@
+            m = re.match(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line.strip())
+            if m:
+                old_s, old_c, new_s, new_c = m.groups()
+                current_hunk = (
+                    int(old_s),
+                    int(old_c) if old_c else 1,
+                    int(new_s),
+                    int(new_c) if new_c else 1,
+                    [],
+                )
+        elif current_hunk is not None:
+            # 行内容：空格=上下文，-=删除，+=添加
+            current_hunk[4].append(line)
+    if current_file and current_hunk is not None:
+        current_file["hunks"].append(current_hunk)
+    if current_file:
+        files.append(current_file)
+    return files
+
+
+def _apply_hunk(old_lines: List[str], old_start: int, old_count: int, new_start: int, new_count: int, hunk_lines: List[str]) -> List[str]:
+    """应用单个 hunk。old_lines 为带换行符的行列表；unified diff：空格=上下文，-=删除，+=添加。"""
+    if old_start <= 0:
+        result = []
+        old_pos = 0
+    else:
+        result = old_lines[: old_start - 1]
+        old_pos = old_start - 1
+    for hunk_line in hunk_lines:
+        if len(hunk_line) < 1:
+            continue
+        if hunk_line[0] == " ":
+            result.append(hunk_line[1:] if hunk_line.endswith("\n") else hunk_line[1:] + "\n")
+            old_pos += 1
+        elif hunk_line[0] == "-":
+            old_pos += 1
+        elif hunk_line[0] == "+":
+            result.append(hunk_line[1:] if hunk_line.endswith("\n") else hunk_line[1:] + "\n")
+    result.extend(old_lines[old_pos:])
+    return result
+
+
+class ApplyPatchTool(BaseTool):
+    """
+    应用 Unified Diff（editblock/udiff 式细粒度编辑）
+    
+    接受模型输出的标准 unified diff 文本，按 hunk 精确应用，便于审计和回滚。
+    参考 aider 的 udiff 编辑范式。
+    """
+
+    def __init__(self):
+        super().__init__(
+            name="apply_patch",
+            description="应用 unified diff 到文件。输入为标准 diff 文本（---/+++ 文件路径，@@ hunk，- 删除行，+ 添加行）。路径为相对项目根。"
+        )
+
+    async def execute(
+        self,
+        diff: str,
+        base_path: Optional[str] = None
+    ) -> ToolResult:
+        """
+        应用 diff。
+        
+        Args:
+            diff: unified diff 字符串（可含多个文件）
+            base_path: 相对路径的基准目录，默认使用当前仓库根
+        """
+        try:
+            base = self.context.repo_path
+            if base_path:
+                base = self.resolve_path(base_path)
+            parsed = _parse_unified_diff(diff)
+            applied = []
+            errors = []
+            for file_info in parsed:
+                rel_path = file_info["path"]
+                full_path = base / rel_path
+                if not full_path.exists() and not any(h[4] for h in file_info["hunks"] if any(l.startswith("+") for l in h[4])):
+                    errors.append(f"文件不存在且无新增内容: {rel_path}")
+                    continue
+                try:
+                    if full_path.exists():
+                        content = full_path.read_text(encoding="utf-8", errors="ignore")
+                        old_lines = content.splitlines(keepends=True)
+                        if not content.endswith("\n") and old_lines:
+                            old_lines[-1] = old_lines[-1].rstrip("\n") + "\n"
+                    else:
+                        full_path.parent.mkdir(parents=True, exist_ok=True)
+                        old_lines = []
+                    for (old_start, old_count, new_start, new_count, hunk_lines) in file_info["hunks"]:
+                        old_lines = _apply_hunk(old_lines, old_start, old_count, new_start, new_count, hunk_lines)
+                    full_path.write_text("".join(old_lines), encoding="utf-8")
+                    applied.append(rel_path)
+                except Exception as e:
+                    errors.append(f"{rel_path}: {e}")
+            if errors and not applied:
+                return ToolResult(success=False, content=None, error="; ".join(errors))
+            return ToolResult(
+                success=True,
+                content=f"已应用 diff 到: {', '.join(applied)}" + ("; 错误: " + "; ".join(errors) if errors else ""),
+                metadata={"applied": applied, "errors": errors if errors else None}
+            )
+        except Exception as e:
+            return ToolResult(success=False, content=None, error=str(e))
+
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "diff": {
+                        "type": "string",
+                        "description": "Unified diff 全文（包含 ---/+++ 路径和 @@ hunk）"
+                    },
+                    "base_path": {
+                        "type": "string",
+                        "description": "相对路径基准，默认当前仓库根。使用 '.' 表示仓库根"
+                    }
+                },
+                "required": ["diff"]
+            }
+        }

@@ -18,18 +18,18 @@ llm:
   temperature: 0.1  # 低温度，更准确
   max_tokens: 4000
 
-# 工具配置（只读工具）
+# 工具配置（只读，名称与 registry 一致）
 tools:
-  - repo_map              # 生成代码地图
-  - get_repo_structure    # 获取目录结构
-  - read_file             # 读取文件
-  - text_search           # 搜索代码
-  - regex_search          # 正则搜索
-  - get_diagnostics       # 获取诊断信息
-  - find_references       # 查找引用
-  - get_symbols           # 获取符号
-  - parse_ast             # 解析AST
-  - find_function         # 查找函数
+  - repo_map
+  - get_repo_structure
+  - read_file
+  - text_search
+  - regex_search
+  - get_file_symbols
+  - lsp_diagnostics
+  - lsp_find_references
+  - lsp_symbols
+  - ast_grep_search
 
 # 中间件
 middleware:

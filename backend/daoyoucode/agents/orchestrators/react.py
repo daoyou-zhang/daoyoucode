@@ -149,16 +149,21 @@ class ReActOrchestrator(BaseOrchestrator):
             # 2. 准备prompt
             prompt_source = self._prepare_prompt_source(skill)
             
-            # 3. 执行Agent（带工具）
+            # 3. 只传入已注册的工具名，避免 Kiro 等生成的配置里有错误工具名导致不稳定
+            from ..tools import get_tool_registry
+            tool_registry = get_tool_registry()
+            tools_to_use = tool_registry.filter_tool_names(skill.tools if skill.tools else None)
+            
+            # 4. 执行Agent（带工具）
             result = await agent.execute(
                 prompt_source=prompt_source,
                 user_input=user_input,
                 context=context,
                 llm_config=skill.llm,
-                tools=skill.tools if skill.tools else None
+                tools=tools_to_use
             )
             
-            # 4. 返回结果
+            # 5. 返回结果
             return {
                 'success': result.success,
                 'content': result.content,

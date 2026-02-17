@@ -121,16 +121,20 @@ class SimpleOrchestrator(BaseOrchestrator):
         # 3. 准备prompt来源
         prompt_source = self._prepare_prompt_source(skill)
         
-        # 4. 执行Agent
+        # 4. 只传入已注册的工具名
+        from ..tools import get_tool_registry
+        tools_to_use = get_tool_registry().filter_tool_names(skill.tools if skill.tools else None)
+        
+        # 5. 执行Agent
         result = await agent.execute(
             prompt_source=prompt_source,
             user_input=user_input,
             context=context,
             llm_config=skill.llm,
-            tools=skill.tools if skill.tools else None
+            tools=tools_to_use
         )
         
-        # 5. 返回结果
+        # 6. 返回结果
         return {
             'success': result.success,
             'content': result.content,

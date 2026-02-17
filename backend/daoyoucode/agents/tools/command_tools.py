@@ -287,3 +287,98 @@ class RunTestTool(BaseTool):
                 "required": []
             }
         }
+
+
+class RunLintTool(BaseTool):
+    """
+    运行 Lint（编辑后验证，与 run_test 配合使用）
+    
+    执行项目配置的 lint 命令并返回结果，便于 Agent 在 write_file/search_replace/apply_patch 后自检。
+    建议流程：编辑 → run_lint / run_test → 根据输出修复。
+    """
+
+    def __init__(self):
+        super().__init__(
+            name="run_lint",
+            description="运行 lint 检查（如 ruff check、eslint）。编辑后建议调用以验证代码。"
+        )
+
+    async def execute(
+        self,
+        command: Optional[str] = None,
+        cwd: Optional[str] = None,
+        timeout: int = 45
+    ) -> ToolResult:
+        """
+        Args:
+            command: 要执行的 lint 命令。不传时尝试常见命令：ruff check .（Python）或 eslint .（JS）
+            cwd: 工作目录，默认仓库根
+            timeout: 超时秒数
+        """
+        try:
+            work_dir = self.context.repo_path
+            if cwd:
+                from pathlib import Path
+                work_dir = self.resolve_path(cwd)
+            cmd = command
+            if not cmd:
+                # 默认尝试：优先 ruff（Python），其次 eslint
+                py_check = work_dir / "pyproject.toml"
+                if (work_dir / "package.json").exists():
+                    cmd = "npx eslint . --max-warnings 0 2>/dev/null || true"
+                elif py_check.exists() or list(work_dir.glob("*.py")):
+                    cmd = "ruff check . 2>/dev/null || true"
+                else:
+                    cmd = "echo 'No default lint for this project'"
+            process = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(work_dir)
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"Lint 超时（{timeout}秒）"
+                )
+            out = stdout.decode("utf-8", errors="ignore")
+            err = stderr.decode("utf-8", errors="ignore")
+            combined = (out + "\n" + err).strip()
+            return ToolResult(
+                success=process.returncode == 0,
+                content=combined or "Lint 通过，无输出",
+                error=None if process.returncode == 0 else combined,
+                metadata={"command": cmd, "returncode": process.returncode}
+            )
+        except Exception as e:
+            return ToolResult(success=False, content=None, error=str(e))
+
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "lint 命令，如 'ruff check .' 或 'npx eslint .'。不传则自动尝试常见命令"
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": "工作目录，默认仓库根"
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "超时秒数",
+                        "default": 45
+                    }
+                },
+                "required": []
+            }
+        }

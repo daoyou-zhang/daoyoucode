@@ -16,6 +16,17 @@ llm:
 middleware:
   - context_management
 
+tools:
+  - read_file
+  - write_file
+  - list_files
+  - get_file_info
+  - text_search
+  - regex_search
+  - search_replace
+  - git_status
+  - git_diff
+
 permissions:
   read:
     - pattern: "*"

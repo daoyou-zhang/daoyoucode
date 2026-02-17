@@ -439,8 +439,8 @@ def handle_chat(user_input: str, ui_context: dict):
     import os
     
     # 准备基本上下文（传递给Skill系统）
-    # 将 repo 路径转换为绝对路径
     repo_path = os.path.abspath(ui_context["repo"])
+    skill_name = ui_context.get("skill", "chat-assistant")
     
     context = {
         "session_id": ui_context["session_id"],
@@ -449,7 +449,6 @@ def handle_chat(user_input: str, ui_context: dict):
         "initial_files": ui_context.get("initial_files", []),
         "subtree_only": ui_context.get("subtree_only", False),
         "cwd": ui_context.get("cwd", os.getcwd()),
-        # 添加明确的说明
         "working_directory": repo_path,
         "repo_root": repo_path,
     }
@@ -460,36 +459,37 @@ def handle_chat(user_input: str, ui_context: dict):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    try:
-        # 初始化Agent系统（包括工具注册、Agent注册、编排器注册）
+    # 会话级只初始化一次，仅当 repo/skill 变化时再 set_context 或重配（优化建议 2）
+    need_init = (
+        not ui_context.get("_chat_init_done")
+        or ui_context.get("_chat_init_repo") != repo_path
+        or ui_context.get("_chat_init_skill") != skill_name
+    )
+    if need_init:
         from daoyoucode.agents.init import initialize_agent_system
-        initialize_agent_system()
-        
-        # 设置工具注册表的工作目录（使用新的 ToolContext）
         from daoyoucode.agents.tools.registry import get_tool_registry
         from daoyoucode.agents.tools.base import ToolContext
         from pathlib import Path
-        
+        from daoyoucode.agents.llm.client_manager import get_client_manager
+        from daoyoucode.agents.llm.config_loader import auto_configure
+
+        initialize_agent_system()
         registry = get_tool_registry()
         tool_context = ToolContext(
             repo_path=Path(repo_path),
             subtree_only=context.get("subtree_only", False),
-            cwd=Path(context.get("cwd", repo_path)) if context.get("subtree_only") else None
+            cwd=Path(context["cwd"]).resolve() if context.get("subtree_only") else None,
         )
         registry.set_context(tool_context)
-        
-        # 配置LLM客户端
-        from daoyoucode.agents.llm.client_manager import get_client_manager
-        from daoyoucode.agents.llm.config_loader import auto_configure
-        
         client_manager = get_client_manager()
         auto_configure(client_manager)
-        
+        ui_context["_chat_init_done"] = True
+        ui_context["_chat_init_repo"] = repo_path
+        ui_context["_chat_init_skill"] = skill_name
+    
+    try:
         # 通过Skill系统执行
         from daoyoucode.agents.executor import execute_skill
-        
-        # 使用动态Skill
-        skill_name = ui_context.get('skill', 'chat-assistant')
         
         console.print("[bold blue]🤔 AI正在思考...[/bold blue]")
         
@@ -733,7 +733,7 @@ def handle_chat_with_agent(user_input: str, context: dict) -> str:
             from daoyoucode.agents.executor import execute_skill
             
             result = loop.run_until_complete(execute_skill(
-                skill_name="chat_assistant",  # 使用chat_assistant Skill
+                skill_name="chat-assistant",
                 user_input=user_input,
                 session_id=agent_context["session_id"],
                 context=agent_context

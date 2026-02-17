@@ -1,0 +1,55 @@
+# 单次编辑 Skill：供 daoyoucode edit 命令使用，走统一编排与超时/恢复/Hook
+name: edit-single
+version: 1.0.0
+description: 单次文件编辑，根据指令修改指定文件（CLI edit 命令）
+
+orchestrator: react
+agent: programmer
+
+prompt:
+  inline: |
+    你是代码编辑专家。根据用户给出的「编辑指令」和「要编辑的文件」完成修改。
+    请先读取文件内容，再按指令做最小化、精确的修改，必要时使用 write_file 或 search_replace 工具写入结果。
+    路径使用相对项目根的路径；当前工作目录即项目根。
+
+llm:
+  model: qwen-max
+  temperature: 0.3
+  max_tokens: 4000
+
+tools:
+  - read_file
+  - write_file
+  - search_replace
+  - list_files
+  - get_file_info
+
+middleware:
+  - context_management
+
+inputs:
+  - name: user_input
+    type: string
+    required: true
+    description: 编辑指令与文件列表说明（由 CLI 组装）
+  - name: repo
+    type: string
+    required: false
+    description: 仓库路径
+  - name: instruction
+    type: string
+    required: false
+    description: 用户编辑指令
+  - name: edit_files
+    type: array
+    required: false
+    description: 要编辑的文件路径列表
+
+outputs:
+  - name: response
+    type: string
+    description: AI 的修改说明或完成结果
+
+metadata:
+  category: edit
+  use_when: "CLI edit 命令"

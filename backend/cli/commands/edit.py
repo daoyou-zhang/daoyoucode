@@ -36,18 +36,9 @@ def main(
     if not validate_files(files):
         raise typer.Exit(1)
     
-    # 初始化Agent系统
-    agent_available = initialize_edit_agent(model)
-    
-    # 执行编辑流程
+    # 通过 Skill 体系执行（复用超时/恢复/Hook），失败时降级为模拟模式
     try:
-        if agent_available:
-            # 使用真实Agent
-            execute_edit_with_agent(files, instruction, model, yes, repo)
-        else:
-            # 使用模拟模式
-            execute_edit_mock(files, instruction, yes)
-        
+        execute_edit_via_skill(files, instruction, model, yes, repo)
     except Exception as e:
         console.print(f"\n[red]❌ 错误: {e}[/red]\n")
         raise typer.Exit(1)
@@ -136,184 +127,101 @@ def show_success(files: List[Path]):
     console.print("\n[dim]💡 提示: 使用 git diff 查看详细修改[/dim]\n")
 
 
-def initialize_edit_agent(model: str) -> bool:
-    """
-    初始化编辑Agent
-    
-    Returns:
-        True: Agent初始化成功
-        False: Agent初始化失败，使用模拟模式
-    """
-    from cli.ui.console import console
-    
-    try:
-        # 1. 配置LLM客户端
-        from daoyoucode.agents.llm.client_manager import get_client_manager
-        from daoyoucode.agents.llm.config_loader import auto_configure
-        
-        client_manager = get_client_manager()
-        auto_configure(client_manager)
-        
-        # 检查是否有可用的提供商
-        if not client_manager.provider_configs:
-            console.print("[yellow]⚠ 未配置LLM提供商，使用模拟模式[/yellow]")
-            console.print("[dim]请配置 backend/config/llm_config.yaml[/dim]")
-            return False
-        
-        # 2. 导入Agent系统
-        from daoyoucode.agents.core.agent import (
-            get_agent_registry,
-            register_agent,
-            BaseAgent,
-            AgentConfig
-        )
-        
-        # 3. 检查是否已有Agent
-        registry = get_agent_registry()
-        if "CodeAgent" in registry.list_agents():
-            console.print("[dim]✓ CodeAgent已就绪[/dim]")
-            return True
-        
-        # 创建并注册CodeAgent
-        config = AgentConfig(
-            name="CodeAgent",
-            description="代码编辑Agent，负责文件修改",
-            model=model,
-            temperature=0.3,  # 代码编辑需要更低的温度
-            system_prompt="""你是DaoyouCode的代码编辑专家。
-
-你的任务：
-- 理解用户的编辑指令
-- 分析现有代码
-- 生成精确的修改
-- 确保代码质量
-
-你的原则：
-- 最小化修改范围
-- 保持代码风格一致
-- 添加必要的注释
-- 确保语法正确
-
-请根据用户指令修改代码。"""
-        )
-        
-        agent = BaseAgent(config)
-        register_agent(agent)
-        
-        console.print("[dim]✓ CodeAgent初始化完成[/dim]")
-        return True
-        
-    except Exception as e:
-        console.print(f"[yellow]⚠ Agent初始化失败，使用模拟模式[/yellow]")
-        console.print(f"[dim]原因: {str(e)[:100]}[/dim]")
-        return False
-
-
-def execute_edit_with_agent(
+def execute_edit_via_skill(
     files: List[Path],
     instruction: str,
     model: str,
     yes: bool,
-    repo: Path
+    repo: Path,
 ):
-    """使用真实Agent执行编辑"""
+    """通过 edit-single Skill 执行编辑（复用编排器、超时恢复、Hook）"""
     from cli.ui.console import console
     import asyncio
-    
+    import os
+
+    repo_path = os.path.abspath(str(repo))
+    # 要编辑的文件：使用相对 repo 的路径供 Agent 使用
     try:
-        # 导入Agent系统
-        from daoyoucode.agents.core.agent import get_agent_registry
-        
-        # 获取Agent
-        registry = get_agent_registry()
-        agent = registry.get_agent("CodeAgent")
-        
-        if not agent:
-            console.print("[yellow]CodeAgent不可用，使用模拟模式[/yellow]")
+        repo_p = Path(repo_path)
+        edit_files = [str(Path(f).resolve().relative_to(repo_p)) if repo_p in Path(f).resolve().parents or Path(f).resolve() == repo_p else str(f) for f in files]
+    except ValueError:
+        edit_files = [str(f) for f in files]
+
+    user_input = f"""请编辑以下文件，并严格按指令修改：
+
+**要编辑的文件：**
+{chr(10).join('- ' + p for p in edit_files)}
+
+**编辑指令：**
+{instruction}
+
+请先读取上述文件内容，再按指令做最小化、精确的修改，并使用 write_file 或 search_replace 工具写入。路径使用相对项目根的路径。"""
+
+    context = {
+        "session_id": "edit-" + str(int(time.time())),
+        "repo": repo_path,
+        "working_directory": repo_path,
+        "model": model,
+        "instruction": instruction,
+        "edit_files": edit_files,
+        "subtree_only": False,
+        "cwd": repo_path,
+    }
+
+    try:
+        from daoyoucode.agents.init import initialize_agent_system
+        from daoyoucode.agents.tools.registry import get_tool_registry
+        from daoyoucode.agents.tools.base import ToolContext
+        from daoyoucode.agents.llm.client_manager import get_client_manager
+        from daoyoucode.agents.llm.config_loader import auto_configure
+        from daoyoucode.agents.executor import execute_skill
+
+        initialize_agent_system()
+        registry = get_tool_registry()
+        registry.set_context(ToolContext(repo_path=Path(repo_path)))
+        client_manager = get_client_manager()
+        auto_configure(client_manager)
+        if not client_manager.provider_configs:
+            console.print("[yellow]⚠ 未配置LLM，使用模拟模式[/yellow]")
             execute_edit_mock(files, instruction, yes)
             return
-        
-        # 读取文件内容
-        file_contents = {}
-        for file in files:
-            try:
-                with open(file, 'r', encoding='utf-8') as f:
-                    file_contents[str(file)] = f.read()
-            except Exception as e:
-                console.print(f"[red]读取文件失败 {file}: {e}[/red]")
-                return
-        
-        # 准备上下文
-        agent_context = {
-            "files": file_contents,
-            "repo": str(repo),
-            "instruction": instruction
-        }
-        
-        # 构建详细的prompt
-        detailed_prompt = f"""请根据以下指令修改代码：
 
-指令：{instruction}
-
-文件：
-"""
-        for filepath, content in file_contents.items():
-            detailed_prompt += f"\n--- {filepath} ---\n{content}\n"
-        
-        detailed_prompt += """
-请提供修改后的完整代码。"""
-        
-        # 执行编辑
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            
             task = progress.add_task("[cyan]🤖 AI正在分析和修改代码...", total=None)
-            
-            # 调用Agent
-            result = asyncio.run(agent.execute(
-                prompt_source={"use_agent_default": True},
-                user_input=detailed_prompt,
-                context=agent_context,
-                tools=["read_file", "write_file"]  # 可用工具
-            ))
-            
+            result = asyncio.run(
+                execute_skill(
+                    skill_name="edit-single",
+                    user_input=user_input,
+                    session_id=context["session_id"],
+                    context=context,
+                )
+            )
             progress.update(task, description="[green]✓[/green] AI处理完成")
-        
-        # 检查结果
-        if not result.success:
-            console.print(f"[red]Agent执行失败: {result.error}[/red]")
-            console.print("[yellow]降级到模拟模式[/yellow]")
+
+        if not result.get("success"):
+            console.print(f"[yellow]⚠ 执行失败: {result.get('error', '未知错误')}[/yellow]")
             execute_edit_mock(files, instruction, yes)
             return
-        
-        # 显示AI的响应
+
+        content = result.get("content", "")
         console.print("\n[bold cyan]AI的修改建议[/bold cyan]\n")
-        console.print(result.content[:500])  # 显示前500字符
-        if len(result.content) > 500:
+        console.print(content[:500] if len(content) > 500 else content)
+        if len(content) > 500:
             console.print("[dim]...(内容过长，已截断)[/dim]")
-        
-        # 显示修改预览（模拟）
-        show_diff_preview_real(files, result.content)
-        
-        # 确认应用
+        show_diff_preview_real(files, content)
+
         if not yes:
             if not typer.confirm("\n应用这些修改？"):
                 console.print("\n[yellow]已取消修改[/yellow]\n")
                 raise typer.Exit(0)
-        
-        # 应用修改（这里需要解析AI的响应并应用）
-        # 暂时使用模拟
         apply_changes(files)
-        
-        # 显示成功信息
         show_success(files)
-        
     except Exception as e:
-        console.print(f"[red]Agent调用异常: {str(e)}[/red]")
-        console.print("[yellow]降级到模拟模式[/yellow]")
+        console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
         execute_edit_mock(files, instruction, yes)
 
 

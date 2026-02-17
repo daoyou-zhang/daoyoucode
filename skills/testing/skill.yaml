@@ -9,12 +9,20 @@ prompt:
   file: prompts/test.md
 
 llm:
-  model: qwen-coder-plus  # 使用已配置的模型
+  model: qwen-coder-plus
   temperature: 0.3
   max_tokens: 4000
 
 middleware:
   - context_management
+
+tools:
+  - read_file
+  - write_file
+  - list_files
+  - text_search
+  - run_test
+  - run_lint
 
 inputs:
   - name: test_request
