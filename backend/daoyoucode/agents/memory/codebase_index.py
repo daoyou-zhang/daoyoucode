@@ -733,6 +733,316 @@ class CodebaseIndex:
             if self._chunk_id(c) == chunk_id:
                 return i
         return -1
+    
+    # ========== 阶段4：混合检索 ==========
+    
+    def search_hybrid(
+        self,
+        query: str,
+        top_k: int = 10,
+        enable_multilayer: bool = True,
+        enable_adaptive_weights: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        混合检索（🆕 阶段4）
+        
+        结合多种检索信号：
+        1. 语义相似度
+        2. BM25关键词匹配
+        3. PageRank重要性
+        4. 上下文相关性
+        
+        Args:
+            query: 查询字符串
+            top_k: 返回结果数量
+            enable_multilayer: 是否启用多层扩展
+            enable_adaptive_weights: 是否启用自适应权重
+        
+        Returns:
+            混合检索结果
+        """
+        if not self.chunks:
+            self.build_index()
+        if not self.chunks:
+            return []
+        
+        logger.info(f"🔍 混合检索: {query}")
+        
+        # 初始化BM25缓存
+        self._init_bm25_cache()
+        
+        # 检测查询类型
+        query_type = self._detect_query_type(query)
+        logger.info(f"   查询类型: {query_type}")
+        
+        # 获取自适应权重
+        if enable_adaptive_weights:
+            weights = self._get_adaptive_weights(query_type)
+        else:
+            weights = {
+                "semantic": 0.4,
+                "keyword": 0.3,
+                "pagerank": 0.2,
+                "context": 0.1
+            }
+        
+        logger.info(f"   权重: semantic={weights['semantic']:.1f}, "
+                    f"keyword={weights['keyword']:.1f}, "
+                    f"pagerank={weights['pagerank']:.1f}, "
+                    f"context={weights['context']:.1f}")
+        
+        # 第1步：获取候选结果
+        if enable_multilayer:
+            # 使用多层检索获取候选
+            candidates = self.search_multilayer(
+                query,
+                top_k=top_k * 3,  # 获取更多候选
+                enable_file_expansion=True,
+                enable_reference_expansion=True
+            )
+        else:
+            # 使用单层检索
+            candidates = self.search(query, top_k=top_k * 3)
+        
+        logger.info(f"   候选结果: {len(candidates)} 个")
+        
+        # 第2步：计算混合分数
+        for chunk in candidates:
+            # 语义分数（已有）
+            semantic_score = chunk.get('score', 0.0)
+            
+            # BM25关键词分数
+            keyword_score = self._bm25_score(query, chunk)
+            
+            # PageRank分数（已有）
+            pagerank_score = chunk.get('pagerank_score', 0.0)
+            
+            # 上下文分数
+            context_score = self._context_score(chunk)
+            
+            # 归一化（确保所有分数在[0, 1]范围）
+            semantic_score = min(max(semantic_score, 0.0), 1.0)
+            keyword_score = min(keyword_score / 10.0, 1.0)  # BM25分数通常较大
+            pagerank_score = min(pagerank_score * 10, 1.0)  # PageRank通常较小
+            
+            # 混合分数
+            chunk['hybrid_score'] = (
+                weights['semantic'] * semantic_score +
+                weights['keyword'] * keyword_score +
+                weights['pagerank'] * pagerank_score +
+                weights['context'] * context_score
+            )
+            
+            # 保存各项分数（用于调试）
+            chunk['scores'] = {
+                'semantic': semantic_score,
+                'keyword': keyword_score,
+                'pagerank': pagerank_score,
+                'context': context_score
+            }
+        
+        # 第3步：按混合分数排序
+        candidates.sort(key=lambda c: c.get('hybrid_score', 0), reverse=True)
+        
+        # 第4步：返回top-k
+        results = candidates[:top_k]
+        
+        logger.info(f"   ✅ 最终返回: {len(results)} 个结果")
+        
+        return results
+    
+    def _init_bm25_cache(self):
+        """初始化BM25缓存（🆕 阶段4）"""
+        if hasattr(self, '_bm25_cache'):
+            return
+        
+        from collections import Counter
+        
+        logger.debug("🔄 初始化BM25缓存...")
+        
+        # 计算平均文档长度
+        total_len = 0
+        for chunk in self.chunks:
+            words = re.findall(r'\w+', chunk['text'].lower())
+            total_len += len(words)
+        
+        self._avg_doc_len = total_len / len(self.chunks) if self.chunks else 1
+        
+        # 计算文档频率（每个词出现在多少个文档中）
+        self._doc_freq = Counter()
+        for chunk in self.chunks:
+            words = set(re.findall(r'\w+', chunk['text'].lower()))
+            for word in words:
+                self._doc_freq[word] += 1
+        
+        self._bm25_cache = True
+        logger.debug(f"   ✅ BM25缓存已初始化（平均长度: {self._avg_doc_len:.1f}）")
+    
+    def _bm25_score(
+        self,
+        query: str,
+        chunk: Dict,
+        k1: float = 1.5,
+        b: float = 0.75
+    ) -> float:
+        """
+        BM25关键词匹配分数（🆕 阶段4）
+        
+        Args:
+            query: 查询字符串
+            chunk: 代码块
+            k1: BM25参数（控制词频饱和度）
+            b: BM25参数（控制长度归一化）
+        
+        Returns:
+            BM25分数
+        """
+        import math
+        from collections import Counter
+        
+        # 分词
+        query_words = re.findall(r'\w+', query.lower())
+        doc_words = re.findall(r'\w+', chunk['text'].lower())
+        
+        if not query_words or not doc_words:
+            return 0.0
+        
+        # 计算词频
+        doc_freq = Counter(doc_words)
+        doc_len = len(doc_words)
+        
+        # 计算BM25分数
+        score = 0.0
+        N = len(self.chunks)
+        
+        for word in query_words:
+            if word not in doc_freq:
+                continue
+            
+            # 词频
+            tf = doc_freq[word]
+            
+            # 文档频率（包含该词的文档数）
+            df = self._doc_freq.get(word, 0)
+            
+            # IDF = log((N - df + 0.5) / (df + 0.5) + 1)
+            idf = math.log((N - df + 0.5) / (df + 0.5) + 1) if df > 0 else 0
+            
+            # BM25公式
+            numerator = tf * (k1 + 1)
+            denominator = tf + k1 * (1 - b + b * doc_len / self._avg_doc_len)
+            
+            score += idf * (numerator / denominator)
+        
+        return score
+    
+    def _detect_query_type(self, query: str) -> str:
+        """
+        检测查询类型（🆕 阶段4）
+        
+        Returns:
+            "code" | "function_name" | "natural_language"
+        """
+        # 代码关键字
+        code_keywords = {
+            'def', 'class', 'import', 'from', 'return',
+            'if', 'for', 'while', 'try', 'except',
+            'async', 'await', 'lambda', 'yield', 'with'
+        }
+        
+        words = query.lower().split()
+        
+        # 检查是否包含代码关键字
+        if any(word in code_keywords for word in words):
+            return "code"
+        
+        # 检查是否是函数名（驼峰或下划线）
+        if re.match(r'^[a-z_][a-z0-9_]*$', query.lower()) or \
+           re.match(r'^[a-z][a-zA-Z0-9]*$', query):
+            return "function_name"
+        
+        # 默认为自然语言
+        return "natural_language"
+    
+    def _get_adaptive_weights(self, query_type: str) -> Dict[str, float]:
+        """
+        根据查询类型返回自适应权重（🆕 阶段4）
+        
+        Args:
+            query_type: "code" | "function_name" | "natural_language"
+        
+        Returns:
+            权重字典
+        """
+        if query_type == "code":
+            # 代码查询：关键词权重高
+            return {
+                "semantic": 0.3,
+                "keyword": 0.4,
+                "pagerank": 0.2,
+                "context": 0.1
+            }
+        elif query_type == "function_name":
+            # 函数名查询：精确匹配权重高
+            return {
+                "semantic": 0.2,
+                "keyword": 0.5,
+                "pagerank": 0.2,
+                "context": 0.1
+            }
+        else:  # natural_language
+            # 自然语言查询：语义权重高
+            return {
+                "semantic": 0.5,
+                "keyword": 0.2,
+                "pagerank": 0.2,
+                "context": 0.1
+            }
+    
+    def _context_score(self, chunk: Dict) -> float:
+        """
+        计算上下文分数（🆕 阶段4）
+        
+        考虑因素：
+        1. 文件类型
+        2. 文件路径
+        3. 代码类型（class > function > variable）
+        """
+        score = 0.0
+        
+        # 文件类型权重
+        file_ext = Path(chunk['path']).suffix
+        ext_weights = {
+            '.py': 1.0,
+            '.js': 0.9,
+            '.ts': 0.9,
+            '.tsx': 0.9,
+            '.jsx': 0.9,
+            '.md': 0.5,
+            '.yaml': 0.3,
+            '.json': 0.3
+        }
+        score += ext_weights.get(file_ext, 0.5) * 0.3
+        
+        # 文件路径权重（核心模块优先）
+        path = chunk['path'].lower()
+        if 'core' in path or 'agent' in path:
+            score += 0.3
+        elif 'test' in path:
+            score += 0.1
+        else:
+            score += 0.2
+        
+        # 代码类型权重
+        type_weights = {
+            'class': 1.0,
+            'function': 0.8,
+            'method': 0.8,
+            'variable': 0.5
+        }
+        score += type_weights.get(chunk.get('type', 'unknown'), 0.5) * 0.4
+        
+        return min(score, 1.0)  # 归一化到[0, 1]
 
     @classmethod
     def get_index(cls, repo_path: Path) -> "CodebaseIndex":
