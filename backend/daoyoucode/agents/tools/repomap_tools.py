@@ -48,6 +48,11 @@ class RepoMapTool(BaseTool):
     - 个性化权重（对话文件、提到的标识符）
     - 缓存机制（避免重复解析）
     - Token预算控制
+    
+    🆕 公开API（供codebase_index等外部模块使用）：
+    - get_definitions(): 获取代码定义
+    - get_reference_graph(): 获取引用图
+    - get_pagerank_scores(): 获取PageRank分数
     """
     
     # RepoMap可以稍微长一点，因为它是智能排序的
@@ -61,6 +66,7 @@ class RepoMapTool(BaseTool):
         )
         self.cache_db = None
         self.graph = None
+        self._last_definitions = None  # 🆕 保存最后一次的definitions
     
     def get_function_schema(self) -> Dict[str, Any]:
         """获取Function Calling schema"""
@@ -98,6 +104,124 @@ class RepoMapTool(BaseTool):
                 "required": ["repo_path"]
             }
         }
+    
+    # ========== 🆕 公开API（供外部模块使用）==========
+    
+    def get_definitions(
+        self,
+        repo_path: str,
+        use_cache: bool = True
+    ) -> Dict[str, List[Dict]]:
+        """
+        获取代码定义（公开API）
+        
+        Args:
+            repo_path: 仓库路径
+            use_cache: 是否使用缓存
+        
+        Returns:
+            {
+                "backend/agents/core/agent.py": [
+                    {
+                        "type": "class",
+                        "name": "BaseAgent",
+                        "line": 50,
+                        "end_line": 150,
+                        "kind": "def",
+                        "parent": None,
+                        "scope": "global"
+                    },
+                    ...
+                ]
+            }
+        """
+        repo_path_resolved = self.resolve_path(repo_path)
+        
+        if not repo_path_resolved.exists():
+            logger.warning(f"仓库路径不存在: {repo_path}")
+            return {}
+        
+        if use_cache:
+            self._init_cache(repo_path_resolved)
+        
+        definitions = self._scan_repository(repo_path_resolved)
+        
+        # 🆕 计算end_line（如果没有）
+        definitions = self._compute_end_lines(definitions, repo_path_resolved)
+        
+        # 保存以供其他方法使用
+        self._last_definitions = definitions
+        
+        return definitions
+    
+    def get_reference_graph(
+        self,
+        repo_path: str,
+        definitions: Optional[Dict[str, List[Dict]]] = None
+    ) -> Dict[str, Dict[str, float]]:
+        """
+        获取引用图（公开API）
+        
+        Args:
+            repo_path: 仓库路径
+            definitions: 代码定义（如果为None，会自动获取）
+        
+        Returns:
+            {
+                "file_a.py": {
+                    "file_b.py": 3.0,  # file_a引用file_b 3次
+                    "file_c.py": 1.0
+                }
+            }
+        """
+        repo_path_resolved = self.resolve_path(repo_path)
+        
+        if definitions is None:
+            definitions = self.get_definitions(repo_path)
+        
+        return self._build_reference_graph(definitions, repo_path_resolved)
+    
+    def get_pagerank_scores(
+        self,
+        repo_path: str,
+        reference_graph: Optional[Dict] = None,
+        definitions: Optional[Dict] = None,
+        chat_files: Optional[List[str]] = None,
+        mentioned_idents: Optional[List[str]] = None
+    ) -> Dict[str, float]:
+        """
+        获取PageRank分数（公开API）
+        
+        Args:
+            repo_path: 仓库路径
+            reference_graph: 引用图（如果为None，会自动获取）
+            definitions: 代码定义（如果为None，会自动获取）
+            chat_files: 焦点文件
+            mentioned_idents: 提到的标识符
+        
+        Returns:
+            {
+                "file_a.py": 0.85,
+                "file_b.py": 0.65,
+                ...
+            }
+        """
+        if definitions is None:
+            definitions = self.get_definitions(repo_path)
+        
+        if reference_graph is None:
+            reference_graph = self.get_reference_graph(repo_path, definitions)
+        
+        ranked = self._pagerank(
+            reference_graph,
+            definitions,
+            chat_files or [],
+            mentioned_idents or []
+        )
+        
+        return dict(ranked)
+    
+    # ========== 私有方法（保持不变）==========
         
     async def execute(
         self,
@@ -377,6 +501,7 @@ class RepoMapTool(BaseTool):
         
         definitions = []
         saw = set()
+        parent_stack = []  # 🆕 跟踪父级（用于确定方法所属的类）
         
         # 处理匹配结果: [(pattern_index, {capture_name: [nodes]})]
         for pattern_index, captures_dict in matches:
@@ -393,12 +518,34 @@ class RepoMapTool(BaseTool):
                     
                     # 提取类型（class、function、method等）
                     type_name = tag.split(".")[-1]
+                    name = node.text.decode("utf-8")
+                    
+                    # 🆕 确定父级和作用域（仅对定义）
+                    parent = None
+                    scope = "global"
+                    
+                    if kind == "def":
+                        # 确定父级
+                        parent = parent_stack[-1] if parent_stack else None
+                        
+                        # 确定作用域
+                        if type_name == "class":
+                            scope = "global"
+                            # 将类名压入栈（用于后续方法）
+                            parent_stack.append(name)
+                        elif type_name in ("function", "method"):
+                            scope = "class" if parent else "global"
+                        else:
+                            scope = "global"
                     
                     definitions.append({
                         "type": type_name,
-                        "name": node.text.decode("utf-8"),
+                        "name": name,
                         "line": node.start_point[0] + 1,
-                        "kind": kind
+                        "kind": kind,
+                        # 🆕 阶段2新增字段
+                        "parent": parent,
+                        "scope": scope
                     })
         
         # 如果只有定义没有引用，使用 Pygments 补充引用
@@ -439,6 +586,50 @@ class RepoMapTool(BaseTool):
             return path
         
         return None
+    
+    def _compute_end_lines(
+        self,
+        definitions: Dict[str, List[Dict]],
+        repo_path: Path
+    ) -> Dict[str, List[Dict]]:
+        """
+        计算每个定义的结束行（🆕 公开API支持）
+        
+        策略：
+        1. 如果已有end_line，保持不变
+        2. 否则，找到下一个定义的起始行作为结束行
+        3. 如果是最后一个定义，使用文件末尾
+        """
+        for file_path, defs in definitions.items():
+            # 只处理定义，不处理引用
+            def_only = [d for d in defs if d.get("kind") == "def"]
+            
+            if not def_only:
+                continue
+            
+            # 按行号排序
+            def_only.sort(key=lambda d: d["line"])
+            
+            for i, d in enumerate(def_only):
+                if "end_line" in d and d["end_line"] > 0:
+                    continue
+                
+                # 找到下一个定义
+                if i + 1 < len(def_only):
+                    d["end_line"] = def_only[i + 1]["line"] - 1
+                else:
+                    # 最后一个定义，读取文件获取总行数
+                    try:
+                        full_path = repo_path / file_path
+                        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            total_lines = len(f.readlines())
+                        d["end_line"] = total_lines
+                    except Exception as e:
+                        logger.debug(f"无法读取文件 {file_path}: {e}")
+                        # 如果读取失败，估计50行
+                        d["end_line"] = d["line"] + 50
+        
+        return definitions
 
     
     def _build_reference_graph(self, definitions: Dict[str, List[Dict]], repo_path: Path) -> Dict[str, Dict[str, float]]:

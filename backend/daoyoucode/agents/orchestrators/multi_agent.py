@@ -39,43 +39,81 @@ class MultiAgentOrchestrator(BaseOrchestrator):
             from ..tools import get_tool_registry
             from ..intent import should_prefetch_project_understanding
             _tool_reg = get_tool_registry()
-            need_project_prefetch, intents = await should_prefetch_project_understanding(skill, user_input_stripped, context)
+            need_project_prefetch, intents, prefetch_level = await should_prefetch_project_understanding(skill, user_input_stripped, context)
             has_tools = all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map"))
-            self.logger.info("[预取] need_prefetch=%s has_three_tools=%s user_input=%s", need_project_prefetch, has_tools, user_input_stripped[:80] + ("…" if len(user_input_stripped) > 80 else ""))
-            if need_project_prefetch and has_tools:
+            self.logger.info("[预取] need_prefetch=%s level=%s has_three_tools=%s user_input=%s", need_project_prefetch, prefetch_level, has_tools, user_input_stripped[:80] + ("…" if len(user_input_stripped) > 80 else ""))
+            
+            if need_project_prefetch and has_tools and prefetch_level != "none":
                 try:
                     docs_tool = _tool_reg.get_tool("discover_project_docs")
                     struct_tool = _tool_reg.get_tool("get_repo_structure")
                     repo_map_tool = _tool_reg.get_tool("repo_map")
-                    d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
-                    s = await struct_tool.execute(repo_path=".", max_depth=3)
-                    r = await repo_map_tool.execute(repo_path=".")
-                    ld = len(getattr(d, "content", None) or "") if d and getattr(d, "content", None) else 0
-                    ls = len(getattr(s, "content", None) or "") if s and getattr(s, "content", None) else 0
-                    lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
-                    self.logger.info("[预取] 三层结果 doc=%s struct=%s repomap=%s (chars)", ld, ls, lr)
-                    # 预取块上限：默认 8000/3500/4500；skill 配了 project_understanding_max_chars 时按比例缩小
-                    _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 8000, 3500, 4500
-                    max_total = getattr(skill, "project_understanding_max_chars", None)
-                    if max_total is not None and max_total > 0:
-                        _DOC_CHARS = min(8000, max(500, int(max_total * 0.50)))
-                        _STRUCT_CHARS = min(3500, max(300, int(max_total * 0.22)))
-                        _REPOMAP_CHARS = min(4500, max(300, int(max_total * 0.28)))
-                    header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                    
+                    # 🆕 根据预取级别决定调用哪些工具
                     parts = []
-                    if d and getattr(d, "content", None) and d.content:
-                        parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
-                    if s and getattr(s, "content", None) and s.content:
-                        parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
-                    if r and getattr(r, "content", None) and r.content:
-                        parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                    
+                    if prefetch_level == "full":
+                        # 完整预取：文档+结构+地图
+                        d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
+                        s = await struct_tool.execute(repo_path=".", max_depth=3)
+                        r = await repo_map_tool.execute(repo_path=".")
+                        
+                        ld = len(getattr(d, "content", None) or "") if d and getattr(d, "content", None) else 0
+                        ls = len(getattr(s, "content", None) or "") if s and getattr(s, "content", None) else 0
+                        lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
+                        self.logger.info("[预取] full级别 doc=%s struct=%s repomap=%s (chars)", ld, ls, lr)
+                        
+                        # 预取块上限
+                        _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 8000, 3500, 4500
+                        max_total = getattr(skill, "project_understanding_max_chars", None)
+                        if max_total is not None and max_total > 0:
+                            _DOC_CHARS = min(8000, max(500, int(max_total * 0.50)))
+                            _STRUCT_CHARS = min(3500, max(300, int(max_total * 0.22)))
+                            _REPOMAP_CHARS = min(4500, max(300, int(max_total * 0.28)))
+                        
+                        if d and getattr(d, "content", None) and d.content:
+                            parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
+                        if s and getattr(s, "content", None) and s.content:
+                            parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
+                        if r and getattr(r, "content", None) and r.content:
+                            parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                    
+                    elif prefetch_level == "medium":
+                        # 中等预取：结构+地图
+                        s = await struct_tool.execute(repo_path=".", max_depth=3)
+                        r = await repo_map_tool.execute(repo_path=".")
+                        
+                        ls = len(getattr(s, "content", None) or "") if s and getattr(s, "content", None) else 0
+                        lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
+                        self.logger.info("[预取] medium级别 struct=%s repomap=%s (chars)", ls, lr)
+                        
+                        _STRUCT_CHARS, _REPOMAP_CHARS = 4000, 6000
+                        
+                        if s and getattr(s, "content", None) and s.content:
+                            parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
+                        if r and getattr(r, "content", None) and r.content:
+                            parts.append("【代码地图】\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                    
+                    elif prefetch_level == "light":
+                        # 轻量预取：只地图
+                        r = await repo_map_tool.execute(repo_path=".")
+                        
+                        lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
+                        self.logger.info("[预取] light级别 repomap=%s (chars)", lr)
+                        
+                        _REPOMAP_CHARS = 8000
+                        
+                        if r and getattr(r, "content", None) and r.content:
+                            parts.append("【代码地图】\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                    
                     if parts:
+                        header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
                         context["project_understanding_block"] = header + "\n\n".join(parts)
-                        self.logger.info("已预取了解项目三层结果并注入 context（multi_agent，智能体循环前） block_len=%s", len(context["project_understanding_block"]))
+                        self.logger.info("已预取了解项目（%s级别）并注入 context（multi_agent，智能体循环前） block_len=%s", prefetch_level, len(context["project_understanding_block"]))
                     else:
-                        self.logger.warning("[预取] 三层工具均无有效 content，parts 为空，未注入 block")
+                        self.logger.warning("[预取] 工具均无有效 content，parts 为空，未注入 block")
                 except Exception as e:
-                    self.logger.warning("预取了解项目三层失败: %s", e, exc_info=True)
+                    self.logger.warning("预取了解项目失败: %s", e, exc_info=True)
         
         # 1. 应用中间件
         if skill.middleware:
@@ -358,19 +396,67 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         skill: 'SkillConfig'
     ) -> Dict[str, Any]:
         """
-        主Agent + 辅助Agent模式（默认）
+        主Agent + 辅助Agent模式（智能选择）
         
         第一个Agent是主Agent，其他是辅助Agent
+        根据意图智能选择需要执行的辅助Agent
         """
-        self.logger.info("主Agent + 辅助Agent模式")
+        self.logger.info("主Agent + 辅助Agent模式（智能选择）")
         
         main_agent = agents[0]
         helper_agents = agents[1:] if len(agents) > 1 else []
         
-        # 1. 如果有辅助Agent，先并行执行它们
+        # 🆕 根据意图智能选择辅助Agent
+        intents = context.get('detected_intents', [])
+        
+        selected_helpers = []
+        if not helper_agents:
+            # 没有辅助Agent，直接执行主Agent
+            pass
+        elif 'understand_project' in intents:
+            # 只需要架构分析
+            selected_helpers = [a for a in helper_agents if a.name == 'code_analyzer']
+            self.logger.info(f"意图：了解项目 → 选择 code_analyzer")
+        elif 'edit_or_write' in intents:
+            # 需要编程专家和架构分析
+            selected_helpers = [a for a in helper_agents if a.name in ['programmer', 'code_analyzer']]
+            self.logger.info(f"意图：编写代码 → 选择 programmer + code_analyzer")
+        elif 'general_chat' in intents:
+            # 简单寒暄，不需要辅助Agent
+            selected_helpers = []
+            self.logger.info(f"意图：简单寒暄 → 不执行辅助Agent")
+        else:
+            # 默认：根据用户输入关键词判断
+            user_input_lower = user_input.lower()
+            
+            # 检测关键词
+            needs_refactor = any(k in user_input_lower for k in ['重构', 'refactor', '优化', 'optimize'])
+            needs_test = any(k in user_input_lower for k in ['测试', 'test', '单元测试', 'unit test'])
+            needs_code = any(k in user_input_lower for k in ['编写', '实现', '添加', '修复', 'bug', 'fix', 'write', 'add'])
+            needs_analysis = any(k in user_input_lower for k in ['分析', '架构', '理解', 'analyze', 'architecture'])
+            
+            # 根据关键词选择Agent
+            for agent in helper_agents:
+                if agent.name == 'code_analyzer' and needs_analysis:
+                    selected_helpers.append(agent)
+                elif agent.name == 'programmer' and needs_code:
+                    selected_helpers.append(agent)
+                elif agent.name == 'refactor_master' and needs_refactor:
+                    selected_helpers.append(agent)
+                elif agent.name == 'test_expert' and needs_test:
+                    selected_helpers.append(agent)
+            
+            # 如果没有匹配到任何关键词，执行所有辅助Agent（保守策略）
+            if not selected_helpers:
+                selected_helpers = helper_agents
+                self.logger.info(f"未匹配到关键词 → 执行所有辅助Agent（保守策略）")
+            else:
+                self.logger.info(f"根据关键词选择了 {len(selected_helpers)} 个辅助Agent: {[a.name for a in selected_helpers]}")
+        
+        # 1. 如果有选中的辅助Agent，先并行执行它们
         helper_results = []
-        if helper_agents:
-            self.logger.info(f"执行 {len(helper_agents)} 个辅助Agent")
+        if selected_helpers:
+            self.logger.info(f"执行 {len(selected_helpers)} 个辅助Agent")
             
             helper_tasks = [
                 agent.execute(
@@ -380,12 +466,12 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                     llm_config=skill.llm,
                     tools=self._get_tools_for_agent(skill, agent.name)
                 )
-                for agent in helper_agents
+                for agent in selected_helpers
             ]
             
             helper_responses = await asyncio.gather(*helper_tasks, return_exceptions=True)
             
-            for agent, response in zip(helper_agents, helper_responses):
+            for agent, response in zip(selected_helpers, helper_responses):
                 if isinstance(response, Exception):
                     self.logger.error(f"辅助Agent {agent.name} 失败: {response}")
                 else:
@@ -393,6 +479,8 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                         'agent': agent.name,
                         'content': response.content if response.success else ""
                     })
+        else:
+            self.logger.info("未选择辅助Agent，直接执行主Agent")
         
         # 2. 执行主Agent（可以看到辅助Agent的结果）
         self.logger.info(f"执行主Agent: {main_agent.name}")
@@ -422,7 +510,9 @@ class MultiAgentOrchestrator(BaseOrchestrator):
             'cost': main_result.cost,
             'metadata': {
                 'main_agent': main_agent.name,
-                'helper_agents': [a.name for a in helper_agents]
+                'helper_agents': [a.name for a in helper_agents],
+                'selected_helpers': [a.name for a in selected_helpers],
+                'intents': intents
             }
         }
     

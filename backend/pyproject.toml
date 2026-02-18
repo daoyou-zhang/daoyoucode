@@ -22,6 +22,10 @@ dependencies = [
     "httpx>=0.24.0",
     "pyyaml>=6.0",
     "jinja2>=3.0.0",
+    # 向量检索依赖
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+    "torch>=2.0.0",
 ]
 
 [project.optional-dependencies]

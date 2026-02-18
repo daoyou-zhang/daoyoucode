@@ -427,9 +427,10 @@ class BaseAgent(ABC):
    - ❌ 错误：repo_map(repo_path="./your-repo-path")
    - ❌ 错误：repo_map(repo_path="/path/to/repo")
 
-2. 文件路径使用相对路径
-   - ✅ 正确：read_file(file_path="backend/config.py")
-   - ❌ 错误：read_file(file_path="path/to/your/file.txt")
+2. 文件路径：相对**项目根**（当前工作目录即项目根）
+   - 本仓库后端代码在 backend/daoyoucode/ 下，编排器在 backend/daoyoucode/agents/orchestrators/
+   - ✅ 正确：read_file(file_path="backend/daoyoucode/agents/orchestrators/multi_agent.py")
+   - ❌ 错误：read_file(file_path="daoyoucode/orchestrators/multi_agent.py")  （会解析到错误路径）
 
 3. 搜索目录使用 '.' 或省略
    - ✅ 正确：text_search(query="example", directory=".")
@@ -445,7 +446,7 @@ class BaseAgent(ABC):
 6. 不要重复调用
    - 同一轮对话中不要用相同参数重复调用同一工具（如多次 repo_map(repo_path=".")）；若已获得该工具结果，请直接基于结果回答。
 
-记住：当前工作目录就是项目根目录，不需要猜测路径！
+记住：当前工作目录=项目根；不要用 daoyoucode/ 作为路径前缀，后端代码在 backend/daoyoucode/ 下。
 
 ---
 

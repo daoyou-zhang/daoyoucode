@@ -45,7 +45,7 @@ class VectorRetriever:
         
         Args:
             model_name: embedding模型名称
-                - paraphrase-multilingual-MiniLM-L12-v2: 多语言，384维，50MB
+                - paraphrase-multilingual-MiniLM-L12-v2: 多语言，384维，50MB（推荐）
                 - all-MiniLM-L6-v2: 英文，384维，80MB
                 - text2vec-base-chinese: 中文，768维，400MB
         """
@@ -53,31 +53,46 @@ class VectorRetriever:
         self.model = None
         self.enabled = False
         
-        # 尝试加载模型（默认不加载）
-        # self._load_model()  # ← 注释掉，默认禁用
+        # 🆕 默认启用（自动加载模型）
+        self._load_model()
         
-        logger.info("向量检索器已初始化（默认禁用）")
-        logger.info("💡 要启用向量检索，请安装: pip install sentence-transformers")
+        if self.enabled:
+            logger.info(f"✅ 向量检索已启用: {self.model_name}")
+        else:
+            logger.warning("⚠️ 向量检索未启用，将使用关键词匹配回退")
     
     def _load_model(self):
         """加载embedding模型"""
         try:
             from sentence_transformers import SentenceTransformer
+            import numpy as np
             
             logger.info(f"🔄 加载embedding模型: {self.model_name}")
+            logger.info("   首次加载会自动下载模型（约50MB），请稍候...")
+            
             self.model = SentenceTransformer(self.model_name)
             self.enabled = True
-            logger.info(f"✅ 向量检索已启用: {self.model_name}")
+            
+            # 测试模型
+            test_embedding = self.model.encode("test", convert_to_numpy=True)
+            dim = self.model.get_sentence_embedding_dimension()
+            
+            logger.info(f"✅ 向量检索已启用")
+            logger.info(f"   模型: {self.model_name}")
+            logger.info(f"   维度: {dim}")
+            logger.info(f"   测试: {test_embedding.shape}")
         
-        except ImportError:
-            logger.info(
-                "ℹ️ sentence-transformers未安装，向量检索不可用\n"
-                "💡 安装: pip install sentence-transformers"
+        except ImportError as e:
+            logger.warning(
+                "⚠️ sentence-transformers未安装，向量检索不可用\n"
+                "💡 安装命令: pip install sentence-transformers\n"
+                f"   错误: {e}"
             )
             self.enabled = False
         
         except Exception as e:
             logger.warning(f"⚠️ 加载embedding模型失败: {e}")
+            logger.warning("   将使用关键词匹配回退")
             self.enabled = False
     
     def enable(self):

@@ -98,33 +98,60 @@ async def should_prefetch_project_understanding(
     skill: Any,
     user_input: str,
     context: Dict[str, Any],
-) -> Tuple[bool, List[str]]:
+) -> Tuple[bool, List[str], str]:
     """
     是否在智能体循环前做「了解项目」预取（文档+目录结构+repo_map → project_understanding_block）。
     编排器（ReAct / MultiAgent）在 execute 开头统一调此函数，逻辑只在此一处维护。
 
-    返回 (need_prefetch, intents)。use_intent 时 intents 为分类结果，否则为 []。
+    返回 (need_prefetch, intents, prefetch_level)。
+    
+    prefetch_level:
+    - "full": 完整预取（文档+结构+地图）- 用于"了解项目"
+    - "medium": 中等预取（结构+地图）- 用于"需要代码上下文"
+    - "light": 轻量预取（只地图）- 用于"编写/修改代码"
+    - "none": 不预取 - 用于"简单寒暄"
     """
     user_input_stripped = (user_input or "").strip()
     if not user_input_stripped:
-        return False, []
+        return False, [], "none"
 
     use_intent = getattr(skill, "project_understanding_use_intent", False)
     need = False
     intents: List[str] = []
+    prefetch_level = "none"
 
     if use_intent:
         intents = await classify_intents(user_input_stripped, getattr(skill, "llm", None))
         context["detected_intents"] = intents
-        need = "understand_project" in intents
+        
+        # 🆕 根据意图确定预取级别
+        if "understand_project" in intents:
+            need = True
+            prefetch_level = "full"
+        elif "need_code_context" in intents:
+            need = True
+            prefetch_level = "medium"
+        elif "edit_or_write" in intents:
+            need = True
+            prefetch_level = "light"
+        elif "general_chat" in intents:
+            need = False
+            prefetch_level = "none"
+        
+        # 兜底：关键词匹配
         if not need and any(k in user_input_stripped for k in PROJECT_UNDERSTANDING_FALLBACK_KEYWORDS):
             need = True
+            prefetch_level = "full"
     else:
         triggers = getattr(skill, "project_understanding_triggers", None) or []
         if not triggers and getattr(skill, "name", "") == "chat-assistant":
             triggers = ["了解", "看看项目", "项目怎么样", "项目是啥", "介绍项目", "这是什么项目"]
         need = bool(triggers and any(k in user_input_stripped.lower() for k in triggers))
-        if not need and any(k in user_input_stripped for k in PROJECT_UNDERSTANDING_FALLBACK_KEYWORDS):
+        
+        if need:
+            prefetch_level = "full"
+        elif any(k in user_input_stripped for k in PROJECT_UNDERSTANDING_FALLBACK_KEYWORDS):
             need = True
+            prefetch_level = "full"
 
-    return need, intents
+    return need, intents, prefetch_level
