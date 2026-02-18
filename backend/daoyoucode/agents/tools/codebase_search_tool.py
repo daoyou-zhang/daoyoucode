@@ -59,7 +59,8 @@ class SemanticCodeSearchTool(BaseTool):
                 return ToolResult(success=False, content=None, error=f"目录不存在: {repo_path}")
 
             from ..memory.codebase_index import search_codebase
-            results = search_codebase(path, query, top_k=top_k)
+            # 默认 hybrid：语义 + BM25 + PageRank + 多层扩展，充分利用 repomap/chunk 元数据
+            results = search_codebase(path, query, top_k=top_k, strategy="hybrid")
 
             if not results:
                 return ToolResult(
@@ -74,7 +75,8 @@ class SemanticCodeSearchTool(BaseTool):
                 start = r.get("start", 0)
                 end = r.get("end", 0)
                 text = (r.get("text") or "")[:1200]
-                score = r.get("score", 0)
+                # hybrid 策略返回 hybrid_score，否则为 score
+                score = r.get("hybrid_score", r.get("score", 0))
                 lines.append(f"[{i}] {path_rel} (L{start}-{end}) score={score:.3f}\n```\n{text}\n```")
             content = "\n\n".join(lines)
             if len(content) > self.MAX_OUTPUT_CHARS:

@@ -1052,7 +1052,27 @@ class CodebaseIndex:
         return _index_cache[key]
 
 
-def search_codebase(repo_path: Path, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
-    """便捷函数：获取或构建索引并检索。"""
+def search_codebase(
+    repo_path: Path,
+    query: str,
+    top_k: int = 10,
+    strategy: str = "hybrid"
+) -> List[Dict[str, Any]]:
+    """
+    便捷函数：获取或构建索引并检索。
+
+    Args:
+        repo_path: 仓库根路径
+        query: 自然语言查询
+        top_k: 返回条数
+        strategy: 检索策略。"basic"=仅语义/关键词；"multilayer"=多层扩展；"hybrid"=混合检索（默认，推荐）
+
+    Returns:
+        检索结果列表，每项含 path/start/end/text/score 等
+    """
     idx = CodebaseIndex.get_index(repo_path)
+    if strategy == "hybrid":
+        return idx.search_hybrid(query, top_k=top_k, enable_multilayer=True, enable_adaptive_weights=True)
+    if strategy == "multilayer":
+        return idx.search_multilayer(query, top_k=top_k)
     return idx.search(query, top_k=top_k)
