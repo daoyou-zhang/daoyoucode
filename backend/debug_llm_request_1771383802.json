@@ -1,0 +1,180 @@
+{
+  "model": "qwen-max",
+  "messages": [
+    {
+      "role": "user",
+      "content": "⚠️ 工具使用规则（必须遵守）：\n\n1. 路径参数使用 '.' 表示当前工作目录\n   - ✅ 正确：repo_map(repo_path=\".\")\n   - ❌ 错误：repo_map(repo_path=\"./your-repo-path\")\n   - ❌ 错误：repo_map(repo_path=\"/path/to/repo\")\n\n2. 文件路径使用相对路径\n   - ✅ 正确：read_file(file_path=\"backend/config.py\")\n   - ❌ 错误：read_file(file_path=\"path/to/your/file.txt\")\n\n3. 搜索目录使用 '.' 或省略\n   - ✅ 正确：text_search(query=\"example\", directory=\".\")\n   - ❌ 错误：text_search(query=\"example\", directory=\"./src\")\n\n4. 细粒度编辑与验证（对齐 aider）\n   - 可用 apply_patch(diff=\"...\") 提交 unified diff，便于审计和回滚。\n   - 编辑后建议调用 run_lint 或 run_test 验证，再根据输出修复。\n\n5. 单文件符号（AST 深度）\n   - 已知文件时可调用 get_file_symbols(file_path) 获取类/函数/方法及行号。\n\n6. 不要重复调用\n   - 同一轮对话中不要用相同参数重复调用同一工具（如多次 repo_map(repo_path=\".\")）；若已获得该工具结果，请直接基于结果回答。\n\n记住：当前工作目录就是项目根目录，不需要猜测路径！\n\n---\n\n"
+    }
+  ],
+  "temperature": 0.3,
+  "max_tokens": null,
+  "functions": [
+    {
+      "name": "read_file",
+      "description": "读取文件内容",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件的相对路径。例如: 'backend/config.py' 或 'README.md'。不要使用占位符！"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "写入文件内容（自动创建目录）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件路径"
+          },
+          "content": {
+            "type": "string",
+            "description": "文件内容"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          },
+          "create_dirs": {
+            "type": "boolean",
+            "description": "是否自动创建目录",
+            "default": true
+          }
+        },
+        "required": [
+          "file_path",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "list_files",
+      "description": "列出目录内容（支持递归和模式匹配）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string",
+            "description": "目录路径（相对于项目根目录，使用 '.' 表示当前目录）",
+            "default": "."
+          },
+          "recursive": {
+            "type": "boolean",
+            "description": "是否递归列出子目录",
+            "default": false
+          },
+          "pattern": {
+            "type": "string",
+            "description": "文件名模式（如 '*.py' 或 '**/test_*.py'）"
+          },
+          "max_depth": {
+            "type": "integer",
+            "description": "最大递归深度（默认3，设置为较大值如999表示无限制）",
+            "default": 3
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "text_search",
+      "description": "在文件中搜索文本",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "搜索关键词"
+          },
+          "directory": {
+            "type": "string",
+            "description": "搜索目录。默认为当前工作目录（'.'），也可以指定子目录的相对路径",
+            "default": "."
+          },
+          "file_pattern": {
+            "type": "string",
+            "description": "文件名模式（如 *.py）"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "description": "是否区分大小写",
+            "default": false
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "最大结果数",
+            "default": 100
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "run_test",
+      "description": "运行测试（支持pytest、unittest等）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "test_path": {
+            "type": "string",
+            "description": "测试文件或目录路径"
+          },
+          "test_framework": {
+            "type": "string",
+            "description": "测试框架（pytest/unittest/jest）",
+            "default": "pytest"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "工作目录"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "超时时间（秒）",
+            "default": 60
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "run_lint",
+      "description": "运行 lint 检查（如 ruff check、eslint）。编辑后建议调用以验证代码。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "lint 命令，如 'ruff check .' 或 'npx eslint .'。不传则自动尝试常见命令"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "工作目录，默认仓库根"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "超时秒数",
+            "default": 45
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}

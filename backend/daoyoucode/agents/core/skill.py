@@ -63,6 +63,10 @@ class SkillConfig:
     project_understanding_triggers: List[str] = field(default_factory=list)
     # 为 true 时用 LLM 判断「是否想了解项目/架构」意图，不依赖触发词；与 triggers 二选一或并用（intent 优先）
     project_understanding_use_intent: bool = False
+    # 可选：预取块总字符数上限（不设则编排器默认约 16000）。若模型上下文很小可设小值（如 8000）避免超窗
+    project_understanding_max_chars: Optional[int] = None
+    # 可选：预取块前的说明/指令文案，拼在【项目文档】等之前；不设则用编排器默认
+    project_understanding_header: Optional[str] = None
 
 
 class SkillLoader:
@@ -150,7 +154,9 @@ class SkillLoader:
             metadata=config.get('metadata', {}),
             skill_path=skill_path,
             project_understanding_triggers=config.get('project_understanding_triggers', []),
-            project_understanding_use_intent=config.get('project_understanding_use_intent', False)
+            project_understanding_use_intent=config.get('project_understanding_use_intent', False),
+            project_understanding_max_chars=config.get('project_understanding_max_chars'),
+            project_understanding_header=config.get('project_understanding_header'),
         )
     
     def get_skill(self, name: str) -> Optional[SkillConfig]:

@@ -33,6 +33,50 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         
         self.logger.info(f"多Agent执行Skill: {skill.name}")
         
+        # 0. 与 ReAct 一致：是否预取由 intent.should_prefetch_project_understanding 统一判定
+        user_input_stripped = (user_input or "").strip()
+        if user_input_stripped:
+            from ..tools import get_tool_registry
+            from ..intent import should_prefetch_project_understanding
+            _tool_reg = get_tool_registry()
+            need_project_prefetch, intents = await should_prefetch_project_understanding(skill, user_input_stripped, context)
+            has_tools = all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map"))
+            self.logger.info("[预取] need_prefetch=%s has_three_tools=%s user_input=%s", need_project_prefetch, has_tools, user_input_stripped[:80] + ("…" if len(user_input_stripped) > 80 else ""))
+            if need_project_prefetch and has_tools:
+                try:
+                    docs_tool = _tool_reg.get_tool("discover_project_docs")
+                    struct_tool = _tool_reg.get_tool("get_repo_structure")
+                    repo_map_tool = _tool_reg.get_tool("repo_map")
+                    d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
+                    s = await struct_tool.execute(repo_path=".", max_depth=3)
+                    r = await repo_map_tool.execute(repo_path=".")
+                    ld = len(getattr(d, "content", None) or "") if d and getattr(d, "content", None) else 0
+                    ls = len(getattr(s, "content", None) or "") if s and getattr(s, "content", None) else 0
+                    lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
+                    self.logger.info("[预取] 三层结果 doc=%s struct=%s repomap=%s (chars)", ld, ls, lr)
+                    # 预取块上限：默认 8000/3500/4500；skill 配了 project_understanding_max_chars 时按比例缩小
+                    _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 8000, 3500, 4500
+                    max_total = getattr(skill, "project_understanding_max_chars", None)
+                    if max_total is not None and max_total > 0:
+                        _DOC_CHARS = min(8000, max(500, int(max_total * 0.50)))
+                        _STRUCT_CHARS = min(3500, max(300, int(max_total * 0.22)))
+                        _REPOMAP_CHARS = min(4500, max(300, int(max_total * 0.28)))
+                    header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                    parts = []
+                    if d and getattr(d, "content", None) and d.content:
+                        parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
+                    if s and getattr(s, "content", None) and s.content:
+                        parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
+                    if r and getattr(r, "content", None) and r.content:
+                        parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                    if parts:
+                        context["project_understanding_block"] = header + "\n\n".join(parts)
+                        self.logger.info("已预取了解项目三层结果并注入 context（multi_agent，智能体循环前） block_len=%s", len(context["project_understanding_block"]))
+                    else:
+                        self.logger.warning("[预取] 三层工具均无有效 content，parts 为空，未注入 block")
+                except Exception as e:
+                    self.logger.warning("预取了解项目三层失败: %s", e, exc_info=True)
+        
         # 1. 应用中间件
         if skill.middleware:
             for middleware_name in skill.middleware:
@@ -357,6 +401,8 @@ class MultiAgentOrchestrator(BaseOrchestrator):
             **context,
             'helper_results': helper_results
         }
+        block_len = len(main_context.get("project_understanding_block") or "")
+        self.logger.info("[预取] 主Agent 入参 context 含 project_understanding_block=%s (chars)", block_len if block_len else "无")
         
         main_result = await main_agent.execute(
             prompt_source=skill.prompt if skill.prompt else {'use_agent_default': True},

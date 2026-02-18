@@ -18,6 +18,9 @@ agents:
 prompt:
   file: prompts/sisyphus.md
 
+# 了解项目预取：用 LLM 意图判断，避免死关键词漏掉「理解下当前项目」等说法
+project_understanding_use_intent: true
+
 # LLM配置
 llm:
   model: qwen-max

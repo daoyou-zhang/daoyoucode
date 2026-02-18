@@ -182,13 +182,13 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], skill: str,
 """
     console.print(f"[bold cyan]{banner}[/bold cyan]")
     
-    # 显示配置信息
+    # 显示配置信息（仓库始终为 git 根；扫描范围仅影响 repo_map 等工具的路径过滤，不影响文档检索）
     scope_info = ""
     if subtree_only:
         cwd = Path.cwd()
         try:
             rel_cwd = cwd.relative_to(repo)
-            scope_info = f"\n• 扫描范围: [yellow]{rel_cwd}/ (仅当前目录)[/yellow]"
+            scope_info = f"\n• 扫描范围: [yellow]{rel_cwd}/ (仅当前目录，代码地图等)[/yellow]"
         except ValueError:
             scope_info = f"\n• 扫描范围: [yellow]当前目录[/yellow]"
     
@@ -196,7 +196,7 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], skill: str,
 [bold]当前配置[/bold]
 • Skill: [cyan]{skill}[/cyan]
 • 模型: [cyan]{model}[/cyan]
-• 仓库: [dim]{repo}[/dim]
+• 仓库: [dim]{repo}[/dim] (git 根，文档检索用此)
 • 文件: [dim]{len(files) if files else 0} 个[/dim]{scope_info}
 """
     console.print(Panel(info_panel, border_style="cyan", padding=(0, 2)))

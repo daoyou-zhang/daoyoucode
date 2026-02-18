@@ -24,16 +24,18 @@ class DiscoverProjectDocsTool(BaseTool):
     - 智能摘要，提取关键信息
     """
     
-    # 文档优先级
+    # 文档优先级：根目录优先，再查 backend/、docs/（便于 DaoyouCode 等「更了解自己」）
     README_PATTERNS = [
         "README.md", "README.rst", "README.txt", "README",
-        "readme.md", "readme.rst", "readme.txt", "readme"
+        "readme.md", "readme.rst", "readme.txt", "readme",
+        "backend/README.md", "docs/README.md",
     ]
     
     ARCHITECTURE_PATTERNS = [
         "ARCHITECTURE.md", "DESIGN.md", "STRUCTURE.md",
         "architecture.md", "design.md", "structure.md",
-        "docs/ARCHITECTURE.md", "docs/architecture.md"
+        "backend/ARCHITECTURE.md", "backend/DESIGN.md",
+        "docs/ARCHITECTURE.md", "docs/architecture.md",
     ]
     
     CHANGELOG_PATTERNS = [
@@ -100,7 +102,8 @@ class DiscoverProjectDocsTool(BaseTool):
             ToolResult
         """
         try:
-            repo_path = Path(repo_path).resolve()
+            # 使用工具上下文的 resolve_path，与 repo_map 等一致，保证 "." 解析为项目根（非进程 cwd）
+            repo_path = self.resolve_path(repo_path)
             if not repo_path.exists():
                 return ToolResult(
                     success=False,
@@ -110,7 +113,7 @@ class DiscoverProjectDocsTool(BaseTool):
             
             docs = []
             
-            # 1. 查找README（必读）
+            # 1. 查找README（必读）；若有根 README 且存在 backend/README，一并纳入（更了解自己）
             readme = self._find_file(repo_path, self.README_PATTERNS)
             if readme:
                 content = self._read_file(readme, max_doc_length)
@@ -122,6 +125,16 @@ class DiscoverProjectDocsTool(BaseTool):
                         'summary': self._extract_readme_summary(content)
                     })
                     logger.info(f"✓ 找到README: {readme.name}")
+            backend_readme = repo_path / "backend" / "README.md"
+            if backend_readme.exists() and backend_readme.is_file() and (not readme or readme != backend_readme):
+                content = self._read_file(backend_readme, max_doc_length)
+                if content:
+                    docs.append({
+                        'type': 'README (backend)',
+                        'path': str(backend_readme.relative_to(repo_path)),
+                        'content': content,
+                    })
+                    logger.info("✓ 找到 backend/README，一并纳入")
             
             # 2. 查找架构文档
             arch_doc = self._find_file(repo_path, self.ARCHITECTURE_PATTERNS)

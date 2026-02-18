@@ -23,7 +23,10 @@ project_understanding_triggers:
   - 说说项目
   - 项目结构
 
-# LLM配置
+# 可选：预取块总字符上限（不设则默认约 16000）。若模型上下文很小可设小值（如 8000）避免超窗
+# project_understanding_max_chars: 16000
+
+# LLM配置（max_tokens 为回复长度上限；输入上下文由模型窗口决定，ReAct 不经过 ContextManager 的 token_budget 剪枝）
 llm:
   model: qwen-max
   temperature: 0.7

@@ -236,40 +236,7 @@ async def _execute_skill_internal(
         # 更新任务状态为运行中
         task_manager.update_status(task.id, TaskStatus.RUNNING)
         
-        # 「了解项目」预取：支持 (1) LLM 意图判断 或 (2) 触发词匹配；use_intent 为 true 时用意图，否则用触发词
-        _uin = (user_input or "").strip()
-        use_intent = getattr(skill, "project_understanding_use_intent", False)
-        need_prefetch = False
-        if _uin:
-            if use_intent:
-                need_prefetch = await _is_project_understanding_intent(_uin, getattr(skill, "llm", None))
-            else:
-                triggers = getattr(skill, "project_understanding_triggers", None) or []
-                if not triggers and skill_name == "chat-assistant":
-                    triggers = ["了解", "看看项目", "项目怎么样", "项目是啥", "介绍项目", "这是什么项目"]
-                need_prefetch = bool(triggers and any(k in _uin.lower() for k in triggers))
-        if need_prefetch:
-            try:
-                docs_tool = registry.get_tool("discover_project_docs")
-                struct_tool = registry.get_tool("get_repo_structure")
-                repo_map_tool = registry.get_tool("repo_map")
-                if docs_tool and struct_tool and repo_map_tool:
-                    d = await docs_tool.execute(repo_path=".")
-                    s = await struct_tool.execute(repo_path=".", max_depth=3)
-                    r = await repo_map_tool.execute(repo_path=".")
-                    parts = []
-                    if d and getattr(d, "content", None) and d.content:
-                        parts.append("【项目文档】\n" + ((d.content[:4000] + "…") if len(d.content) > 4000 else d.content))
-                    if s and getattr(s, "content", None) and s.content:
-                        parts.append("【目录结构】\n" + ((s.content[:2000] + "…") if len(s.content) > 2000 else s.content))
-                    if r and getattr(r, "content", None) and r.content:
-                        parts.append("【代码地图】\n" + ((r.content[:4000] + "…") if len(r.content) > 4000 else r.content))
-                    if parts:
-                        context["project_understanding_block"] = "\n\n".join(parts)
-                        logger.info("已预取了解项目三层结果并注入 context")
-            except Exception as e:
-                logger.warning(f"预取了解项目三层失败: {e}")
-        
+        # 「了解项目」预取已移至 ReAct 编排器内、智能体循环前：一次意图分类 + 预取，见 orchestrators/react.py
         # 按问检索（Cursor 同级）：若 Skill 含 semantic_code_search 且用户有输入，预取相关代码块并注入 context
         skill_tools = getattr(skill, "tools", None) or []
         if "semantic_code_search" in skill_tools and user_input and user_input.strip():
@@ -404,38 +371,6 @@ def get_task_stats() -> Dict[str, Any]:
     """
     task_manager = get_task_manager()
     return task_manager.get_stats()
-
-
-async def _is_project_understanding_intent(user_input: str, llm_config: Optional[Dict[str, Any]]) -> bool:
-    """
-    用 LLM 判断用户是否想了解项目/架构/结构/概览（一次短调用，避免写死触发词）。
-    返回 True 表示应预取「了解项目」三层结果。
-    """
-    if not (user_input and user_input.strip()):
-        return False
-    try:
-        from ..llm import get_client_manager
-        from ..llm.base import LLMRequest
-        cfg = llm_config or {}
-        model = cfg.get("model", "qwen-max")
-        client_manager = get_client_manager()
-        client = client_manager.get_client(model=model)
-        prompt = (
-            "你是一个意图分类器。仅判断下面用户输入是否表示「想了解/探索当前项目」"
-            "（例如：项目是啥、介绍、架构、结构、概览、整体、看看、了解一下等）。\n"
-            "只回答 YES 或 NO，不要解释。\n\n用户输入：\n" + (user_input.strip()[:500])
-        )
-        request = LLMRequest(
-            prompt=prompt,
-            model=model,
-            temperature=0,
-            max_tokens=10,
-        )
-        resp = await client.chat(request)
-        return (resp.content or "").strip().upper().startswith("Y")
-    except Exception as e:
-        logger.warning(f"了解项目意图判断失败，按否处理: {e}")
-        return False
 
 
 def _truncate_description(text: str, max_length: int = 500) -> str:

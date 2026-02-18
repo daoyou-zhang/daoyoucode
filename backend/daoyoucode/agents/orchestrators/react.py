@@ -134,7 +134,58 @@ class ReActOrchestrator(BaseOrchestrator):
         logger.info(f"ReAct编排器执行: {skill.name}")
         
         try:
-            # 1. 获取Agent
+            # 1. 智能体循环前：是否预取「了解项目」由 intent.should_prefetch_project_understanding 统一判定
+            user_input_stripped = (user_input or "").strip()
+            if user_input_stripped:
+                from ..tools import get_tool_registry
+                from ..intent import should_prefetch_project_understanding
+                _tool_reg = get_tool_registry()
+                need_project_prefetch, _ = await should_prefetch_project_understanding(skill, user_input_stripped, context)
+                use_intent = getattr(skill, "project_understanding_use_intent", False)
+                if need_project_prefetch and all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map")):
+                    try:
+                        docs_tool = _tool_reg.get_tool("discover_project_docs")
+                        struct_tool = _tool_reg.get_tool("get_repo_structure")
+                        repo_map_tool = _tool_reg.get_tool("repo_map")
+                        # 传足 max_doc_length，否则工具内部默认 5000 会截断，导致「文档没给到」
+                        d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
+                        s = await struct_tool.execute(repo_path=".", max_depth=3)
+                        r = await repo_map_tool.execute(repo_path=".")
+                        # 预取块上限：默认 8000/3500/4500；skill 配了 project_understanding_max_chars 时按比例缩小
+                        _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 8000, 3500, 4500
+                        max_total = getattr(skill, "project_understanding_max_chars", None)
+                        if max_total is not None and max_total > 0:
+                            _DOC_CHARS = min(8000, max(500, int(max_total * 0.50)))
+                            _STRUCT_CHARS = min(3500, max(300, int(max_total * 0.22)))
+                            _REPOMAP_CHARS = min(4500, max(300, int(max_total * 0.28)))
+                        header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                        parts = []
+                        if d and getattr(d, "content", None) and d.content:
+                            parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
+                        if s and getattr(s, "content", None) and s.content:
+                            parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
+                        if r and getattr(r, "content", None) and r.content:
+                            parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                        if parts:
+                            context["project_understanding_block"] = header + "\n\n".join(parts)
+                            logger.info("已预取了解项目三层结果并注入 context（编排器内、智能体循环前）")
+                    except Exception as e:
+                        logger.warning("预取了解项目三层失败: %s", e)
+                # 复用意图：need_code_context 时预取 semantic_code_chunks（若 context 已含则跳过，避免与 executor 重复）
+                if use_intent and "need_code_context" in context.get("detected_intents", []) and "semantic_code_chunks" not in context:
+                    skill_tools = getattr(skill, "tools", None) or []
+                    if "semantic_code_search" in skill_tools:
+                        try:
+                            sem_tool = _tool_reg.get_tool("semantic_code_search")
+                            if sem_tool:
+                                res = await sem_tool.execute(query=user_input_stripped[:500], top_k=6, repo_path=".")
+                                if res and getattr(res, "content", None) and res.content:
+                                    context["semantic_code_chunks"] = (res.content[:5000] + "…") if len(res.content) > 5000 else res.content
+                                    logger.info("按意图预取 semantic_code_chunks")
+                        except Exception as e:
+                            logger.warning("按意图预取 semantic 失败: %s", e)
+            
+            # 2. 获取Agent
             from ..core.agent import get_agent_registry
             registry = get_agent_registry()
             agent = registry.get_agent(skill.agent)
@@ -146,15 +197,15 @@ class ReActOrchestrator(BaseOrchestrator):
                     'error': f"Agent '{skill.agent}' not found"
                 }
             
-            # 2. 准备prompt
+            # 3. 准备prompt
             prompt_source = self._prepare_prompt_source(skill)
             
-            # 3. 只传入已注册的工具名，避免 Kiro 等生成的配置里有错误工具名导致不稳定
+            # 4. 只传入已注册的工具名，避免 Kiro 等生成的配置里有错误工具名导致不稳定
             from ..tools import get_tool_registry
             tool_registry = get_tool_registry()
             tools_to_use = tool_registry.filter_tool_names(skill.tools if skill.tools else None)
             
-            # 4. 执行Agent（带工具）
+            # 5. 执行Agent（带工具）
             result = await agent.execute(
                 prompt_source=prompt_source,
                 user_input=user_input,

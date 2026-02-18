@@ -518,7 +518,7 @@ text_search(query="cache|Cache", file_pattern="**/*.py")
 {{ semantic_code_chunks }}
 {% endif %}
 {% if project_understanding_block %}
-📋 **项目理解三层结果（已预取，请直接基于此用 2～5 句话概括，可带 1～2 个关键点后收尾；禁止罗列模块/文件/优点；不要再次调用 discover_project_docs/get_repo_structure/repo_map）**：
+📋 **项目理解三层结果（已预取）**：请**以【项目文档】为主**用 2～5 句话概括项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，**禁止**逐条罗列文件/类名或「主要模块：context.py…」；不要再次调用 discover_project_docs/get_repo_structure/repo_map。
 {{ project_understanding_block }}
 {% endif %}
 
