@@ -20,6 +20,7 @@ class ToolPostProcessor:
     - 根据用户问题优化工具结果
     - 减少无关信息
     - 提升相关性
+    - 美化输出格式
     """
     
     def __init__(self):
@@ -30,6 +31,10 @@ class ToolPostProcessor:
             'read_file': ReadFilePostProcessor(),
             'get_repo_structure': StructurePostProcessor(),
         }
+        
+        # 导入 ResultFormatter
+        from .result_formatter import get_result_formatter
+        self.formatter = get_result_formatter()
     
     async def process(
         self,
@@ -51,19 +56,32 @@ class ToolPostProcessor:
             优化后的工具结果
         """
         if not result.success:
+            # 失败的结果也格式化（显示友好的错误信息）
+            try:
+                formatted_content = self.formatter.format(tool_name, result)
+                result.content = formatted_content
+            except Exception as e:
+                logger.warning(f"格式化失败结果时出错: {e}")
             return result
         
+        # 1. 智能过滤（减少无关信息）
         processor = self.processors.get(tool_name)
-        if not processor:
-            return result  # 没有专门的处理器，返回原结果
+        if processor:
+            try:
+                result = await processor.process(result, user_query, context or {})
+                logger.info(f"工具 {tool_name} 智能过滤完成")
+            except Exception as e:
+                logger.error(f"工具 {tool_name} 智能过滤失败: {e}", exc_info=True)
         
+        # 2. 美化格式（添加图标、结构化显示）
         try:
-            processed = await processor.process(result, user_query, context or {})
-            logger.info(f"工具 {tool_name} 后处理完成")
-            return processed
+            formatted_content = self.formatter.format(tool_name, result)
+            result.content = formatted_content
+            logger.debug(f"工具 {tool_name} 格式化完成")
         except Exception as e:
-            logger.error(f"工具 {tool_name} 后处理失败: {e}", exc_info=True)
-            return result  # 失败时返回原结果
+            logger.warning(f"工具 {tool_name} 格式化失败: {e}")
+        
+        return result
 
 
 class BasePostProcessor:

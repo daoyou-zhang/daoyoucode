@@ -78,6 +78,7 @@ def _register_builtin_tools():
         AstGrepReplaceTool
     )
     from .codebase_search_tool import SemanticCodeSearchTool
+    from .code_validation_tool import CodeSnippetValidationTool
 
     # 文件操作工具（6个）
     _tool_registry.register(ReadFileTool())
@@ -161,6 +162,13 @@ def _register_builtin_tools():
         _tool_registry.register(AstGrepReplaceTool())
     except Exception as e:
         logger.error(f"注册AST工具失败: {e}")
+    
+    # 代码验证工具（1个）
+    try:
+        _tool_registry.register(CodeSnippetValidationTool())
+        logger.info("✓ CodeSnippetValidationTool注册成功")
+    except Exception as e:
+        logger.error(f"注册CodeSnippetValidationTool失败: {e}")
     
     logger.info(f"已注册 {len(_tool_registry.list_tools())} 个内置工具")
     

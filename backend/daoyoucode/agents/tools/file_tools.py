@@ -85,12 +85,12 @@ class ReadFileTool(BaseTool):
 
 
 class WriteFileTool(BaseTool):
-    """写入文件工具"""
+    """写入文件工具（支持LSP验证）"""
     
     def __init__(self):
         super().__init__(
             name="write_file",
-            description="写入文件内容（自动创建目录）"
+            description="写入文件内容（自动创建目录，可选LSP验证）"
         )
     
     async def execute(
@@ -98,7 +98,8 @@ class WriteFileTool(BaseTool):
         file_path: str,
         content: str,
         encoding: str = "utf-8",
-        create_dirs: bool = True
+        create_dirs: bool = True,
+        verify: bool = True  # 🔥 新增：是否验证代码
     ) -> ToolResult:
         """
         写入文件
@@ -108,32 +109,131 @@ class WriteFileTool(BaseTool):
             content: 文件内容
             encoding: 编码格式
             create_dirs: 是否自动创建目录
+            verify: 是否使用LSP验证代码（默认True）
         """
         try:
-            path = Path(file_path)
+            path = self.resolve_path(file_path)
             
             # 创建目录
             if create_dirs and not path.parent.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
             
+            # 写入文件
             with open(path, 'w', encoding=encoding) as f:
                 f.write(content)
             
-            return ToolResult(
-                success=True,
-                content=f"Successfully wrote {len(content)} bytes to {file_path}",
-                metadata={
-                    'file_path': str(path),
-                    'size': len(content),
-                    'lines': content.count('\n') + 1
-                }
-            )
+            result_metadata = {
+                'file_path': str(path),
+                'size': len(content),
+                'lines': content.count('\n') + 1
+            }
+            
+            # 🔥 LSP验证（仅对代码文件）
+            if verify and self._should_verify(path):
+                diagnostics = await self._verify_with_lsp(path)
+                
+                if diagnostics:
+                    # 有错误
+                    error_count = len([d for d in diagnostics if d.get('severity') == 1])
+                    warning_count = len([d for d in diagnostics if d.get('severity') == 2])
+                    
+                    result_metadata['diagnostics'] = diagnostics
+                    result_metadata['error_count'] = error_count
+                    result_metadata['warning_count'] = warning_count
+                    
+                    if error_count > 0:
+                        # 有错误，返回失败
+                        error_messages = [
+                            f"Line {d.get('range', {}).get('start', {}).get('line', '?') + 1}: {d.get('message', 'Unknown error')}"
+                            for d in diagnostics if d.get('severity') == 1
+                        ]
+                        
+                        return ToolResult(
+                            success=False,
+                            content=None,
+                            error=f"代码有{error_count}个错误:\n" + "\n".join(error_messages[:5]),
+                            metadata=result_metadata
+                        )
+                    else:
+                        # 只有警告，成功但提示
+                        warning_messages = [
+                            f"Line {d.get('range', {}).get('start', {}).get('line', '?') + 1}: {d.get('message', 'Unknown warning')}"
+                            for d in diagnostics if d.get('severity') == 2
+                        ]
+                        
+                        return ToolResult(
+                            success=True,
+                            content=f"文件已写入，但有{warning_count}个警告:\n" + "\n".join(warning_messages[:3]),
+                            metadata=result_metadata
+                        )
+                else:
+                    # 验证通过
+                    result_metadata['verified'] = True
+                    return ToolResult(
+                        success=True,
+                        content=f"文件已写入并验证通过: {file_path}",
+                        metadata=result_metadata
+                    )
+            else:
+                # 不验证或不支持验证
+                return ToolResult(
+                    success=True,
+                    content=f"文件已写入: {file_path}",
+                    metadata=result_metadata
+                )
+                
         except Exception as e:
             return ToolResult(
                 success=False,
                 content=None,
                 error=str(e)
             )
+    
+    def _should_verify(self, path: Path) -> bool:
+        """判断是否应该验证文件"""
+        # 只验证代码文件
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs'}
+        return path.suffix in code_extensions
+    
+    async def _verify_with_lsp(self, file_path: Path) -> List[Dict]:
+        """
+        使用LSP验证代码
+        
+        Returns:
+            诊断信息列表（错误和警告）
+        """
+        try:
+            from .lsp_tools import with_lsp_client
+            import asyncio
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            # 🔥 获取诊断信息（内部会处理文件打开和等待）
+            # 使用更长的等待时间确保pyright完成分析
+            result = await with_lsp_client(
+                str(file_path),
+                lambda client: client.diagnostics(str(file_path), wait_time=3.0)
+            )
+            
+            diagnostics = result.get('items', [])
+            logger.debug(f"LSP返回{len(diagnostics)}个诊断信息")
+            
+            # 只返回错误和警告（忽略信息和提示）
+            filtered = [
+                d for d in diagnostics 
+                if d.get('severity') in [1, 2]  # 1=Error, 2=Warning
+            ]
+            
+            logger.debug(f"过滤后{len(filtered)}个错误/警告")
+            return filtered
+        
+        except Exception as e:
+            # LSP验证失败不影响文件写入
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"LSP验证失败: {e}")
+            return []
     
     def get_function_schema(self) -> Dict[str, Any]:
         return {
@@ -144,7 +244,7 @@ class WriteFileTool(BaseTool):
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "文件路径"
+                        "description": "文件路径（相对于项目根目录）"
                     },
                     "content": {
                         "type": "string",
@@ -158,6 +258,11 @@ class WriteFileTool(BaseTool):
                     "create_dirs": {
                         "type": "boolean",
                         "description": "是否自动创建目录",
+                        "default": True
+                    },
+                    "verify": {
+                        "type": "boolean",
+                        "description": "是否使用LSP验证代码（默认True，自动检测代码文件）",
                         "default": True
                     }
                 },

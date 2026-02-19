@@ -1,0 +1,100 @@
+# 代码审查助手
+name: code-review
+version: 1.0.0
+description: 自动代码审查助手，检查代码质量、类型注解、测试覆盖等
+
+orchestrator: react
+agent: MainAgent
+
+# Prompt配置
+prompt:
+  file: prompts/code_review.md
+
+# LLM配置
+llm:
+  model: qwen-max
+  temperature: 0.3  # 代码审查需要更严格
+  max_tokens: 4000
+
+# 可用工具（按审查流程排序）
+tools:
+  - lsp_diagnostics       # 1. 检查语法和类型错误
+  - lsp_symbols           # 2. 获取文件符号
+  - lsp_find_references   # 3. 检查引用情况
+  - semantic_code_search  # 4. 查找相似代码
+  - repo_map              # 5. 分析代码结构
+  - text_search           # 6. 查找测试文件
+  - read_file             # 7. 读取相关文件
+
+# 中间件
+middleware:
+  - context_management
+
+# 权限
+permissions:
+  read:
+    - pattern: "*"
+      permission: allow
+  write:
+    - pattern: "*"
+      permission: deny  # 代码审查只读
+  execute:
+    - pattern: "*"
+      permission: deny
+
+# 输入
+inputs:
+  - name: file_path
+    type: string
+    required: true
+    description: 要审查的文件路径
+  
+  - name: session_id
+    type: string
+    required: false
+    description: 会话ID
+  
+  - name: repo
+    type: string
+    required: false
+    description: 仓库路径
+
+# 输出
+outputs:
+  - name: review_report
+    type: string
+    description: 审查报告
+  
+  - name: quality_score
+    type: number
+    description: 代码质量评分（0-100）
+  
+  - name: issues
+    type: array
+    description: 发现的问题列表
+  
+  - name: suggestions
+    type: array
+    description: 改进建议列表
+
+# Hook配置
+hooks:
+  - logging
+  - metrics
+
+# 元数据
+metadata:
+  category: code-quality
+  cost: MEDIUM
+  triggers:
+    - "代码审查"
+    - "检查代码"
+    - "代码质量"
+  use_when:
+    - "代码审查"
+    - "质量检查"
+    - "重构前评估"
+  features:
+    - "LSP深度分析"
+    - "自动质量评分"
+    - "结构化报告"

@@ -521,15 +521,36 @@ class LSPClient:
         result = await self._send('workspace/symbol', {'query': query})
         return result
     
-    async def diagnostics(self, file_path: str):
-        """获取诊断信息"""
+    async def diagnostics(self, file_path: str, wait_time: float = 2.0):
+        """
+        获取诊断信息
+        
+        Args:
+            file_path: 文件路径
+            wait_time: 等待LSP分析的时间（秒），默认2.0秒
+        """
         abs_path = Path(file_path).resolve()
         uri = abs_path.as_uri()
         
-        await self.open_file(str(abs_path))
+        # 如果文件已打开，发送didChange通知以触发重新分析
+        if str(abs_path) in self.opened_files:
+            try:
+                text = abs_path.read_text(encoding='utf-8')
+                self._notify('textDocument/didChange', {
+                    'textDocument': {
+                        'uri': uri,
+                        'version': 2  # 增加版本号
+                    },
+                    'contentChanges': [{'text': text}]
+                })
+            except Exception as e:
+                logger.debug(f"Failed to send didChange: {e}")
+        else:
+            # 首次打开文件
+            await self.open_file(str(abs_path))
         
-        # 等待诊断信息
-        await asyncio.sleep(0.5)
+        # 等待诊断信息（pyright需要时间分析）
+        await asyncio.sleep(wait_time)
         
         # 尝试使用textDocument/diagnostic（LSP 3.17+）
         try:
