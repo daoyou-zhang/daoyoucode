@@ -140,7 +140,7 @@ class ReActOrchestrator(BaseOrchestrator):
                 from ..tools import get_tool_registry
                 from ..intent import should_prefetch_project_understanding
                 _tool_reg = get_tool_registry()
-                need_project_prefetch, _ = await should_prefetch_project_understanding(skill, user_input_stripped, context)
+                need_project_prefetch, _, prefetch_level = await should_prefetch_project_understanding(skill, user_input_stripped, context)
                 use_intent = getattr(skill, "project_understanding_use_intent", False)
                 if need_project_prefetch and all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map")):
                     try:
@@ -214,10 +214,10 @@ class ReActOrchestrator(BaseOrchestrator):
                 tools=tools_to_use
             )
             
-            # 5. 返回结果
+            # 5. 返回结果（content 保证为 str，避免 None 导致前端无输出）
             return {
                 'success': result.success,
-                'content': result.content,
+                'content': result.content if result.content is not None else "",
                 'metadata': {
                     **result.metadata,
                     'skill': skill.name,

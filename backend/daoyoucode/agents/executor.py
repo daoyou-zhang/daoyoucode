@@ -124,6 +124,7 @@ async def _execute_skill_internal(
     session_id = context.get('session_id')
     
     # 统一设置工具上下文：优先用完整 ToolContext，避免覆盖 CLI 传入的 subtree_only/cwd（见优化建议 3.1）
+    
     from pathlib import Path
     from .tools.registry import get_tool_registry
     from .tools.base import ToolContext
@@ -240,15 +241,25 @@ async def _execute_skill_internal(
         # 按问检索（Cursor 同级）：若 Skill 含 semantic_code_search 且用户有输入，预取相关代码块并注入 context
         skill_tools = getattr(skill, "tools", None) or []
         if "semantic_code_search" in skill_tools and user_input and user_input.strip():
+            
+            import time
+            start_time = time.time()
+            
             try:
                 sem_tool = registry.get_tool("semantic_code_search")
                 if sem_tool:
+                    # 正常执行，不设置超时（首次建立索引可能需要较长时间）
                     res = await sem_tool.execute(query=user_input.strip()[:500], top_k=6, repo_path=".")
+                    
+                    elapsed = time.time() - start_time
+                    logger.info(f"语义代码检索完成，耗时: {elapsed:.2f}秒")
+                    
                     if res and getattr(res, "content", None) and res.content:
                         context["semantic_code_chunks"] = (res.content[:5000] + "…") if len(res.content) > 5000 else res.content
                         logger.info("按问检索: 已注入 semantic_code_chunks")
             except Exception as e:
-                logger.warning(f"按问检索预取失败: {e}")
+                elapsed = time.time() - start_time
+                logger.warning(f"按问检索预取失败（耗时{elapsed:.2f}秒）: {e}")
         
         # 5. 执行
         result = await orchestrator.execute(skill, user_input, context)

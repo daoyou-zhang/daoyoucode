@@ -126,6 +126,36 @@ def main(
     # 显示欢迎横幅
     show_banner(model, repo_path, files, skill, subtree_only)
     
+    # ✅ 提前初始化Agent系统（避免在交互过程中初始化导致冲突）
+    console.print("\n[dim]正在初始化Agent系统...[/dim]")
+    
+    try:
+        from daoyoucode.agents.init import initialize_agent_system
+        from daoyoucode.agents.tools.registry import get_tool_registry
+        from daoyoucode.agents.tools.base import ToolContext
+        from daoyoucode.agents.llm.client_manager import get_client_manager
+        from daoyoucode.agents.llm.config_loader import auto_configure
+        
+        initialize_agent_system()
+        
+        registry = get_tool_registry()
+        tool_context = ToolContext(
+            repo_path=repo_path,
+            subtree_only=subtree_only,
+            cwd=Path.cwd() if subtree_only else None,
+        )
+        registry.set_context(tool_context)
+        
+        client_manager = get_client_manager()
+        auto_configure(client_manager)
+        
+        console.print("[dim]✓ 初始化完成[/dim]")
+    except Exception as e:
+        console.print(f"[red]初始化失败: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
+    
     # 生成会话ID（用于记忆系统）
     session_id = str(uuid.uuid4())
     
@@ -144,7 +174,19 @@ def main(
         # 主循环
         while True:
             # 获取用户输入
-            user_input = console.input("\n[bold green]你[/bold green] › ")
+            try:
+                user_input = console.input("\n[bold green]你[/bold green] > ")
+            except EOFError:
+                # 管道输入结束
+                console.print("\n[cyan]输入结束[/cyan]\n")
+                break
+            except KeyboardInterrupt:
+                raise
+            
+            # 立即刷新输出流，避免Rich缓冲导致后续输出丢失
+            import sys
+            sys.stdout.flush()
+            sys.stderr.flush()
             
             if not user_input.strip():
                 continue
@@ -157,6 +199,10 @@ def main(
             
             # 处理普通对话（通过Skill系统）
             handle_chat(user_input, ui_context)
+            
+            # 对话完成后再次刷新
+            sys.stdout.flush()
+            sys.stderr.flush()
     
     except KeyboardInterrupt:
         console.print("\n\n[cyan]👋 再见！[/cyan]\n")
@@ -174,7 +220,7 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], skill: str,
     banner = """
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
-║     🤖  DaoyouCode 交互式对话                            ║
+║     DaoyouCode 交互式对话                                ║
 ║                                                          ║
 ║     精简而强大，基于18大核心系统                         ║
 ║                                                          ║
@@ -188,25 +234,25 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], skill: str,
         cwd = Path.cwd()
         try:
             rel_cwd = cwd.relative_to(repo)
-            scope_info = f"\n• 扫描范围: [yellow]{rel_cwd}/ (仅当前目录，代码地图等)[/yellow]"
+            scope_info = f"\n* 扫描范围: [yellow]{rel_cwd}/ (仅当前目录，代码地图等)[/yellow]"
         except ValueError:
-            scope_info = f"\n• 扫描范围: [yellow]当前目录[/yellow]"
+            scope_info = f"\n* 扫描范围: [yellow]当前目录[/yellow]"
     
     info_panel = f"""
 [bold]当前配置[/bold]
-• Skill: [cyan]{skill}[/cyan]
-• 模型: [cyan]{model}[/cyan]
-• 仓库: [dim]{repo}[/dim] (git 根，文档检索用此)
-• 文件: [dim]{len(files) if files else 0} 个[/dim]{scope_info}
+* Skill: [cyan]{skill}[/cyan]
+* 模型: [cyan]{model}[/cyan]
+* 仓库: [dim]{repo}[/dim] (git 根，文档检索用此)
+* 文件: [dim]{len(files) if files else 0} 个[/dim]{scope_info}
 """
     console.print(Panel(info_panel, border_style="cyan", padding=(0, 2)))
     
     # 显示提示
-    console.print("\n[yellow]💡 提示:[/yellow]")
-    console.print("  • 输入 [cyan]/help[/cyan] 查看所有命令")
-    console.print("  • 输入 [cyan]/skill[/cyan] 切换Skill")
-    console.print("  • 输入 [cyan]/exit[/cyan] 退出对话")
-    console.print("  • 按 [cyan]Ctrl+C[/cyan] 也可退出")
+    console.print("\n[yellow]提示:[/yellow]")
+    console.print("  * 输入 [cyan]/help[/cyan] 查看所有命令")
+    console.print("  * 输入 [cyan]/skill[/cyan] 切换Skill")
+    console.print("  * 输入 [cyan]/exit[/cyan] 退出对话")
+    console.print("  * 按 [cyan]Ctrl+C[/cyan] 也可退出")
 
 
 def handle_command(cmd: str, ui_context: dict) -> bool:
@@ -434,11 +480,32 @@ def show_history(context: dict):
 
 def handle_chat(user_input: str, ui_context: dict):
     """处理对话 - 通过Skill系统"""
+    import sys
+    try:
+        _handle_chat_impl(user_input, ui_context)
+    except Exception as e:
+        try:
+            sys.stdout.write("\nAI > [Error] ")
+            sys.stdout.write(str(e).encode("ascii", errors="replace").decode("ascii")[:200])
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        except Exception:
+            sys.stdout.write("\nAI > [Error]\n")
+            sys.stdout.flush()
+
+
+def _handle_chat_impl(user_input: str, ui_context: dict):
+    """实际对话逻辑（内层）"""
     from cli.ui.console import console
     import asyncio
     import os
+    import sys
     
-    # 准备基本上下文（传递给Skill系统）
+    # 立即刷新输出流，确保之前的输出都显示出来
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    ai_response = ""  # 保证后续显示块一定有定义
     repo_path = os.path.abspath(ui_context["repo"])
     skill_name = ui_context.get("skill", "chat-assistant")
     
@@ -453,73 +520,114 @@ def handle_chat(user_input: str, ui_context: dict):
         "repo_root": repo_path,
     }
     
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    # 会话级只初始化一次，仅当 repo/skill 变化时再 set_context 或重配（优化建议 2）
-    need_init = (
-        not ui_context.get("_chat_init_done")
-        or ui_context.get("_chat_init_repo") != repo_path
-        or ui_context.get("_chat_init_skill") != skill_name
-    )
-    if need_init:
-        from daoyoucode.agents.init import initialize_agent_system
-        from daoyoucode.agents.tools.registry import get_tool_registry
-        from daoyoucode.agents.tools.base import ToolContext
-        from pathlib import Path
-        from daoyoucode.agents.llm.client_manager import get_client_manager
-        from daoyoucode.agents.llm.config_loader import auto_configure
-
-        initialize_agent_system()
-        registry = get_tool_registry()
-        tool_context = ToolContext(
-            repo_path=Path(repo_path),
-            subtree_only=context.get("subtree_only", False),
-            cwd=Path(context["cwd"]).resolve() if context.get("subtree_only") else None,
-        )
-        registry.set_context(tool_context)
-        client_manager = get_client_manager()
-        auto_configure(client_manager)
-        ui_context["_chat_init_done"] = True
-        ui_context["_chat_init_repo"] = repo_path
-        ui_context["_chat_init_skill"] = skill_name
+    # 会话级初始化已在main函数中完成，这里不再需要
     
     try:
-        # 通过Skill系统执行
+        # 通过Skill系统执行（带超时，避免一直无返回）
         from daoyoucode.agents.executor import execute_skill
+        import asyncio
+        import sys
+
+        # 显示思考提示并立即刷新
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        _safe_console_print(console, "[bold blue]AI正在思考...[/bold blue]")
+        sys.stdout.flush()
+        sys.stderr.flush()
         
-        console.print("[bold blue]🤔 AI正在思考...[/bold blue]")
+        # 获取或创建事件循环
         
-        result = loop.run_until_complete(execute_skill(
-            skill_name=skill_name,  # ← 动态Skill
-            user_input=user_input,
-            session_id=context["session_id"],
-            context=context
-        ))
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError as e:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        async def _run():
+            result = await execute_skill(
+                skill_name=skill_name,
+                user_input=user_input,
+                session_id=context["session_id"],
+                context=context,
+            )
+            return result
         
-        # 显示结果
-        if result.get('success'):
-            ai_response = result.get('content', '')
-        else:
-            error_msg = result.get('error', '未知错误')
-            console.print(f"[yellow]⚠ 执行失败: {error_msg}[/yellow]")
-            ai_response = "抱歉，我遇到了一些问题。请重试。"
-    
+        try:
+            result = loop.run_until_complete(asyncio.wait_for(_run(), timeout=120))
+        except asyncio.TimeoutError:
+            console.print("[yellow]警告: 请求超时（120秒），请检查网络或稍后重试。[/yellow]")
+            ai_response = "抱歉，本次请求超时。请检查网络与 API 配置后重试。"
+            result = None
+        
+        if result is not None:
+            if result.get("success"):
+                ai_response = result.get("content")
+                if ai_response is None:
+                    ai_response = ""
+                if not (ai_response and ai_response.strip()):
+                    ai_response = "（未收到模型回复，请重试或检查 API 配置。）"
+            else:
+                error_msg = result.get("error", "未知错误")
+                console.print(f"[yellow]警告: 执行失败: {error_msg}[/yellow]")
+                ai_response = "抱歉，我遇到了一些问题。请重试。"
     except Exception as e:
-        console.print(f"[yellow]⚠ 调用异常: {str(e)[:100]}[/yellow]")
-        ai_response = "抱歉，系统出现异常。请重试。"
-    
+        ai_response = "Sorry, something went wrong. Please try again."
+        try:
+            _safe_console_print(console, f"[yellow]Warning: {_safe_str(e)[:200]}[/yellow]")
+        except Exception:
+            pass
+
     # 显示AI响应
-    console.print(f"\n[bold blue]AI[/bold blue] › ", end="")
+    body = (ai_response or "(no response)").strip()
     
-    # 使用Markdown渲染（如果包含代码块）
-    if "```" in ai_response:
-        console.print(Markdown(ai_response))
-    else:
-        console.print(ai_response)
+    try:
+        sys.stdout.write("\nAI > ")
+        sys.stdout.flush()
+        
+        # 控制台编码可能不是 UTF-8，只输出可安全编码的字符
+        out = body
+        try:
+            sys.stdout.write(out + "\n")
+            sys.stdout.flush()
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            out = (body or "").encode("utf-8", errors="replace").decode("ascii", errors="replace") or "(no response)"
+            sys.stdout.write(out + "\n")
+            sys.stdout.flush()
+    except Exception as e:
+        try:
+            sys.stdout.write("\nAI > (output omitted)\n")
+            sys.stdout.flush()
+        except Exception:
+            pass
+    
+    # 最后再次刷新，确保所有输出都显示
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+
+def _safe_str(s: object) -> str:
+    """转为字符串且避免编码问题（仅 ASCII 安全字符用于控制台）"""
+    t = str(s) if s is not None else ""
+    try:
+        t.encode("ascii")
+        return t
+    except UnicodeEncodeError:
+        return t.encode("ascii", errors="replace").decode("ascii")
+
+
+def _safe_console_print(console, *args, **kwargs):
+    """调用 console.print，若编码错误则用 ASCII 回退"""
+    try:
+        console.print(*args, **kwargs)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        fallback = " ".join(_safe_str(a) for a in args)
+        if fallback.strip():
+            console.print(fallback[:500], **{k: v for k, v in kwargs.items() if k != "end"})
+        if kwargs.get("end") is not None:
+            console.print(end=kwargs.get("end"))
 
 
 def generate_mock_response(user_input: str, context: dict) -> str:

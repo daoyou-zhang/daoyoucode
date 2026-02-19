@@ -467,22 +467,26 @@ class CodebaseIndex:
             self.build_index()
         if not self.chunks:
             return []
-
+        
         retriever = self._get_retriever()
         if retriever.enabled and self.embeddings is not None:
             import numpy as np
+            
             q = retriever.encode(query)
+            
             if q is not None:
                 q_norm = q / np.linalg.norm(q)
                 emb_norm = self.embeddings / np.linalg.norm(self.embeddings, axis=1, keepdims=True)
                 scores = np.dot(emb_norm, q_norm)
                 top_idx = np.argsort(scores)[::-1][:top_k]
+                
                 return [
                     {**self.chunks[i], "score": float(scores[i])}
                     for i in top_idx if scores[i] > 1e-6
                 ]
 
         # 关键词回退
+        
         words = re.findall(r"\w+", query.lower())
         if not words:
             return self.chunks[:top_k]
