@@ -54,7 +54,63 @@ def initialize_agent_system():
     register_middleware('followup', FollowupMiddleware)
     logger.info("✓ 中间件已注册")
     
+    # 5. 🔥 检查LSP服务器状态（同步检查，不启动）
+    try:
+        from .tools.lsp_tools import get_lsp_manager
+        
+        manager = get_lsp_manager()
+        
+        # 检查Python LSP是否已安装
+        from .tools.lsp_tools import BUILTIN_LSP_SERVERS
+        pyright_config = BUILTIN_LSP_SERVERS.get("pyright")
+        
+        if pyright_config and manager.is_server_installed(pyright_config):
+            logger.info("✓ LSP系统已就绪（pyright已安装）")
+            logger.info("  提示: LSP将在首次使用时自动启动")
+        else:
+            logger.info("✓ LSP系统已就绪（按需启动）")
+            logger.info("  提示: 安装 'pip install pyright' 以启用Python LSP增强")
+    
+    except Exception as e:
+        logger.debug(f"LSP检查失败: {e}")
+    
     _initialized = True
     logger.info("Agent系统初始化完成")
     
     return tool_registry
+
+
+def warmup_lsp_async():
+    """
+    异步预热LSP服务器（可选，在后台运行）
+    
+    这个函数应该在有事件循环的环境中调用，
+    例如在CLI命令的async函数中
+    """
+    import asyncio
+    from .tools.lsp_tools import get_lsp_manager
+    
+    async def _warmup():
+        try:
+            logger.info("🔥 预热LSP服务器...")
+            manager = get_lsp_manager()
+            
+            # 尝试启动Python LSP
+            available = await manager.ensure_server_available("python")
+            
+            if available:
+                logger.info("✅ LSP服务器预热完成（Python支持）")
+            else:
+                logger.debug("LSP服务器未安装，跳过预热")
+        
+        except Exception as e:
+            logger.debug(f"LSP预热失败: {e}")
+    
+    # 创建任务但不等待
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_warmup())
+    except RuntimeError:
+        # 没有运行的事件循环
+        logger.debug("没有运行的事件循环，跳过LSP预热")
+

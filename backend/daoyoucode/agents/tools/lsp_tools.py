@@ -131,6 +131,7 @@ class LSPClient:
             )
         
         # 准备环境变量
+        import os
         env = dict(self.server_config.env) if self.server_config.env else {}
         
         # 启动进程
@@ -140,7 +141,7 @@ class LSPClient:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(self.root),
-            env={**dict(asyncio.subprocess.os.environ), **env}
+            env={**dict(os.environ), **env}
         )
         
         # 启动读取任务
@@ -368,10 +369,12 @@ class LSPClient:
     
     async def initialize(self):
         """初始化LSP服务器"""
+        import os
+        
         root_uri = self.root.as_uri()
         
         init_params = {
-            'processId': asyncio.subprocess.os.getpid(),
+            'processId': os.getpid(),
             'rootUri': root_uri,
             'rootPath': str(self.root),
             'workspaceFolders': [{'uri': root_uri, 'name': 'workspace'}],
@@ -624,6 +627,7 @@ class LSPServerManager:
     - 服务器复用（避免重复启动）
     - 自动清理空闲服务器
     - 引用计数管理
+    - 🔥 自动检测和安装LSP服务器
     
     参考：oh-my-opencode/src/tools/lsp/client.ts (LSPServerManager)
     """
@@ -650,6 +654,139 @@ class LSPServerManager:
         # self._start_cleanup_timer()
         
         logger.info("LSP服务器管理器已初始化")
+    
+    def is_server_installed(self, server_config: LSPServerConfig) -> bool:
+        """检查LSP服务器是否已安装"""
+        command = server_config.command[0]
+        return shutil.which(command) is not None
+    
+    async def ensure_server_available(self, language: str) -> bool:
+        """
+        确保LSP服务器可用（自动安装）
+        
+        Args:
+            language: 语言名称（python, javascript, typescript等）
+        
+        Returns:
+            bool: 是否可用
+        """
+        # 获取服务器配置
+        server_config = self._get_server_config_for_language(language)
+        if not server_config:
+            logger.warning(f"不支持的语言: {language}")
+            return False
+        
+        # 检查是否已安装
+        if self.is_server_installed(server_config):
+            logger.info(f"✅ LSP服务器已安装: {server_config.id}")
+            return True
+        
+        # 自动安装
+        logger.info(f"🔄 正在安装LSP服务器: {server_config.id}")
+        
+        try:
+            if server_config.id == "pyright":
+                # 尝试pip安装
+                result = await asyncio.create_subprocess_exec(
+                    "pip", "install", "pyright",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await result.wait()
+                
+                if result.returncode == 0:
+                    logger.info(f"✅ LSP服务器安装成功: {server_config.id}")
+                    return True
+                else:
+                    # 尝试npm安装
+                    result = await asyncio.create_subprocess_exec(
+                        "npm", "install", "-g", "pyright",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    await result.wait()
+                    
+                    if result.returncode == 0:
+                        logger.info(f"✅ LSP服务器安装成功: {server_config.id}")
+                        return True
+            
+            logger.error(f"❌ LSP服务器安装失败: {server_config.id}")
+            self._print_installation_guide(server_config.id)
+            return False
+        
+        except Exception as e:
+            logger.error(f"❌ LSP服务器安装异常: {e}")
+            self._print_installation_guide(server_config.id)
+            return False
+    
+    def _get_server_config_for_language(self, language: str) -> Optional[LSPServerConfig]:
+        """根据语言获取服务器配置"""
+        language_to_server = {
+            "python": "pyright",
+            "javascript": "typescript-language-server",
+            "typescript": "typescript-language-server",
+            "rust": "rust-analyzer",
+            "go": "gopls",
+        }
+        
+        server_id = language_to_server.get(language.lower())
+        if server_id:
+            return BUILTIN_LSP_SERVERS.get(server_id)
+        
+        return None
+    
+    def _print_installation_guide(self, server_id: str):
+        """打印LSP服务器安装指南"""
+        guides = {
+            "pyright": """
+╔══════════════════════════════════════════════════════════╗
+║           Python LSP服务器安装指南                       ║
+╚══════════════════════════════════════════════════════════╝
+
+DaoyouCode需要LSP服务器来提供深度代码理解能力。
+
+推荐安装方式:
+  pip install pyright
+
+或者:
+  npm install -g pyright
+
+安装后，DaoyouCode会自动使用LSP服务器。
+
+如果不安装，部分高级功能将不可用:
+  - 类型信息
+  - 引用追踪
+  - 代码质量评估
+  - 智能补全验证
+""",
+            "typescript-language-server": """
+╔══════════════════════════════════════════════════════════╗
+║        JavaScript/TypeScript LSP服务器安装指南           ║
+╚══════════════════════════════════════════════════════════╝
+
+安装方式:
+  npm install -g typescript-language-server typescript
+""",
+            "rust-analyzer": """
+╔══════════════════════════════════════════════════════════╗
+║              Rust LSP服务器安装指南                      ║
+╚══════════════════════════════════════════════════════════╝
+
+安装方式:
+  rustup component add rust-analyzer
+""",
+            "gopls": """
+╔══════════════════════════════════════════════════════════╗
+║               Go LSP服务器安装指南                       ║
+╚══════════════════════════════════════════════════════════╝
+
+安装方式:
+  go install golang.org/x/tools/gopls@latest
+""",
+        }
+        
+        guide = guides.get(server_id, f"请安装LSP服务器: {server_id}")
+        print(guide)
     
     def _start_cleanup_timer(self):
         """启动清理定时器"""

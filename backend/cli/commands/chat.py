@@ -547,6 +547,13 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
             asyncio.set_event_loop(loop)
 
         async def _run():
+            # 🔥 预热LSP服务器（在后台运行，不阻塞）
+            try:
+                from daoyoucode.agents.init import warmup_lsp_async
+                warmup_lsp_async()  # 创建后台任务
+            except Exception:
+                pass  # 忽略预热失败
+            
             result = await execute_skill(
                 skill_name=skill_name,
                 user_input=user_input,
