@@ -99,6 +99,11 @@ class RepoMapTool(BaseTool):
                         "type": "boolean",
                         "description": "是否自动调整token预算（默认true）。当chat_files为空时，自动扩大预算以提供更全面的视图",
                         "default": True
+                    },
+                    "enable_lsp": {
+                        "type": "boolean",
+                        "description": "是否启用LSP增强（默认true）。启用后会显示类型签名和引用计数",
+                        "default": True
                     }
                 },
                 "required": ["repo_path"]
@@ -229,7 +234,8 @@ class RepoMapTool(BaseTool):
         chat_files: Optional[List[str]] = None,
         mentioned_idents: Optional[List[str]] = None,
         max_tokens: int = 3000,
-        auto_scale: bool = True
+        auto_scale: bool = True,
+        enable_lsp: bool = True  # 🔥 新增：默认启用LSP
     ) -> ToolResult:
         """
         生成RepoMap
@@ -240,6 +246,7 @@ class RepoMapTool(BaseTool):
             mentioned_idents: 提到的标识符（权重×10）
             max_tokens: 最大token数量
             auto_scale: 是否自动调整token预算
+            enable_lsp: 是否启用LSP增强（默认True）
             
         Returns:
             ToolResult
@@ -292,11 +299,16 @@ class RepoMapTool(BaseTool):
                 mentioned_idents=mentioned_idents
             )
             
+            # 🔥 LSP增强：为top-k定义添加类型信息
+            if enable_lsp:
+                await self._enhance_with_lsp(ranked, definitions, repo_path_resolved)
+            
             # 生成地图（控制token）
             repo_map = self._generate_map(
                 ranked,
                 definitions,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                enable_lsp=enable_lsp  # 传递LSP标志
             )
             
             # 关闭数据库
@@ -314,7 +326,8 @@ class RepoMapTool(BaseTool):
                     'max_tokens': max_tokens,
                     'original_max_tokens': original_max_tokens,
                     'auto_scaled': auto_scale and (max_tokens != original_max_tokens),
-                    'chat_files_count': len(chat_files)
+                    'chat_files_count': len(chat_files),
+                    'lsp_enabled': enable_lsp
                 }
             )
             
@@ -775,7 +788,8 @@ class RepoMapTool(BaseTool):
         self,
         ranked: List[Tuple[str, float]],
         definitions: Dict[str, List[Dict]],
-        max_tokens: int
+        max_tokens: int,
+        enable_lsp: bool = False  # 🔥 新增参数
     ) -> str:
         """
         生成代码地图（控制token数量）
@@ -813,7 +827,26 @@ class RepoMapTool(BaseTool):
             
             # 定义列表
             for d in file_defs:
-                def_line = f"  {d.get('type', 'unknown')} {d['name']} (line {d['line']})"
+                # 🔥 LSP增强输出：显示类型签名和引用计数
+                has_signature = enable_lsp and d.get('lsp_signature')
+                has_ref_count = enable_lsp and d.get('lsp_ref_count', 0) > 0
+                
+                if has_signature and has_ref_count:
+                    # 完整LSP信息：类型签名 + 引用计数
+                    def_line = f"  {d.get('type', 'unknown')} {d['name']}: {d['lsp_signature']}  # {d['lsp_ref_count']}次引用"
+                elif has_signature:
+                    # 只有类型签名
+                    def_line = f"  {d.get('type', 'unknown')} {d['name']}: {d['lsp_signature']}"
+                elif has_ref_count:
+                    # 只有引用计数
+                    def_line = f"  {d.get('type', 'unknown')} {d['name']} (line {d['line']})  # {d['lsp_ref_count']}次引用"
+                elif enable_lsp and d.get('lsp_verified'):
+                    # LSP验证通过但无额外信息
+                    def_line = f"  {d.get('type', 'unknown')} {d['name']} (line {d['line']}) ✓"
+                else:
+                    # 标准格式
+                    def_line = f"  {d.get('type', 'unknown')} {d['name']} (line {d['line']})"
+                
                 def_tokens = len(def_line.split())
                 
                 if current_tokens + def_tokens > max_tokens:
@@ -831,7 +864,213 @@ class RepoMapTool(BaseTool):
         # 添加头部
         file_count = len([l for l in lines if l.startswith('\n')])
         header = f"# 代码地图 (Top {file_count} 文件)\n"
+        if enable_lsp:
+            header += "# (LSP增强: 包含类型签名和引用计数)\n"
         return header + "\n".join(lines)
+    
+    async def _enhance_with_lsp(
+        self,
+        ranked: List[Tuple[str, float]],
+        definitions: Dict[str, List[Dict]],
+        repo_path: Path,
+        top_k: int = 50
+    ) -> None:
+        """
+        使用LSP增强定义信息
+        
+        真正的增强：
+        1. 使用hover获取类型签名
+        2. 使用references获取引用计数（如果LSP支持）
+        3. 为符号添加完整的LSP信息
+        """
+        from .lsp_tools import with_lsp_client, get_lsp_manager
+        
+        try:
+            manager = get_lsp_manager()
+            
+            # 按文件分组
+            files_to_enhance: Dict[str, List[Dict]] = {}
+            count = 0
+            
+            for file_path, score in ranked:
+                if count >= top_k:
+                    break
+                
+                if file_path not in definitions:
+                    continue
+                
+                file_defs = [d for d in definitions[file_path] if d.get("kind") == "def"]
+                
+                if file_defs:
+                    files_to_enhance[file_path] = file_defs
+                    count += len(file_defs)
+                    if count >= top_k:
+                        excess = count - top_k
+                        files_to_enhance[file_path] = file_defs[:-excess] if excess > 0 else file_defs
+                        break
+            
+            logger.info(f"🔥 LSP增强: 处理{len(files_to_enhance)}个文件，获取类型信息和引用计数...")
+            
+            enhanced_count = 0
+            skipped_count = 0
+            
+            for file_path, file_defs in files_to_enhance.items():
+                try:
+                    abs_file_path = repo_path / file_path
+                    
+                    if not abs_file_path.exists():
+                        skipped_count += len(file_defs)
+                        continue
+                    
+                    # 检查LSP支持
+                    ext = abs_file_path.suffix
+                    server_config = manager.find_server_for_extension(ext)
+                    if not server_config or not manager.is_server_installed(server_config):
+                        skipped_count += len(file_defs)
+                        continue
+                    
+                    # 获取LSP符号
+                    symbols = await with_lsp_client(
+                        str(abs_file_path),
+                        lambda client: client.document_symbols(str(abs_file_path))
+                    )
+                    
+                    if not symbols:
+                        logger.debug(f"  {file_path}: 未获取到符号")
+                        skipped_count += len(file_defs)
+                        continue
+                    
+                    logger.debug(f"  {file_path}: 获取到{len(symbols)}个符号，处理{len(file_defs)}个定义")
+                    
+                    # 为每个定义获取LSP信息
+                    for defn in file_defs:
+                        target_line = defn['line'] - 1
+                        target_name = defn['name']
+                        
+                        # 匹配符号
+                        matching_symbol = None
+                        for sym in symbols:
+                            if 'range' in sym:
+                                sym_line = sym['range']['start']['line']
+                                sym_name = sym.get('name', '')
+                                if abs(sym_line - target_line) <= 2 and sym_name == target_name:
+                                    matching_symbol = sym
+                                    break
+                        
+                        if not matching_symbol:
+                            for sym in symbols:
+                                if 'range' in sym:
+                                    sym_line = sym['range']['start']['line']
+                                    sym_name = sym.get('name', '')
+                                    if abs(sym_line - target_line) <= 10 and sym_name == target_name:
+                                        matching_symbol = sym
+                                        break
+                        
+                        if matching_symbol:
+                            line = matching_symbol['range']['start']['line']
+                            char = matching_symbol['range']['start']['character']
+                            
+                            # 转换为1-based行号
+                            line_1based = line + 1
+                            
+                            # 🔥 关键：使用selectionRange（符号名称的位置）而不是range（整个定义的位置）
+                            if 'selectionRange' in matching_symbol:
+                                sel_line = matching_symbol['selectionRange']['start']['line']
+                                sel_char = matching_symbol['selectionRange']['start']['character']
+                                line_1based = sel_line + 1
+                                char = sel_char
+                            
+                            has_info = False
+                            
+                            # 1. 获取hover信息（类型签名）
+                            try:
+                                hover_info = await with_lsp_client(
+                                    str(abs_file_path),
+                                    lambda client: client.hover(str(abs_file_path), line_1based, char)
+                                )
+                                
+                                if hover_info and 'contents' in hover_info:
+                                    signature = self._extract_signature(hover_info['contents'])
+                                    if signature:
+                                        defn['lsp_signature'] = signature
+                                        has_info = True
+                                        logger.debug(f"    ✓ {target_name}: {signature}")
+                            except Exception as e:
+                                logger.debug(f"    hover失败 {target_name}: {e}")
+                            
+                            # 2. 获取引用计数
+                            try:
+                                references = await with_lsp_client(
+                                    str(abs_file_path),
+                                    lambda client: client.references(
+                                        str(abs_file_path), line_1based, char,
+                                        include_declaration=False
+                                    )
+                                )
+                                
+                                if references and len(references) > 0:
+                                    defn['lsp_ref_count'] = len(references)
+                                    has_info = True
+                                    logger.debug(f"    ✓ {target_name}: {len(references)}次引用")
+                            except Exception as e:
+                                logger.debug(f"    references失败 {target_name}: {e}")
+                            
+                            # 标记为已验证
+                            defn['lsp_verified'] = True
+                            if has_info:
+                                enhanced_count += 1
+                            else:
+                                skipped_count += 1
+                        else:
+                            skipped_count += 1
+                
+                except Exception as e:
+                    logger.debug(f"处理文件失败 {file_path}: {e}")
+                    skipped_count += len(file_defs)
+                    continue
+            
+            logger.info(f"✅ LSP增强完成: {enhanced_count}个符号增强, {skipped_count}个跳过")
+        
+        except Exception as e:
+            logger.warning(f"LSP增强失败: {e}")
+    
+    def _extract_signature(self, contents) -> Optional[str]:
+        """从hover contents中提取签名"""
+        try:
+            # contents可能是字符串、MarkupContent或列表
+            if isinstance(contents, dict) and 'value' in contents:
+                text = contents['value']
+            elif isinstance(contents, str):
+                text = contents
+            elif isinstance(contents, list) and len(contents) > 0:
+                first = contents[0]
+                if isinstance(first, dict) and 'value' in first:
+                    text = first['value']
+                elif isinstance(first, str):
+                    text = first
+                else:
+                    return None
+            else:
+                return None
+            
+            # 清理markdown
+            text = text.strip()
+            if text.startswith('```'):
+                lines = text.split('\n')
+                if len(lines) > 2:
+                    text = '\n'.join(lines[1:-1]).strip()
+            
+            # 只保留第一行（函数签名）
+            signature = text.split('\n')[0].strip()
+            
+            # 限制长度
+            if len(signature) > 100:
+                signature = signature[:97] + '...'
+            
+            return signature if signature else None
+        
+        except Exception:
+            return None
 
 
 class GetRepoStructureTool(BaseTool):

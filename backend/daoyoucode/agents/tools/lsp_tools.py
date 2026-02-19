@@ -43,11 +43,6 @@ BUILTIN_LSP_SERVERS = {
         command=["pyright-langserver", "--stdio"],
         extensions=[".py"]
     ),
-    "pylsp": LSPServerConfig(
-        id="pylsp",
-        command=["pylsp"],
-        extensions=[".py"]
-    ),
     "typescript-language-server": LSPServerConfig(
         id="typescript-language-server",
         command=["typescript-language-server", "--stdio"],
@@ -488,6 +483,24 @@ class LSPClient:
             'textDocument': {'uri': abs_path.as_uri()},
             'position': {'line': line - 1, 'character': character},
             'context': {'includeDeclaration': include_declaration}
+        })
+        
+        return result
+    
+    async def hover(self, file_path: str, line: int, character: int):
+        """
+        获取hover信息（类型签名、文档等）
+        
+        Args:
+            line: 1-based行号（与definition、references一致）
+            character: 0-based字符位置
+        """
+        abs_path = Path(file_path).resolve()
+        await self.open_file(str(abs_path))
+        
+        result = await self._send('textDocument/hover', {
+            'textDocument': {'uri': abs_path.as_uri()},
+            'position': {'line': line - 1, 'character': character}
         })
         
         return result
