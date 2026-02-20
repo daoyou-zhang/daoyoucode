@@ -654,7 +654,7 @@ class ApplyPatchTool(BaseTool):
     应用 Unified Diff（editblock/udiff 式细粒度编辑）
     
     接受模型输出的标准 unified diff 文本，按 hunk 精确应用，便于审计和回滚。
-    参考 aider 的 udiff 编辑范式。
+    采用标准 unified diff 编辑范式。
     """
 
     def __init__(self):

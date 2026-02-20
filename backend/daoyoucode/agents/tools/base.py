@@ -19,13 +19,13 @@ class ToolContext:
     工具上下文
     
     包含工具执行所需的所有环境信息，确保路径处理的一致性。
-    参考 daoyouCodePilot 和 aider 的设计。
+    采用智能路径解析设计。
     
     Attributes:
         repo_path: 仓库根路径（绝对路径）
         session_id: 会话ID
         user_id: 用户ID（可选）
-        subtree_only: 是否只扫描当前目录及其子目录（参考 aider）
+        subtree_only: 是否只扫描当前目录及其子目录
         cwd: 当前工作目录（用于 subtree_only 过滤）
     """
     repo_path: Path
@@ -51,7 +51,7 @@ class ToolContext:
         """
         判断路径是否应该被包含（用于 subtree_only 过滤）
         
-        参考 aider 的实现：
+        实现逻辑：
         - 如果 subtree_only=False，包含所有路径
         - 如果 subtree_only=True，只包含 cwd 及其子目录下的路径
         
@@ -211,7 +211,6 @@ class BaseTool(ABC):
             'daoyoucodepilot',
             'oh-my-opencode',
             'opencode',
-            'aider',
             'cursor'
         ]
         

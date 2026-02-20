@@ -24,7 +24,7 @@ def determine_repo_path(files: Optional[List[Path]], repo_arg: Path) -> Path:
     3. 否则，从当前目录向上查找 git 仓库
     4. 如果找不到 git 仓库，使用当前目录
     
-    参考：aider 的实现方式
+    采用智能路径解析策略
     """
     try:
         import git
@@ -120,7 +120,7 @@ def main(
     import uuid
     import os
     
-    # 使用新的 repo_path 确定逻辑（参考 aider）
+    # 使用智能 repo_path 确定逻辑
     repo_path = determine_repo_path(files, repo)
     
     # 显示欢迎横幅

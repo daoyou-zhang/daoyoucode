@@ -265,7 +265,7 @@ class RepoMapTool(BaseTool):
             chat_files = chat_files or []
             mentioned_idents = mentioned_idents or []
             
-            # 智能调整token预算（借鉴aider）
+            # 智能调整token预算
             original_max_tokens = max_tokens
             if auto_scale:
                 if not chat_files or len(chat_files) == 0:

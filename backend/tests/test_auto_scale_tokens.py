@@ -258,7 +258,7 @@ async def main():
         print("- 无对话文件时，自动扩大到6000 tokens（2倍）")
         print("- 有对话文件时，保持3000 tokens")
         print("- 可以通过auto_scale=False禁用")
-        print("- 借鉴aider的智能策略，更经济实用")
+        print("- 采用智能策略，更经济实用")
         return 0
     else:
         print("\n❌ 部分测试失败")

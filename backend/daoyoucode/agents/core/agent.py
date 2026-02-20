@@ -436,7 +436,7 @@ class BaseAgent(ABC):
    - ✅ 正确：text_search(query="example", directory=".")
    - ❌ 错误：text_search(query="example", directory="./src")
 
-4. 细粒度编辑与验证（对齐 aider）
+4. 细粒度编辑与验证
    - 可用 apply_patch(diff="...") 提交 unified diff，便于审计和回滚。
    - 编辑后建议调用 run_lint 或 run_test 验证，再根据输出修复。
 
