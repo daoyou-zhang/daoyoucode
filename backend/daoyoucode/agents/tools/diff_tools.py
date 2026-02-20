@@ -483,12 +483,14 @@ class SearchReplaceTool(BaseTool):
             replace_all: 是否替换所有出现
         """
         try:
-            path = Path(file_path)
+            # 使用 resolve_path 解析路径
+            path = self.resolve_path(file_path)
+            
             if not path.exists():
                 return ToolResult(
                     success=False,
                     content=None,
-                    error=f"File not found: {file_path}"
+                    error=f"File not found: {file_path} (resolved to {path})"
                 )
             
             # 读取文件
