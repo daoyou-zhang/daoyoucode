@@ -218,12 +218,12 @@ class GitStatusTool(BaseTool):
 
 
 class GitDiffTool(BaseTool):
-    """获取 Git 差异（占位符，待实现）"""
+    """获取 Git 差异"""
     
     def __init__(self):
         super().__init__(
             name="git_diff",
-            description="获取 Git 文件差异"
+            description="获取 Git 文件差异（显示修改内容）"
         )
     
     def get_function_schema(self) -> Dict[str, Any]:
@@ -232,17 +232,84 @@ class GitDiffTool(BaseTool):
             "description": self.description,
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "文件路径（可选，不指定则显示所有修改）"
+                    },
+                    "staged": {
+                        "type": "boolean",
+                        "description": "是否只显示已暂存的修改",
+                        "default": False
+                    }
+                },
                 "required": []
             }
         }
     
-    async def execute(self, **kwargs) -> ToolResult:
-        return ToolResult(
-            success=False,
-            content=None,
-            error="GitDiffTool 尚未实现"
-        )
+    async def execute(self, file_path: str = None, staged: bool = False) -> ToolResult:
+        """
+        获取 Git 差异
+        
+        Args:
+            file_path: 文件路径（可选）
+            staged: 是否只显示已暂存的修改
+        """
+        try:
+            import subprocess
+            
+            # 构建 git diff 命令
+            cmd = ["git", "diff"]
+            
+            if staged:
+                cmd.append("--staged")
+            
+            if file_path:
+                # 解析路径
+                path = self.resolve_path(file_path)
+                cmd.append(str(path))
+            
+            # 执行命令
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace'
+            )
+            
+            if result.returncode != 0:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"Git diff failed: {result.stderr}"
+                )
+            
+            diff_output = result.stdout
+            
+            if not diff_output.strip():
+                return ToolResult(
+                    success=True,
+                    content="No changes" if not file_path else f"No changes in {file_path}",
+                    metadata={'has_changes': False}
+                )
+            
+            return ToolResult(
+                success=True,
+                content=diff_output,
+                metadata={
+                    'has_changes': True,
+                    'file_path': file_path,
+                    'staged': staged
+                }
+            )
+        
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                content=None,
+                error=str(e)
+            )
 
 
 class GitCommitTool(BaseTool):

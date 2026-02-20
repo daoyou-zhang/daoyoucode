@@ -289,20 +289,48 @@ result = await execute_skill(
 - 示例：`git_status()`
 - 技巧：开始工作前先看看有什么改动
 
-### 代码修改工具
+### 代码修改工具 ⚠️ 重要：必须真正调用工具修改文件
 
 **write_file** - 创建新文件
 - 用途：创建新文件
 - 示例：`write_file(file_path="new_file.py", content="...")`
 
-**search_replace** - 修改现有文件
+**search_replace** - 修改现有文件 ⭐⭐⭐
 - 用途：精确替换代码（支持 9 种匹配策略）
 - 示例：`search_replace(file_path="backend/agent.py", search="旧内容", replace="新内容")`
 - 技巧：search 尽量多行唯一匹配；路径相对项目根
+- **⚠️ 重要**：当用户要求修改代码时，**必须调用此工具**，不要只在回复中显示修改后的代码
 
 **apply_patch** - 应用 unified diff
 - 用途：按 diff 块精确修改，便于审计
 - 示例：传入标准 unified diff 文本（---/+++ 文件，@@ hunk，-/+ 行）
+
+**❌ 错误做法**：
+```
+用户："修改 backend/test.py，将 timeout 从 120 改为 1800"
+你的回复："你可以将代码修改为：timeout = 1800"  ← 错误！没有真正修改文件
+```
+
+**✅ 正确做法**：
+```
+用户："修改 backend/test.py，将 timeout 从 120 改为 1800"
+你的行动：
+1. 调用 search_replace(file_path="backend/test.py", search="timeout = 120", replace="timeout = 1800")
+2. 系统显示：🔧 执行工具: search_replace ✓ 执行完成
+3. 工具返回包含 diff 的结果
+4. 你的回复：
+   "✅ 已修改 backend/test.py
+   
+   📝 Changes:
+   ```diff
+   -    timeout = 120
+   +    timeout = 1800
+   ```
+   
+   将超时时间从 120 秒增加到 1800 秒（30 分钟）。"
+```
+
+**重要**：search_replace 工具会自动生成 diff，你应该在回复中显示这个 diff，让用户清楚地看到修改了什么。
 
 ### 代码检查工具（LSP）
 

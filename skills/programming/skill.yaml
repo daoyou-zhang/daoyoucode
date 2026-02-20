@@ -2,8 +2,8 @@ name: programming
 version: 1.0.0
 description: 编程专家服务
 
-# 使用简单编排器
-orchestrator: simple
+# 使用 ReAct 编排器（更适合工具调用）
+orchestrator: react
 
 # 使用编程Agent
 agent: programmer

@@ -42,7 +42,12 @@ tools:
   - text_search           # 文本搜索（修正：原来是grep_search）
   - regex_search          # 正则搜索
   - write_file            # 写入文件（如果需要）
+  - search_replace        # 🆕 搜索替换（修改代码）
+  - apply_patch           # 🆕 应用补丁（细粒度编辑）
   - list_files            # 列出目录（修正：原来是list_directory）
+  - get_file_symbols      # 🆕 获取文件符号（AST）
+  - run_lint              # 🆕 运行 lint 验证
+  - git_diff              # 🆕 查看 git diff
 
 # 中间件
 middleware:

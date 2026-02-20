@@ -493,24 +493,45 @@ class SearchReplaceTool(BaseTool):
                     error=f"File not found: {file_path} (resolved to {path})"
                 )
             
-            # 读取文件
-            content = path.read_text(encoding='utf-8', errors='ignore')
+            # 读取原始文件内容
+            old_content = path.read_text(encoding='utf-8', errors='ignore')
             
             # 执行替换（使用模块级函数）
             from . import diff_tools
-            new_content = diff_tools.replace(content, search, replace, replace_all)
+            new_content = diff_tools.replace(old_content, search, replace, replace_all)
+            
+            # 生成 diff
+            import difflib
+            diff_lines = list(difflib.unified_diff(
+                old_content.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"a/{file_path}",
+                tofile=f"b/{file_path}",
+                lineterm=''
+            ))
+            
+            diff_text = ''.join(diff_lines) if diff_lines else "No changes"
             
             # 写入文件
             path.write_text(new_content, encoding='utf-8')
             
+            # 构建结果消息
+            result_message = f"✅ Successfully modified {file_path}\n\n"
+            result_message += "📝 Changes:\n"
+            result_message += "```diff\n"
+            result_message += diff_text
+            result_message += "\n```"
+            
             return ToolResult(
                 success=True,
-                content=f"Successfully replaced in {file_path}",
+                content=result_message,
                 metadata={
                     'file_path': str(path),
-                    'old_size': len(content),
+                    'old_size': len(old_content),
                     'new_size': len(new_content),
-                    'replace_all': replace_all
+                    'replace_all': replace_all,
+                    'diff': diff_text,
+                    'changes_count': len([line for line in diff_lines if line.startswith('+') or line.startswith('-')])
                 }
             )
         except Exception as e:
