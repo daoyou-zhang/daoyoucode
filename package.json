@@ -26,7 +26,7 @@
   "author": "daoyoucode Team",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "frontend/packages/*"
   ],
   "scripts": {
     "dev": "turbo dev",

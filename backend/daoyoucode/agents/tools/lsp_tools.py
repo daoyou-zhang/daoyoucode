@@ -114,24 +114,75 @@ class LSPClient:
     
     def is_server_installed(self) -> bool:
         """检查LSP服务器是否已安装"""
+        import sys
         command = self.server_config.command[0]
-        return shutil.which(command) is not None
+        
+        # 首先检查系统 PATH
+        if shutil.which(command) is not None:
+            return True
+        
+        # 检查虚拟环境（如果存在）
+        if hasattr(sys, 'prefix') and sys.prefix:
+            venv_scripts = Path(sys.prefix) / "Scripts"
+            if venv_scripts.exists():
+                # Windows - 检查多种扩展名
+                for ext in ['.exe', '.cmd', '.bat', '']:
+                    venv_cmd = venv_scripts / f"{command}{ext}"
+                    if venv_cmd.exists() and venv_cmd.is_file():
+                        return True
+            
+            venv_bin = Path(sys.prefix) / "bin"
+            if venv_bin.exists():
+                # Unix/Linux/Mac
+                venv_cmd = venv_bin / command
+                if venv_cmd.exists() and venv_cmd.is_file():
+                    return True
+        
+        return False
     
     async def start(self):
         """启动LSP服务器"""
-        if not self.is_server_installed():
-            raise FileNotFoundError(
-                f"LSP server not found: {self.server_config.command[0]}\n"
-                f"Please install it first."
-            )
-        
         # 准备环境变量
         import os
+        import sys
         env = dict(self.server_config.env) if self.server_config.env else {}
+        
+        # 解析命令（支持虚拟环境）
+        command = list(self.server_config.command)
+        command_name = command[0]
+        
+        # 检查虚拟环境
+        if hasattr(sys, 'prefix'):
+            venv_scripts = Path(sys.prefix) / "Scripts"
+            if venv_scripts.exists():
+                # Windows
+                for ext in ['.exe', '.cmd', '.bat']:
+                    venv_cmd = venv_scripts / f"{command_name}{ext}"
+                    if venv_cmd.exists():
+                        command[0] = str(venv_cmd)
+                        break
+            
+            venv_bin = Path(sys.prefix) / "bin"
+            if venv_bin.exists():
+                # Unix/Linux/Mac
+                venv_cmd = venv_bin / command_name
+                if venv_cmd.exists():
+                    command[0] = str(venv_cmd)
+        
+        # 如果还是找不到，尝试系统 PATH
+        if not Path(command[0]).exists():
+            which_result = shutil.which(command_name)
+            if which_result:
+                command[0] = which_result
+            else:
+                raise FileNotFoundError(
+                    f"LSP server not found: {command_name}\n"
+                    f"Please install it first."
+                )
         
         # 启动进程
         self.process = await asyncio.create_subprocess_exec(
-            *self.server_config.command,
+            *command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

@@ -1,3 +1,17 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+# 自动发现包
+where = ["."]
+include = ["daoyoucode*", "cli*"]
+exclude = ["tests*", "*.tests*", "config*"]
+
+[tool.setuptools.package-data]
+# 包含查询文件
+"daoyoucode.agents.tools" = ["queries/**/*.scm"]
+
 [project]
 name = "daoyoucode"
 version = "0.1.0"
@@ -10,22 +24,38 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 
 dependencies = [
+    # Web框架
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.5.0",
+    
+    # CLI框架
     "click>=8.1.0",
+    "typer[all]>=0.9.0",
     "rich>=13.7.0",
+    "python-dotenv>=1.0.0",
+    
+    # 代码分析工具
     "gitpython>=3.1.40",
     "tree-sitter>=0.20.0",
     "watchdog>=3.0.0",
-    # LLM模块依赖
+    "grep-ast>=0.3.0",
+    "pygments>=2.15.0",
+    
+    # LSP服务器（代码智能）
+    "pyright>=1.1.350",
+    
+    # LLM客户端依赖
     "httpx>=0.24.0",
     "pyyaml>=6.0",
     "jinja2>=3.0.0",
-    # 向量检索依赖
-    "sentence-transformers>=2.2.0",
+    
+    # 基础数据处理
     "numpy>=1.24.0",
-    "torch>=2.0.0",
+    
+    # 文本处理（可选但推荐）
+    "rank-bm25>=0.2.2",
+    "jieba>=0.42.1",
 ]
 
 [project.optional-dependencies]
@@ -38,13 +68,23 @@ dev = [
     "mypy>=1.7.0",
 ]
 
-[project.scripts]
-daoyoucode = "daoyoucode.cli.main:cli"
-dyc = "daoyoucode.cli.main:cli"
+# 本地向量检索（如果不使用API）
+embedding = [
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+]
 
-[build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
+# 完整功能（包含所有可选依赖）
+full = [
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+    "rank-bm25>=0.2.2",
+    "jieba>=0.42.1",
+]
+
+[project.scripts]
+daoyoucode = "cli.app:main"
+dyc = "cli.app:main"
 
 [tool.black]
 line-length = 100
