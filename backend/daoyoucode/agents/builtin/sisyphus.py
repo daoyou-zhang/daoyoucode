@@ -2,7 +2,7 @@
 Sisyphus - 主编排Agent
 
 负责智能任务分解和Agent调度
-借鉴oh-my-opencode的设计，实现todo驱动的工作流
+采用todo驱动的工作流设计
 
 Prompt配置在 skills/sisyphus/prompts/sisyphus.md
 """

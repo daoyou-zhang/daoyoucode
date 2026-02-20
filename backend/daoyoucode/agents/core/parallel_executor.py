@@ -2,7 +2,7 @@
 并行执行器
 
 支持真正的后台任务并行执行。
-灵感来源：oh-my-opencode的Parallel Execution
+采用高效并行执行设计
 """
 
 import asyncio

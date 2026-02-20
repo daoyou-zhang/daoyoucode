@@ -1,7 +1,7 @@
 """
-Diff工具 - 基于opencode的9种Replacer策略
+Diff工具 - 智能替换策略
 
-采用opencode最先进的Diff系统实现，支持：
+采用先进的 Diff 系统实现，支持：
 - 9种智能替换策略
 - Levenshtein距离算法
 - BlockAnchorReplacer（首尾行锚定）
@@ -102,7 +102,7 @@ class BlockAnchorReplacer(Replacer):
     """
     策略3: 首尾行锚定 + Levenshtein相似度
     
-    这是opencode最强大的策略：
+    这是最强大的策略：
     - 使用首尾行作为锚点
     - 计算中间行的Levenshtein相似度
     - 单候选阈值0.0，多候选阈值0.3

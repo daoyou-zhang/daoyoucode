@@ -2,7 +2,7 @@
 Hook生命周期系统
 
 提供灵活的扩展点，允许用户在执行流程的关键节点注入自定义逻辑。
-灵感来源：oh-my-opencode的31个生命周期Hook
+采用生命周期Hook设计
 """
 
 from typing import Callable, Dict, List, Any, Optional

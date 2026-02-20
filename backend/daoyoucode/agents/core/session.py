@@ -2,7 +2,7 @@
 Agent会话管理
 
 支持会话恢复和上下文保持。
-灵感来源：oh-my-opencode的Resume Previous Agent
+采用智能会话管理设计
 """
 
 from typing import Dict, List, Any, Optional

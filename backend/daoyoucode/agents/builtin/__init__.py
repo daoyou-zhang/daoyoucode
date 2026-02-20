@@ -13,7 +13,7 @@ from .code_explorer import CodeExplorerAgent
 from .refactor_master import RefactorMasterAgent
 from .test_expert import TestExpertAgent
 
-# 新增：借鉴oh-my-opencode的高级Agent
+# 新增：高级Agent
 from .sisyphus import SisyphusAgent
 from .oracle import OracleAgent
 from .librarian import LibrarianAgent
@@ -25,10 +25,10 @@ def register_builtin_agents():
     # 主Agent
     register_agent(MainAgent())
     
-    # 编排Agent（借鉴oh-my-opencode）
+    # 编排Agent
     register_agent(SisyphusAgent())          # 主编排Agent
     
-    # 咨询Agent（借鉴oh-my-opencode）
+    # 咨询Agent
     register_agent(OracleAgent())            # 高IQ咨询Agent（只读）
     register_agent(LibrarianAgent())         # 文档搜索Agent（只读）
     

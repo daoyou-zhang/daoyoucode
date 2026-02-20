@@ -2,7 +2,7 @@
 代码库评估器
 
 评估代码库成熟度和状态。
-灵感来源：oh-my-opencode的Codebase Assessment
+采用智能代码库评估设计
 """
 
 from pathlib import Path

@@ -2,7 +2,7 @@
 Librarian - 文档和代码搜索Agent
 
 专注于信息检索和知识搜索
-借鉴oh-my-opencode的设计
+采用智能搜索设计
 
 Prompt配置在 skills/librarian/prompts/librarian.md
 """

@@ -81,7 +81,6 @@ hooks:
 metadata:
   category: search
   cost: MEDIUM
-  source: oh-my-opencode
   triggers:
     - "查找"
     - "搜索"

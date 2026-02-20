@@ -1,6 +1,6 @@
 name: code-exploration
 version: 1.0.0
-description: 代码库搜索和探索（借鉴oh-my-opencode的Explore）
+description: 代码库搜索和探索
 
 # 使用简单编排器
 orchestrator: simple
@@ -85,7 +85,6 @@ hooks:
 metadata:
   category: exploration
   cost: FREE
-  source: oh-my-opencode
   triggers:
     - "查找代码结构"
     - "发现模式和风格"

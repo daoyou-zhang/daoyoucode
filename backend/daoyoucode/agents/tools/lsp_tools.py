@@ -1,13 +1,11 @@
 """
 LSP工具 - Language Server Protocol集成
 
-基于oh-my-opencode的最佳实现：
+采用业界最佳实践：
 - 6个独立工具（diagnostics, rename, goto_definition, find_references, symbols, code_actions）
 - LSP服务器管理（启动、停止、重启）
 - 支持多种语言（Python、JavaScript、TypeScript等）
 - 结果限制合理（避免输出过多）
-
-参考：oh-my-opencode/src/tools/lsp/
 """
 
 from pathlib import Path
@@ -36,7 +34,7 @@ class LSPServerConfig:
     initialization: Optional[Dict[str, Any]] = None
 
 
-# 内置LSP服务器配置（参考oh-my-opencode）
+# 内置LSP服务器配置
 BUILTIN_LSP_SERVERS = {
     "pyright": LSPServerConfig(
         id="pyright",
@@ -76,7 +74,7 @@ EXT_TO_LANG = {
     ".hpp": "cpp",
 }
 
-# 默认限制（参考oh-my-opencode）
+# 默认限制
 DEFAULT_MAX_REFERENCES = 50
 DEFAULT_MAX_SYMBOLS = 50
 DEFAULT_MAX_DIAGNOSTICS = 100
@@ -95,7 +93,7 @@ class LSPClient:
     - 诊断信息缓存
     - 文件同步
     
-    参考：oh-my-opencode/src/tools/lsp/client.ts
+    采用标准LSP协议实现
     """
     
     def __init__(self, root: str, server_config: LSPServerConfig):
@@ -714,7 +712,7 @@ class LSPServerManager:
     - 引用计数管理
     - 🔥 自动检测和安装LSP服务器
     
-    参考：oh-my-opencode/src/tools/lsp/client.ts (LSPServerManager)
+    采用智能LSP服务器管理
     """
     
     _instance = None
@@ -1047,7 +1045,7 @@ async def with_lsp_client(file_path: str, callback):
     """
     使用LSP客户端执行操作的辅助函数
     
-    参考：oh-my-opencode/src/tools/lsp/utils.ts (withLspClient)
+    采用标准LSP操作模式
     """
     file_path_obj = Path(file_path).resolve()
     
@@ -1085,7 +1083,7 @@ def format_location(location: Dict[str, Any]) -> str:
     """
     格式化位置信息
     
-    参考：oh-my-opencode/src/tools/lsp/utils.ts (formatLocation)
+    标准LSP位置格式化
     """
     if 'targetUri' in location:
         # LocationLink
@@ -1118,7 +1116,7 @@ class LSPDiagnosticsTool(BaseTool):
     """
     获取诊断信息（错误、警告等）
     
-    参考：oh-my-opencode/src/tools/lsp/tools.ts (lsp_diagnostics)
+    标准LSP诊断工具
     """
     
     def __init__(self):
@@ -1251,7 +1249,7 @@ class LSPGotoDefinitionTool(BaseTool):
     """
     跳转到定义
     
-    参考：oh-my-opencode/src/tools/lsp/tools.ts (lsp_goto_definition)
+    标准LSP跳转工具
     """
     
     def __init__(self):
@@ -1341,7 +1339,7 @@ class LSPFindReferencesTool(BaseTool):
     """
     查找引用
     
-    参考：oh-my-opencode/src/tools/lsp/tools.ts (lsp_find_references)
+    标准LSP引用查找工具
     """
     
     def __init__(self):
@@ -1442,7 +1440,7 @@ class LSPSymbolsTool(BaseTool):
     """
     获取符号列表
     
-    参考：oh-my-opencode/src/tools/lsp/tools.ts (lsp_symbols)
+    标准LSP符号工具
     """
     
     def __init__(self):
@@ -1574,7 +1572,7 @@ class LSPRenameTool(BaseTool):
     """
     重命名符号
     
-    参考：oh-my-opencode/src/tools/lsp/tools.ts (lsp_rename)
+    标准LSP重命名工具
     """
     
     def __init__(self):
@@ -1700,7 +1698,7 @@ class LSPCodeActionsTool(BaseTool):
     """
     获取代码操作（快速修复等）
     
-    参考：oh-my-opencode/src/tools/lsp/tools.ts (lsp_code_actions)
+    标准LSP代码操作工具
     """
     
     def __init__(self):

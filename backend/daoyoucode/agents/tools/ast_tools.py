@@ -1,7 +1,7 @@
 """
 AST工具 - 基于ast-grep的AST级别代码搜索和替换
 
-来源：oh-my-opencode（独有功能）
+采用先进的AST分析技术
 特点：
 1. AST级别的精确匹配（不是文本匹配）
 2. 支持25种语言
@@ -10,9 +10,7 @@ AST工具 - 基于ast-grep的AST级别代码搜索和替换
 5. 自动下载和管理ast-grep二进制
 
 对比结论：
-- oh-my-opencode ✅ 独有：ast-grep集成，25种语言，智能提示
-- opencode: 无AST工具
-- daoyouCodePilot: 无AST工具
+- DaoyouCode ✅ 独有：ast-grep集成，25种语言，智能提示
 """
 
 import asyncio
@@ -90,7 +88,7 @@ class AstGrepManager:
     3. 管理缓存目录
     4. 检查NAPI可用性（环境诊断）
     
-    注意：与oh-my-opencode一致，只使用CLI模式，不使用NAPI
+    注意：只使用CLI模式，不使用NAPI
     """
     
     # GitHub仓库

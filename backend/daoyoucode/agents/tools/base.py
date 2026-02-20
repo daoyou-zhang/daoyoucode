@@ -209,8 +209,6 @@ class BaseTool(ABC):
         other_projects = [
             'daoyouCodePilot',
             'daoyoucodepilot',
-            'oh-my-opencode',
-            'opencode',
             'cursor'
         ]
         

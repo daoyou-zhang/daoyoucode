@@ -1,7 +1,7 @@
 """
 代码探索Agent
 
-借鉴oh-my-opencode的Explore智能体
+采用智能代码探索设计
 Prompt配置在 skills/code-exploration/prompts/explore.md
 """
 

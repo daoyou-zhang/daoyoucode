@@ -2,7 +2,7 @@
 细粒度权限控制系统
 
 提供文件级别、目录级别、操作级别的权限控制。
-灵感来源：opencode的细粒度权限规则
+采用细粒度权限规则设计
 """
 
 from typing import Dict, List, Literal, Optional, Union, Any
@@ -82,7 +82,7 @@ class PermissionManager:
     
     def _init_default_permissions(self):
         """初始化默认权限"""
-        # 读取权限（灵感来自opencode）
+        # 读取权限
         read_category = PermissionCategory("read", default_action="allow")
         read_category.add_rule("*", "allow", priority=1000)
         # 敏感文件需要确认

@@ -18,12 +18,12 @@ skills/
 │   └── prompts/
 │       └── programmer.md
 │
-├── code-analysis/            # 代码分析（借鉴oh-my-opencode Oracle）
+├── code-analysis/            # 代码分析
 │   ├── skill.yaml
 │   └── prompts/
 │       └── oracle.md
 │
-├── code-exploration/         # 代码搜索（借鉴oh-my-opencode Explore）
+├── code-exploration/         # 代码搜索
 │   ├── skill.yaml
 │   └── prompts/
 │       └── explore.md
@@ -60,14 +60,12 @@ skills/
 ### 3. code-analysis - 代码分析
 - **Agent**: code_analyzer
 - **模型**: qwen-max
-- **来源**: oh-my-opencode Oracle
 - **用途**: 架构分析、代码审查
 - **特点**: 只读分析、务实建议
 
 ### 4. code-exploration - 代码搜索
 - **Agent**: code_explorer
 - **模型**: qwen-coder-plus
-- **来源**: oh-my-opencode Explore
 - **用途**: 快速查找代码位置
 - **特点**: 并行搜索、结构化输出
 
@@ -276,4 +274,3 @@ def register_builtin_agents():
 
 - [Agent系统文档](../backend/daoyoucode/agents/README.md)
 - [编程Agent文档](../backend/PROGRAMMING_AGENTS.md)
-- [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode)

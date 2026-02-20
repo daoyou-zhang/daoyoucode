@@ -2,7 +2,7 @@
 Agent行为指南
 
 提供结构化的Agent行为指导，让Agent行为更可预测。
-灵感来源：oh-my-opencode的Sisyphus行为指南
+采用结构化行为指南设计
 """
 
 from typing import Dict, List, Any, Optional

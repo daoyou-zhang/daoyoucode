@@ -1,7 +1,7 @@
 """
 Diff工具测试
 
-测试基于opencode的9种Replacer策略
+测试9种智能Replacer策略
 """
 
 import pytest

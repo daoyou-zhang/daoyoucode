@@ -13,7 +13,7 @@
    - ✅ `backend/daoyoucode/agents/core/agent.py`
    - ✅ `backend/config/llm_config.yaml`
    - ❌ `daoyouCodePilot/examples/types_example.py` （错误！这是其他项目）
-   - ❌ `oh-my-opencode/src/agents/` （错误！这是其他项目）
+   - ❌ `other-project/src/` （错误！这是其他项目）
 
 **如果你不确定文件在哪里**：
 1. 使用 `text_search` 搜索文件名

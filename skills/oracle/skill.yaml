@@ -78,7 +78,6 @@ hooks:
 metadata:
   category: advisor
   cost: HIGH
-  source: oh-my-opencode
   triggers:
     - "架构决策"
     - "代码审查"

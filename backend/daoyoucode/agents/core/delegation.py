@@ -2,7 +2,7 @@
 结构化委托系统
 
 提供7段式委托提示结构，提升子Agent成功率。
-灵感来源：oh-my-opencode的Delegation Prompt Structure
+采用结构化委托设计
 """
 
 from typing import List, Dict, Any, Optional

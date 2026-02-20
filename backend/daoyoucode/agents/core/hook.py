@@ -1,7 +1,7 @@
 """
 Hook系统
 
-提供统一的扩展点，类似oh-my-opencode的31个Hook
+提供统一的扩展点，支持灵活的生命周期管理
 """
 
 from abc import ABC, abstractmethod

@@ -2,7 +2,7 @@
 Oracle - 高IQ咨询Agent
 
 只读分析，提供架构建议和技术咨询
-借鉴oh-my-opencode的设计
+采用高IQ分析设计
 
 Prompt配置在 skills/oracle/prompts/oracle.md
 """

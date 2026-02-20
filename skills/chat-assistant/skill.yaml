@@ -8,7 +8,7 @@ agent: MainAgent
 
 # Prompt配置
 prompt:
-  file: prompts/chat_assistant.md  # 改进版本（结合 DaoyouCode 和 Oh-My-OpenCode 最佳实践）
+  file: prompts/chat_assistant.md  # 改进版本（采用业界最佳实践）
 
 # 「了解项目」预取：用 LLM 判断意图（如「我想知道架构」也会触发），不再依赖写死触发词
 project_understanding_use_intent: true
