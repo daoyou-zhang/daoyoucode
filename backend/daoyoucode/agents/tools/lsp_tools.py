@@ -920,12 +920,32 @@ DaoyouCode需要LSP服务器来提供深度代码理解能力。
     
     def find_server_for_extension(self, ext: str) -> Optional[LSPServerConfig]:
         """根据文件扩展名查找LSP服务器"""
+        import sys
+        
         for server_config in BUILTIN_LSP_SERVERS.values():
             if ext in server_config.extensions:
-                # 检查是否已安装
                 command = server_config.command[0]
+                
+                # 首先检查系统 PATH
                 if shutil.which(command):
                     return server_config
+                
+                # 检查虚拟环境
+                if hasattr(sys, 'prefix') and sys.prefix:
+                    venv_scripts = Path(sys.prefix) / "Scripts"
+                    if venv_scripts.exists():
+                        # Windows
+                        for ext_suffix in ['.exe', '.cmd', '.bat', '']:
+                            venv_cmd = venv_scripts / f"{command}{ext_suffix}"
+                            if venv_cmd.exists() and venv_cmd.is_file():
+                                return server_config
+                    
+                    venv_bin = Path(sys.prefix) / "bin"
+                    if venv_bin.exists():
+                        # Unix/Linux/Mac
+                        venv_cmd = venv_bin / command
+                        if venv_cmd.exists() and venv_cmd.is_file():
+                            return server_config
         
         return None
     
