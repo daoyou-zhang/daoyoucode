@@ -205,6 +205,35 @@ class BaseTool(ABC):
         Returns:
             绝对路径
         """
+        # 🆕 检测其他项目名称（防止 AI 混淆项目）
+        other_projects = [
+            'daoyouCodePilot',
+            'daoyoucodepilot',
+            'oh-my-opencode',
+            'opencode',
+            'aider',
+            'cursor'
+        ]
+        
+        path_parts = Path(path).parts
+        if path_parts:
+            first_part = path_parts[0]
+            first_part_lower = first_part.lower()
+            
+            for project in other_projects:
+                if project.lower() == first_part_lower:
+                    self.logger.error(
+                        f"❌ 路径错误: {path}\n"
+                        f"   '{first_part}' 不是当前项目的目录\n"
+                        f"   当前项目: {self.context.repo_path.name}\n"
+                        f"   提示：使用相对于项目根的路径，如 'backend/file.py'"
+                    )
+                    raise ValueError(
+                        f"路径错误：'{path}' 包含其他项目名称 '{first_part}'。\n"
+                        f"当前项目是 '{self.context.repo_path.name}'，"
+                        f"请使用相对路径，如 'backend/daoyoucode/agents/core/agent.py'"
+                    )
+        
         # 🆕 检测占位符路径
         placeholder_patterns = [
             'your-repo-path',
