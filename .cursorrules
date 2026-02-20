@@ -1,6 +1,0 @@
-# DaoyouCode — Cursor 阅读指引
-
-- **快速理解项目**：先读仓库根目录的 `ARCHITECTURE.md`（数据流、关键目录、与 Cursor/aider 的对比），再读 `backend/README.md`。
-- **主代码位置**：`backend/daoyoucode/agents/`（Agent、编排器、工具、LLM、记忆），`backend/cli/`（CLI 子命令）。
-- **入口**：`backend/daoyoucode.py`、`backend/cli/app.py`。行为由 `skills/*/skill.yaml` 配置驱动。
-- **路径约定**：工具与 prompt 中仓库/目录参数用 `.` 表示项目根；文件路径相对项目根。

@@ -283,6 +283,12 @@ def handle_command(cmd: str, ui_context: dict) -> bool:
             ui_context['model'] = args
             console.print(f"[green]✓[/green] 已切换到模型: [cyan]{args}[/cyan]")
     
+    elif command == "/clear":
+        clear_history(ui_context)
+    
+    elif command == "/history":
+        show_history(ui_context)
+    
     elif command == "/session":
         console.print(f"[cyan]会话ID: {ui_context['session_id']}[/cyan]")
     
