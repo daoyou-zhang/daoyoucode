@@ -563,9 +563,17 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
             return result
         
         try:
-            result = loop.run_until_complete(asyncio.wait_for(_run(), timeout=120))
+            # 从配置读取超时时间，默认30分钟
+            from daoyoucode.agents.llm.config_loader import load_llm_config
+            try:
+                llm_config = load_llm_config()
+                cli_timeout = llm_config.get('default', {}).get('timeout', 1800)
+            except:
+                cli_timeout = 1800  # 默认30分钟
+            
+            result = loop.run_until_complete(asyncio.wait_for(_run(), timeout=cli_timeout))
         except asyncio.TimeoutError:
-            console.print("[yellow]警告: 请求超时（120秒），请检查网络或稍后重试。[/yellow]")
+            console.print(f"[yellow]警告: 请求超时（{cli_timeout}秒），请检查网络或稍后重试。[/yellow]")
             ai_response = "抱歉，本次请求超时。请检查网络与 API 配置后重试。"
             result = None
         
