@@ -255,6 +255,36 @@ def show_banner(model: str, repo: Path, files: Optional[List[Path]], skill: str,
     console.print("  * 按 [cyan]Ctrl+C[/cyan] 也可退出")
 
 
+def show_current_config(ui_context: dict):
+    """显示当前配置（用于切换后更新显示）"""
+    from cli.ui.console import console
+    from pathlib import Path
+    
+    repo = Path(ui_context['repo'])
+    skill = ui_context.get('skill', 'chat-assistant')
+    model = ui_context.get('model', 'qwen-plus')
+    files = ui_context.get('initial_files', [])
+    subtree_only = ui_context.get('subtree_only', False)
+    
+    scope_info = ""
+    if subtree_only:
+        cwd = Path(ui_context.get('cwd', Path.cwd()))
+        try:
+            rel_cwd = cwd.relative_to(repo)
+            scope_info = f"\n* 扫描范围: [yellow]{rel_cwd}/ (仅当前目录，代码地图等)[/yellow]"
+        except ValueError:
+            scope_info = f"\n* 扫描范围: [yellow]当前目录[/yellow]"
+    
+    info_panel = f"""
+[bold]当前配置[/bold]
+* Skill: [cyan]{skill}[/cyan]
+* 模型: [cyan]{model}[/cyan]
+* 仓库: [dim]{repo}[/dim] (git 根，文档检索用此)
+* 文件: [dim]{len(files)} 个[/dim]{scope_info}
+"""
+    console.print(Panel(info_panel, border_style="cyan", padding=(0, 2)))
+
+
 def handle_command(cmd: str, ui_context: dict) -> bool:
     """
     处理命令
@@ -939,6 +969,9 @@ def switch_skill(skill_name: str, ui_context: dict):
         console.print(f"[green]✓[/green] 已切换到 [cyan]{skill_name}[/cyan]")
         console.print(f"[dim]{skill.description}[/dim]")
         console.print(f"[dim]编排器: {skill.orchestrator}[/dim]")
+        
+        # 显示更新后的配置
+        show_current_config(ui_context)
     
     except Exception as e:
         console.print(f"[red]切换Skill失败: {e}[/red]")
