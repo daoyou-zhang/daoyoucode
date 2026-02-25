@@ -66,6 +66,7 @@ class MemoryStorage:
         self._preferences_file = self.user_dir / 'preferences.json'
         self._profiles_file = self.user_dir / 'user_profile.json'
         self._user_sessions_file = self.user_dir / 'user_sessions.json'
+        self._tasks_file = self.user_dir / 'tasks.json'  # 🆕 任务历史（用户级）
         
         # 项目级文件路径（如果有项目）
         if self.project_dir:
@@ -273,23 +274,52 @@ class MemoryStorage:
             for key, data in prefs.items()
         }
     
-    # ========== 任务历史（已废弃，仅用于迁移）==========
+    # ========== 任务历史（用户级）==========
     
     def add_task(
         self,
         user_id: str,
         task: Dict[str, Any]
     ):
-        """添加任务（已废弃）"""
-        logger.warning("add_task 已废弃，不再使用任务历史")
+        """
+        添加任务到历史
+        
+        Args:
+            user_id: 用户ID
+            task: 任务信息
+        """
+        if user_id not in self._tasks:
+            self._tasks[user_id] = []
+        
+        self._tasks[user_id].append({
+            **task,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # 保持最近N个任务
+        if len(self._tasks[user_id]) > self.max_tasks:
+            self._tasks[user_id] = self._tasks[user_id][-self.max_tasks:]
+        
+        # 🆕 持久化到用户级（任务历史是跨项目的）
+        self._save_tasks()
     
     def get_task_history(
         self,
         user_id: str,
         limit: int = 10
     ) -> List[Dict]:
-        """获取任务历史（已废弃）"""
-        return []
+        """
+        获取任务历史
+        
+        Args:
+            user_id: 用户ID
+            limit: 限制数量
+        
+        Returns:
+            任务历史列表
+        """
+        tasks = self._tasks.get(user_id, [])
+        return tasks[-limit:]
     
     # ========== 项目上下文（项目级）==========
     
@@ -475,6 +505,7 @@ class MemoryStorage:
             'total_sessions': len(self._conversations),
             'total_conversations': total_conversations,
             'total_users': len(self._preferences),
+            'total_tasks': sum(len(tasks) for tasks in self._tasks.values()),
             'shared_contexts': len(self._shared_contexts),
             'summaries': len(self._summaries),
             'key_info': len(self._key_info),
@@ -509,6 +540,13 @@ class MemoryStorage:
                     self._user_sessions = defaultdict(list, data.get('user_sessions', {}))
                     self._session_users = data.get('session_users', {})
                 logger.info(f"加载了 {len(self._user_sessions)} 个用户的会话映射")
+            
+            # 🆕 加载任务历史
+            if self._tasks_file.exists():
+                with open(self._tasks_file, 'r', encoding='utf-8') as f:
+                    self._tasks = json.load(f)
+                total_tasks = sum(len(tasks) for tasks in self._tasks.values())
+                logger.info(f"加载了 {total_tasks} 个任务")
             
             # 加载摘要
             if self._summaries_file.exists():
@@ -576,6 +614,14 @@ class MemoryStorage:
                 json.dump(self._preferences, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"保存用户偏好失败: {e}")
+    
+    def _save_tasks(self):
+        """保存任务历史"""
+        try:
+            with open(self._tasks_file, 'w', encoding='utf-8') as f:
+                json.dump(self._tasks, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存任务历史失败: {e}")
     
     def _save_summaries(self):
         """保存摘要"""

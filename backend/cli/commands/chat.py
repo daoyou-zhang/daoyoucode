@@ -137,6 +137,10 @@ def main(
         from daoyoucode.agents.llm.config_loader import auto_configure
         from daoyoucode.agents.memory.manager import get_memory_manager
         
+        # 🆕 初始化记忆管理器（支持项目级存储）
+        # 注意：必须在 initialize_agent_system() 之前初始化，这样 Agent 才能获取到正确的实例
+        memory_manager = get_memory_manager(project_path=repo_path, force_new=True)
+        
         initialize_agent_system()
         
         registry = get_tool_registry()
@@ -149,9 +153,6 @@ def main(
         
         client_manager = get_client_manager()
         auto_configure(client_manager)
-        
-        # 🆕 初始化记忆管理器（支持项目级存储）
-        memory_manager = get_memory_manager(project_path=repo_path, force_new=True)
         
         console.print("[dim]✓ 初始化完成[/dim]")
     except Exception as e:
