@@ -1,0 +1,2 @@
+# 这个文件用于让 Git 追踪 .daoyoucode 目录结构
+# 实际的 .daoyoucode/ 目录会被 .gitignore 忽略

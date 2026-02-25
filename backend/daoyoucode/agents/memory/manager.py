@@ -4,6 +4,7 @@
 """
 
 from typing import Dict, List, Optional, Any
+from pathlib import Path
 import logging
 
 from .storage import MemoryStorage
@@ -27,14 +28,15 @@ class MemoryManager:
     6. 缓存层（减少文件I/O）
     """
     
-    def __init__(self, enable_tree: bool = True):
+    def __init__(self, enable_tree: bool = True, project_path: Optional[Path] = None):
         """
         初始化记忆管理器
         
         Args:
             enable_tree: 是否启用对话树（默认启用）
+            project_path: 项目路径（用于项目级存储）
         """
-        self.storage = MemoryStorage()
+        self.storage = MemoryStorage(project_path=project_path)
         self.detector = FollowupDetector()
         
         # ========== 缓存层 ==========
@@ -381,12 +383,21 @@ class MemoryManager:
 _memory_manager_instance = None
 
 
-def get_memory_manager() -> MemoryManager:
-    """获取记忆管理器单例"""
+def get_memory_manager(project_path: Optional[Path] = None, force_new: bool = False) -> MemoryManager:
+    """
+    获取记忆管理器单例
+    
+    Args:
+        project_path: 项目路径（用于项目级存储）
+        force_new: 是否强制创建新实例
+    
+    Returns:
+        MemoryManager实例
+    """
     global _memory_manager_instance
     
-    if _memory_manager_instance is None:
-        _memory_manager_instance = MemoryManager()
+    if force_new or _memory_manager_instance is None:
+        _memory_manager_instance = MemoryManager(project_path=project_path)
         logger.info("记忆管理器单例已创建")
     
     return _memory_manager_instance

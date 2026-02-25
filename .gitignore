@@ -81,3 +81,29 @@ logs/
 .daoyoucode.chat.history.md
 .daoyoucode.conf.yml
 .daoyoucode.tags.cache.v4/
+
+# DaoyouCode 记忆和缓存（新版本）
+# 项目级存储（不上传）
+.daoyoucode/
+!.daoyoucode/.gitkeep
+
+# 用户级存储（在用户目录，不会被 git 追踪）
+# ~/.daoyoucode/
+
+# 旧版本备份（不上传）
+.daoyou.backups/
+
+# 代码索引缓存（不上传）
+.daoyoucode/cache/
+.daoyoucode/codebase_index/
+
+# 对话历史（不上传，包含敏感信息）
+.daoyoucode/chat.history.md
+.daoyoucode/archive/
+
+# 项目上下文（可选：如果团队共享，可以上传）
+# .daoyoucode/project_context.json
+
+# 会话摘要（不上传）
+.daoyoucode/summaries.json
+.daoyoucode/key_info.json
