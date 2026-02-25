@@ -125,8 +125,8 @@
    - 使用建议
 
 ### 相关代码
-- `backend/daoyoucode/agents/core/agent.py` - Agent基类
-- `backend/daoyoucode/agents/builtin/__init__.py` - Agent注册
+- `[项目路径]/agents/core/agent.py` - Agent基类
+- `[项目路径]/agents/builtin/__init__.py` - Agent注册
 
 ### 快速开始
 [提供关键步骤摘要]
@@ -167,8 +167,8 @@ except ToolError as e:
 ```
 
 ### 相关文件
-- `backend/daoyoucode/agents/core/agent.py:123` - 工具调用实现
-- `backend/daoyoucode/agents/tools/base.py:45` - 工具基类
+- `[项目路径]/agents/core/agent.py:123` - 工具调用实现
+- `[项目路径]/agents/tools/base.py:45` - 工具基类
 
 ### 更多资源
 - [工具参考文档](backend/TOOLS_REFERENCE.md)
@@ -210,7 +210,7 @@ except ToolError as e:
 [提供代码示例]
 
 ### 源代码位置
-`backend/daoyoucode/agents/core/agent.py`
+`[项目路径]/agents/core/agent.py`
 ```
 
 ### 场景4：学习新技术
