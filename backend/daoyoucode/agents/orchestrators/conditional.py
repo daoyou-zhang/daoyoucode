@@ -228,8 +228,15 @@ class ConditionalOrchestrator(BaseOrchestrator):
             prompt_source=prompt_config,
             user_input=user_input,
             context=context,
-            tools=path_tools if path_tools else None
+            tools=path_tools if path_tools else None,
+            enable_streaming=context.get('enable_streaming', False)  # 🆕 传递流式标志
         )
+        
+        # 检查是否返回生成器（流式输出）
+        import inspect
+        if inspect.isasyncgen(result):
+            # 流式输出模式，直接返回生成器
+            return result
         
         # 将AgentResult转换为字典
         return {

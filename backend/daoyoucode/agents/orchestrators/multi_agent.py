@@ -199,13 +199,23 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         for i, agent in enumerate(agents):
             self.logger.info(f"执行Agent {i+1}/{len(agents)}: {agent.name}")
             
+            # 只在最后一个 agent 启用流式输出
+            is_last_agent = (i == len(agents) - 1)
+            
             result = await agent.execute(
                 prompt_source={'use_agent_default': True},
                 user_input=current_input,
                 context=context,
                 llm_config=skill.llm,
-                tools=self._get_tools_for_agent(skill, agent.name)
+                tools=self._get_tools_for_agent(skill, agent.name),
+                enable_streaming=context.get('enable_streaming', False) if is_last_agent else False  # 🆕 只在最后一个 agent 启用流式
             )
+            
+            # 检查是否返回生成器（流式输出）
+            import inspect
+            if inspect.isasyncgen(result):
+                # 最后一个 agent 的流式输出，直接返回
+                return result
             
             results.append({
                 'agent': agent.name,

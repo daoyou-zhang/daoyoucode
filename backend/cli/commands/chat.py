@@ -559,6 +559,7 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
         "cwd": ui_context.get("cwd", os.getcwd()),
         "working_directory": repo_path,
         "repo_root": repo_path,
+        "enable_streaming": True,  # 🆕 启用流式输出
     }
     
     # 会话级初始化已在main函数中完成，这里不再需要
@@ -619,12 +620,63 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
             result = None
         
         if result is not None:
-            if result.get("success"):
+            # 检查是否是流式结果（生成器）
+            import inspect
+            if inspect.isasyncgen(result):
+                # 🌊 流式输出模式
+                sys.stdout.write("\nAI > ")
+                sys.stdout.flush()
+                
+                async def consume_stream():
+                    content = ""
+                    async for event in result:
+                        if event.get('type') == 'token':
+                            token = event.get('content', '')
+                            content += token
+                            try:
+                                sys.stdout.write(token)
+                                sys.stdout.flush()
+                            except (UnicodeEncodeError, UnicodeDecodeError):
+                                # 编码错误，跳过这个 token
+                                pass
+                        elif event.get('type') == 'result':
+                            # 流式输出完成
+                            pass
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    return content
+                
+                ai_response = loop.run_until_complete(consume_stream())
+                
+            elif result.get("success"):
                 ai_response = result.get("content")
                 if ai_response is None:
                     ai_response = ""
                 if not (ai_response and ai_response.strip()):
                     ai_response = "（未收到模型回复，请重试或检查 API 配置。）"
+                
+                # 非流式模式，一次性显示
+                body = (ai_response or "(no response)").strip()
+                
+                try:
+                    sys.stdout.write("\nAI > ")
+                    sys.stdout.flush()
+                    
+                    # 控制台编码可能不是 UTF-8，只输出可安全编码的字符
+                    out = body
+                    try:
+                        sys.stdout.write(out + "\n")
+                        sys.stdout.flush()
+                    except (UnicodeEncodeError, UnicodeDecodeError):
+                        out = (body or "").encode("utf-8", errors="replace").decode("ascii", errors="replace") or "(no response)"
+                        sys.stdout.write(out + "\n")
+                        sys.stdout.flush()
+                except Exception as e:
+                    try:
+                        sys.stdout.write("\nAI > (output omitted)\n")
+                        sys.stdout.flush()
+                    except Exception:
+                        pass
             else:
                 error_msg = result.get("error", "未知错误")
                 console.print(f"[yellow]警告: 执行失败: {error_msg}[/yellow]")
@@ -633,29 +685,6 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
         ai_response = "Sorry, something went wrong. Please try again."
         try:
             _safe_console_print(console, f"[yellow]Warning: {_safe_str(e)[:200]}[/yellow]")
-        except Exception:
-            pass
-
-    # 显示AI响应
-    body = (ai_response or "(no response)").strip()
-    
-    try:
-        sys.stdout.write("\nAI > ")
-        sys.stdout.flush()
-        
-        # 控制台编码可能不是 UTF-8，只输出可安全编码的字符
-        out = body
-        try:
-            sys.stdout.write(out + "\n")
-            sys.stdout.flush()
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            out = (body or "").encode("utf-8", errors="replace").decode("ascii", errors="replace") or "(no response)"
-            sys.stdout.write(out + "\n")
-            sys.stdout.flush()
-    except Exception as e:
-        try:
-            sys.stdout.write("\nAI > (output omitted)\n")
-            sys.stdout.flush()
         except Exception:
             pass
     

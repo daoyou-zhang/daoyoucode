@@ -211,8 +211,15 @@ class ReActOrchestrator(BaseOrchestrator):
                 user_input=user_input,
                 context=context,
                 llm_config=skill.llm,
-                tools=tools_to_use
+                tools=tools_to_use,
+                enable_streaming=context.get('enable_streaming', False)  # 🆕 传递流式标志
             )
+            
+            # 检查是否返回生成器（流式输出）
+            import inspect
+            if inspect.isasyncgen(result):
+                # 流式输出模式，直接返回生成器
+                return result
             
             # 5. 返回结果（content 保证为 str，避免 None 导致前端无输出）
             return {

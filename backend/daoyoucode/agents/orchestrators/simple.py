@@ -131,10 +131,17 @@ class SimpleOrchestrator(BaseOrchestrator):
             user_input=user_input,
             context=context,
             llm_config=skill.llm,
-            tools=tools_to_use
+            tools=tools_to_use,
+            enable_streaming=context.get('enable_streaming', False)  # 🆕 传递流式标志
         )
         
-        # 6. 返回结果
+        # 检查是否返回生成器（流式输出）
+        import inspect
+        if inspect.isasyncgen(result):
+            # 流式输出模式，直接返回生成器
+            return result
+        
+        # 6. 返回结果（非流式模式）
         return {
             'success': result.success,
             'content': result.content,

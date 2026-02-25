@@ -264,7 +264,24 @@ async def _execute_skill_internal(
         # 5. 执行
         result = await orchestrator.execute(skill, user_input, context)
         
-        # 6. 更新任务状态
+        # 检查是否返回生成器（流式输出）
+        import inspect
+        if inspect.isasyncgen(result):
+            # 流式输出模式，直接返回生成器
+            # 注意：任务状态更新、hooks 等将被跳过（流式模式下不适用）
+            logger.info("🌊 Executor: 检测到流式输出，直接返回生成器")
+            
+            # 包装生成器，在最后添加 task_id
+            async def wrap_with_task_id():
+                async for event in result:
+                    yield event
+                    # 如果是最终结果，添加 task_id
+                    if event.get('type') == 'result' and 'result' in event:
+                        event['result'].metadata['task_id'] = task.id
+            
+            return wrap_with_task_id()
+        
+        # 6. 更新任务状态（非流式模式）
         if result.get('success'):
             task_manager.update_status(
                 task.id,

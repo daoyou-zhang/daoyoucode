@@ -329,8 +329,9 @@ class BaseAgent(ABC):
         context: Optional[Dict[str, Any]] = None,
         llm_config: Optional[Dict[str, Any]] = None,
         tools: Optional[List[str]] = None,
-        max_tool_iterations: int = 15  # 🆕 增加到 15 次
-    ) -> AgentResult:
+        max_tool_iterations: int = 15,  # 🆕 增加到 15 次
+        enable_streaming: bool = False  # 🆕 是否启用流式输出
+    ):
         """
         执行任务
         
@@ -344,6 +345,15 @@ class BaseAgent(ABC):
             llm_config: LLM配置
             tools: 可用工具列表（工具名称）
             max_tool_iterations: 最大工具调用迭代次数
+            enable_streaming: 是否启用流式输出（最终回复阶段）
+        
+        Returns:
+            如果 enable_streaming=True:
+                AsyncGenerator[Dict[str, Any], None] - 流式事件
+                    - {'type': 'token', 'content': str} - 文本token
+                    - {'type': 'result', 'result': AgentResult} - 最终结果
+            否则:
+                AgentResult - 执行结果
         """
         if context is None:
             context = {}
@@ -486,16 +496,92 @@ class BaseAgent(ABC):
                     "content": full_prompt
                 })
                 
-                response, tools_used = await self._call_llm_with_tools(
+                result = await self._call_llm_with_tools(
                     initial_messages,  # 传递包含历史的消息列表
                     tools,
                     llm_config,
                     max_tool_iterations,
                     context=context,  # 传递 context
-                    history=history   # 传递 history
+                    history=history,   # 传递 history
+                    enable_streaming=enable_streaming  # 🆕 传递流式标志
                 )
+                
+                # 检查是否返回生成器（流式输出）
+                import inspect
+                if inspect.isasyncgen(result):
+                    # 流式输出模式
+                    self.logger.info("🌊 进入流式输出模式")
+                    
+                    async def stream_with_memory():
+                        response_content = ""
+                        final_tools_used = []
+                        
+                        # 逐个 yield token
+                        async for event in result:
+                            if event['type'] == 'token':
+                                response_content += event['content']
+                                yield event
+                            elif event['type'] == 'metadata':
+                                final_tools_used = event.get('tools_used', [])
+                        
+                        # 流式输出完成后，保存到记忆
+                        self.memory.add_conversation(
+                            session_id,
+                            user_input,
+                            response_content,
+                            metadata={'agent': self.name, 'stream': True},
+                            user_id=user_id
+                        )
+                        
+                        # 检查是否需要生成摘要
+                        history_after = self.memory.get_conversation_history(session_id)
+                        current_round = len(history_after)
+                        
+                        if self.memory.long_term_memory.should_generate_summary(session_id, current_round):
+                            try:
+                                from ..llm import get_client_manager
+                                client_manager = get_client_manager()
+                                llm_client = client_manager.get_client(
+                                    llm_config.get('model') if llm_config else self.config.model
+                                )
+                                summary = await self.memory.long_term_memory.generate_summary(
+                                    session_id, history_after, llm_client
+                                )
+                            except Exception as e:
+                                self.logger.warning(f"⚠️ 摘要生成失败: {e}")
+                        
+                        # 保存任务
+                        self.memory.add_task(user_id, {
+                            'agent': self.name,
+                            'input': user_input[:200],
+                            'result': response_content[:200],
+                            'success': True,
+                            'tools_used': final_tools_used,
+                            'stream': True
+                        })
+                        
+                        # 检查是否需要更新用户画像
+                        await self._check_and_update_profile(user_id, session_id)
+                        
+                        # 发送最终结果
+                        yield {
+                            'type': 'result',
+                            'result': AgentResult(
+                                success=True,
+                                content=response_content,
+                                metadata={'agent': self.name, 'stream': True},
+                                tools_used=final_tools_used
+                            )
+                        }
+                    
+                    return stream_with_memory()
+                else:
+                    # 非流式模式，result 是 tuple
+                    response, tools_used = result
             else:
                 response = await self._call_llm(full_prompt, llm_config)
+                tools_used = []
+                tools_used = []
             
             # ========== 5. 保存到记忆 ==========
             
@@ -705,10 +791,11 @@ class BaseAgent(ABC):
         llm_config: Optional[Dict[str, Any]] = None,
         max_iterations: int = 15,  # 🆕 增加到 15 次
         context: Optional[Dict[str, Any]] = None,  # 添加 context 参数
-        history: Optional[List[Dict[str, Any]]] = None  # 添加 history 参数
-    ) -> tuple[str, List[str]]:
+        history: Optional[List[Dict[str, Any]]] = None,  # 添加 history 参数
+        enable_streaming: bool = True  # 🆕 是否启用流式输出
+    ):
         """
-        调用LLM并支持工具调用
+        调用LLM并支持工具调用（支持流式输出）
         
         Args:
             initial_messages: 初始消息列表（包含历史对话和当前输入）
@@ -717,9 +804,15 @@ class BaseAgent(ABC):
             max_iterations: 最大迭代次数
             context: 执行上下文（用于后处理）
             history: 对话历史（用于后处理）
+            enable_streaming: 是否启用流式输出（最终回复阶段）
         
         Returns:
-            (最终响应, 使用的工具列表)
+            如果 enable_streaming=True 且最终回复无工具调用:
+                AsyncGenerator[Dict[str, Any], None] - 流式事件
+                    - {'type': 'token', 'content': str} - 文本token
+                    - {'type': 'metadata', 'tools_used': List[str]} - 元数据
+            否则:
+                tuple[str, List[str]] - (最终响应, 使用的工具列表)
         """
         import json
         import time  # 添加 time 导入
@@ -767,8 +860,66 @@ class BaseAgent(ABC):
             function_call = response.get('metadata', {}).get('function_call')
             
             if not function_call:
-                # 没有工具调用，返回最终响应
-                return response.get('content', ''), tools_used
+                # 没有工具调用，这是最终回复
+                # 如果启用流式且是第一轮（没有工具调用过），使用流式输出
+                if enable_streaming and iteration == 0:
+                    # 第一轮就没有工具调用，直接流式输出
+                    self.logger.info("🌊 使用流式输出（无工具调用）")
+                    
+                    async def stream_generator():
+                        # 提取最后一条用户消息作为 prompt
+                        last_user_message = ""
+                        for msg in reversed(messages):
+                            if msg.get('role') == 'user':
+                                last_user_message = msg.get('content', '')
+                                break
+                        
+                        # 流式输出
+                        async for token in self._stream_llm(last_user_message, llm_config):
+                            yield {'type': 'token', 'content': token}
+                        
+                        # 发送元数据
+                        yield {'type': 'metadata', 'tools_used': tools_used}
+                    
+                    return stream_generator()
+                
+                elif enable_streaming and iteration > 0:
+                    # 有工具调用后的最终回复
+                    # 注意：response 已经包含了 LLM 的回复，但是非流式的
+                    # 我们需要将这个回复转换为流式输出
+                    self.logger.info(f"🌊 转换为流式输出（工具调用后，迭代{iteration+1}次）")
+                    
+                    async def stream_generator():
+                        # 将已有的 response 内容逐字符 yield
+                        content = response.get('content', '')
+                        
+                        # 模拟流式输出（逐词输出）
+                        import re
+                        # 按词分割（中文按字，英文按词）
+                        tokens = []
+                        current = ""
+                        for char in content:
+                            current += char
+                            # 中文字符或空格/标点后输出
+                            if ord(char) > 127 or char in ' \n.,!?;:，。！？；：':
+                                if current:
+                                    tokens.append(current)
+                                    current = ""
+                        if current:
+                            tokens.append(current)
+                        
+                        # 逐个 yield
+                        for token in tokens:
+                            yield {'type': 'token', 'content': token}
+                        
+                        # 发送元数据
+                        yield {'type': 'metadata', 'tools_used': tools_used}
+                    
+                    return stream_generator()
+                
+                else:
+                    # 不启用流式，返回完整响应
+                    return response.get('content', ''), tools_used
             
             # 解析工具调用
             tool_name = function_call['name']
@@ -918,13 +1069,42 @@ class BaseAgent(ABC):
         
         # 达到最大迭代次数，返回最后的响应
         self.logger.warning(f"达到最大工具调用迭代次数: {max_iterations}")
-        final_response = await self._call_llm_with_functions(
-            messages,
-            [],  # 不再提供工具
-            llm_config
-        )
         
-        return final_response.get('content', ''), tools_used
+        if enable_streaming:
+            # 流式输出最后的响应
+            self.logger.info("🌊 使用流式输出（达到最大迭代次数）")
+            
+            async def stream_generator():
+                from ..llm import get_client_manager
+                from ..llm.base import LLMRequest
+                
+                client_manager = get_client_manager()
+                model = (llm_config or {}).get('model', self.config.model)
+                temperature = (llm_config or {}).get('temperature', self.config.temperature)
+                client = client_manager.get_client(model=model)
+                
+                request = LLMRequest(
+                    prompt="",
+                    model=model,
+                    temperature=temperature,
+                    stream=True
+                )
+                request.messages = messages
+                
+                async for token in client.stream_chat(request):
+                    yield {'type': 'token', 'content': token}
+                
+                yield {'type': 'metadata', 'tools_used': tools_used}
+            
+            return stream_generator()
+        else:
+            final_response = await self._call_llm_with_functions(
+                messages,
+                [],  # 不再提供工具
+                llm_config
+            )
+            
+            return final_response.get('content', ''), tools_used
     
     async def _call_llm_with_functions(
         self,
