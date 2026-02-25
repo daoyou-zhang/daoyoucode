@@ -432,6 +432,12 @@ class BaseAgent(ABC):
             if tools:
                 default_tool_rules = """⚠️ 工具使用规则（必须遵守）：
 
+0. 理解用户意图
+   - 仔细分析用户的**当前输入**，判断是否真的需要工具
+   - 如果用户只是简单回应（如"好的"、"谢谢"、"不错"），不要调用工具
+   - 如果用户是新话题，不要基于历史对话调用工具
+   - 只有当用户明确需要查看代码、分析项目时，才调用工具
+
 1. 路径参数使用 '.' 表示当前工作目录
    - ✅ 正确：repo_map(repo_path=".")
    - ❌ 错误：repo_map(repo_path="./your-repo-path")
@@ -466,118 +472,151 @@ class BaseAgent(ABC):
             
             # ========== 4. 调用LLM ==========
             if tools:
-                # 构建初始消息（包含历史对话）
-                initial_messages = []
-                # 历史轮数可配置：context['max_history_rounds']，默认 5
-                max_history_rounds = context.get('max_history_rounds', 5)
-                if history:
-                    # 如果历史超过限制，只保留最近的N轮
-                    if len(history) > max_history_rounds:
-                        truncated_count = len(history) - max_history_rounds
-                        history = history[-max_history_rounds:]
-                        self.logger.info(
-                            f"📉 工具调用历史截断: 保留最近{max_history_rounds}轮, "
-                            f"截断{truncated_count}轮 (节省token)"
-                        )
-                    
-                    for h in history:
-                        initial_messages.append({
-                            "role": "user",
-                            "content": h.get('user', '')
-                        })
-                        initial_messages.append({
-                            "role": "assistant",
-                            "content": h.get('ai', '')
-                        })
+                # 🆕 意图识别：判断是否需要工具
+                # 如果是简单寒暄（general_chat），跳过工具调用
+                detected_intents = context.get('detected_intents', [])
                 
-                # 添加当前用户输入
-                initial_messages.append({
-                    "role": "user",
-                    "content": full_prompt
-                })
-                
-                result = await self._call_llm_with_tools(
-                    initial_messages,  # 传递包含历史的消息列表
-                    tools,
-                    llm_config,
-                    max_tool_iterations,
-                    context=context,  # 传递 context
-                    history=history,   # 传递 history
-                    enable_streaming=enable_streaming  # 🆕 传递流式标志
-                )
-                
-                # 检查是否返回生成器（流式输出）
-                import inspect
-                if inspect.isasyncgen(result):
-                    # 流式输出模式
-                    self.logger.info("🌊 进入流式输出模式")
-                    
-                    async def stream_with_memory():
-                        response_content = ""
-                        final_tools_used = []
-                        
-                        # 逐个 yield token
-                        async for event in result:
-                            if event['type'] == 'token':
-                                response_content += event['content']
-                                yield event
-                            elif event['type'] == 'metadata':
-                                final_tools_used = event.get('tools_used', [])
-                        
-                        # 流式输出完成后，保存到记忆
-                        self.memory.add_conversation(
-                            session_id,
+                if not detected_intents:
+                    # 如果编排器没有做意图识别，这里做一次
+                    from ..intent import classify_intents
+                    try:
+                        detected_intents = await classify_intents(
                             user_input,
-                            response_content,
-                            metadata={'agent': self.name, 'stream': True},
-                            user_id=user_id
+                            llm_config
                         )
-                        
-                        # 检查是否需要生成摘要
-                        history_after = self.memory.get_conversation_history(session_id)
-                        current_round = len(history_after)
-                        
-                        if self.memory.long_term_memory.should_generate_summary(session_id, current_round):
-                            try:
-                                from ..llm import get_client_manager
-                                client_manager = get_client_manager()
-                                llm_client = client_manager.get_client(
-                                    llm_config.get('model') if llm_config else self.config.model
-                                )
-                                summary = await self.memory.long_term_memory.generate_summary(
-                                    session_id, history_after, llm_client
-                                )
-                            except Exception as e:
-                                self.logger.warning(f"⚠️ 摘要生成失败: {e}")
-                        
-                        # 保存任务
-                        self.memory.add_task(user_id, {
-                            'agent': self.name,
-                            'input': user_input[:200],
-                            'result': response_content[:200],
-                            'success': True,
-                            'tools_used': final_tools_used,
-                            'stream': True
-                        })
-                        
-                        # 检查是否需要更新用户画像
-                        await self._check_and_update_profile(user_id, session_id)
-                        
-                        # 发送最终结果
-                        yield {
-                            'type': 'result',
-                            'result': AgentResult(
-                                success=True,
-                                content=response_content,
-                                metadata={'agent': self.name, 'stream': True},
-                                tools_used=final_tools_used
-                            )
-                        }
+                        context['detected_intents'] = detected_intents
+                        self.logger.info(f"🎯 意图识别: {detected_intents}")
+                    except Exception as e:
+                        self.logger.warning(f"意图识别失败: {e}")
+                        detected_intents = []
+                
+                # 如果是简单寒暄，不使用工具
+                if 'general_chat' in detected_intents and len(detected_intents) == 1:
+                    self.logger.info("🌊 检测到简单寒暄，跳过工具调用，直接流式输出")
                     
-                    return stream_with_memory()
+                    if enable_streaming:
+                        async def stream_generator():
+                            async for token in self._stream_llm(full_prompt, llm_config):
+                                yield {'type': 'token', 'content': token}
+                            yield {'type': 'metadata', 'tools_used': []}
+                        
+                        return stream_generator()
+                    else:
+                        response = await self._call_llm(full_prompt, llm_config)
+                        tools_used = []
                 else:
-                    # 非流式模式，result 是 tuple
-                    response, tools_used = result
+                    # 构建初始消息（包含历史对话）
+                    initial_messages = []
+                    # 历史轮数可配置：context['max_history_rounds']，默认 5
+                    max_history_rounds = context.get('max_history_rounds', 5)
+                    if history:
+                        # 如果历史超过限制，只保留最近的N轮
+                        if len(history) > max_history_rounds:
+                            truncated_count = len(history) - max_history_rounds
+                            history = history[-max_history_rounds:]
+                            self.logger.info(
+                                f"📉 工具调用历史截断: 保留最近{max_history_rounds}轮, "
+                                f"截断{truncated_count}轮 (节省token)"
+                            )
+                        
+                        for h in history:
+                            initial_messages.append({
+                                "role": "user",
+                                "content": h.get('user', '')
+                            })
+                            initial_messages.append({
+                                "role": "assistant",
+                                "content": h.get('ai', '')
+                            })
+                    
+                    # 添加当前用户输入
+                    initial_messages.append({
+                        "role": "user",
+                        "content": full_prompt
+                    })
+                    
+                    result = await self._call_llm_with_tools(
+                        initial_messages,  # 传递包含历史的消息列表
+                        tools,
+                        llm_config,
+                        max_tool_iterations,
+                        context=context,  # 传递 context
+                        history=history,   # 传递 history
+                        enable_streaming=enable_streaming  # 🆕 传递流式标志
+                    )
+                    
+                    # 检查是否返回生成器（流式输出）
+                    import inspect
+                    if inspect.isasyncgen(result):
+                        # 流式输出模式
+                        self.logger.info("🌊 进入流式输出模式")
+                        
+                        async def stream_with_memory():
+                            response_content = ""
+                            final_tools_used = []
+                            
+                            # 逐个 yield token
+                            async for event in result:
+                                if event['type'] == 'token':
+                                    response_content += event['content']
+                                    yield event
+                                elif event['type'] == 'metadata':
+                                    final_tools_used = event.get('tools_used', [])
+                            
+                            # 流式输出完成后，保存到记忆
+                            self.memory.add_conversation(
+                                session_id,
+                                user_input,
+                                response_content,
+                                metadata={'agent': self.name, 'stream': True},
+                                user_id=user_id
+                            )
+                            
+                            # 检查是否需要生成摘要
+                            history_after = self.memory.get_conversation_history(session_id)
+                            current_round = len(history_after)
+                            
+                            if self.memory.long_term_memory.should_generate_summary(session_id, current_round):
+                                try:
+                                    from ..llm import get_client_manager
+                                    client_manager = get_client_manager()
+                                    llm_client = client_manager.get_client(
+                                        llm_config.get('model') if llm_config else self.config.model
+                                    )
+                                    summary = await self.memory.long_term_memory.generate_summary(
+                                        session_id, history_after, llm_client
+                                    )
+                                except Exception as e:
+                                    self.logger.warning(f"⚠️ 摘要生成失败: {e}")
+                            
+                            # 保存任务
+                            self.memory.add_task(user_id, {
+                                'agent': self.name,
+                                'input': user_input[:200],
+                                'result': response_content[:200],
+                                'success': True,
+                                'tools_used': final_tools_used,
+                                'stream': True
+                            })
+                            
+                            # 检查是否需要更新用户画像
+                            await self._check_and_update_profile(user_id, session_id)
+                            
+                            # 发送最终结果
+                            yield {
+                                'type': 'result',
+                                'result': AgentResult(
+                                    success=True,
+                                    content=response_content,
+                                    metadata={'agent': self.name, 'stream': True},
+                                    tools_used=final_tools_used
+                                )
+                            }
+                        
+                        return stream_with_memory()
+                    else:
+                        # 非流式模式，result 是 tuple
+                        response, tools_used = result
             else:
                 response = await self._call_llm(full_prompt, llm_config)
                 tools_used = []
