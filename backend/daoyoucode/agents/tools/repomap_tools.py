@@ -12,10 +12,12 @@ RepoMap工具 - 代码地图生成
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
 import logging
-import sqlite3
 import json
+import time
 from collections import defaultdict, namedtuple
 import warnings
+
+from diskcache import Cache
 
 from .base import BaseTool, ToolResult
 
@@ -64,9 +66,31 @@ class RepoMapTool(BaseTool):
             name="repo_map",
             description="生成代码仓库地图，智能排序最相关的代码定义"
         )
-        self.cache_db = None
+        # 🔥 第3层：文件级缓存（diskcache）
+        self.file_cache = None
+        
+        # 🔥 第2层：内存级缓存（definitions + graph）
+        self.definitions_cache = None
+        self.graph_cache = None
+        self.cache_timestamp = None
+        self.cached_repo_path = None
+        
+        # 🔥 第1层：结果级缓存（map结果）
+        self.map_cache = {}  # {cache_key: (result, timestamp)}
+        self.map_cache_ttl = 300  # 5分钟过期
+        
         self.graph = None
         self._last_definitions = None  # 🆕 保存最后一次的definitions
+        
+        # 缓存统计
+        self.cache_stats = {
+            'result_hits': 0,
+            'result_misses': 0,
+            'memory_hits': 0,
+            'memory_misses': 0,
+            'file_hits': 0,
+            'file_misses': 0
+        }
     
     def get_function_schema(self) -> Dict[str, Any]:
         """获取Function Calling schema"""
@@ -282,19 +306,76 @@ class RepoMapTool(BaseTool):
                         f"使用标准token预算 {max_tokens}"
                     )
             
-            # 初始化缓存
+            # 🔥 第1层：检查结果级缓存
+            cache_key = self._make_cache_key(chat_files, mentioned_idents, max_tokens)
+            
+            if cache_key in self.map_cache:
+                cached_result, timestamp = self.map_cache[cache_key]
+                if time.time() - timestamp < self.map_cache_ttl:
+                    self.cache_stats['result_hits'] += 1
+                    logger.info(f"✅ 命中结果级缓存 (0.001秒) | 统计: {self._format_cache_stats()}")
+                    return cached_result
+            
+            self.cache_stats['result_misses'] += 1
+            
+            # 初始化文件级缓存
             self._init_cache(repo_path_resolved)
             
-            # 扫描仓库
-            definitions = self._scan_repository(repo_path_resolved)
+            # 🔥 第2层：检查内存级缓存
+            files_changed = self._check_files_changed(repo_path_resolved)
             
-            # 构建引用图
-            graph = self._build_reference_graph(definitions, repo_path_resolved)
+            if not files_changed and self.definitions_cache and self.cached_repo_path == str(repo_path_resolved):
+                self.cache_stats['memory_hits'] += 1
+                logger.info(f"✅ 命中内存级缓存，跳过扫描 (0.1秒) | 统计: {self._format_cache_stats()}")
+                definitions = self.definitions_cache
+                graph = self.graph_cache
+            else:
+                self.cache_stats['memory_misses'] += 1
+                
+                # 🔥 第3层：扫描仓库（使用文件级缓存 + 增量更新）
+                scan_start = time.time()
+                definitions, changed_files = self._scan_repository_incremental(repo_path_resolved)
+                scan_time = time.time() - scan_start
+                
+                # 🔥 增量更新引用图
+                graph_start = time.time()
+                if changed_files and self.graph_cache:
+                    # 有改动且有缓存，增量更新
+                    graph = self._update_reference_graph_incremental(
+                        self.graph_cache,
+                        definitions,
+                        changed_files,
+                        repo_path_resolved
+                    )
+                    logger.info(f"🔄 增量更新引用图: {len(changed_files)} 个文件")
+                    
+                    # 🔥 清除结果级缓存（因为 RepoMap 已改变）
+                    if self.map_cache:
+                        old_cache_size = len(self.map_cache)
+                        self.map_cache.clear()
+                        logger.info(f"🗑️  清除结果级缓存: {old_cache_size} 个条目（因为文件改动）")
+                else:
+                    # 首次运行或全量更新
+                    graph = self._build_reference_graph(definitions, repo_path_resolved)
+                
+                graph_time = time.time() - graph_start
+                
+                logger.info(
+                    f"🔍 扫描完成: {len(definitions)} 个文件 "
+                    f"(扫描 {scan_time:.2f}秒, 构图 {graph_time:.2f}秒) | "
+                    f"统计: {self._format_cache_stats()}"
+                )
+                
+                # 保存到内存缓存
+                self.definitions_cache = definitions
+                self.graph_cache = graph
+                self.cache_timestamp = time.time()
+                self.cached_repo_path = str(repo_path_resolved)
             
             # PageRank排序
             ranked = self._pagerank(
                 graph,
-                definitions,  # 传递 definitions
+                definitions,
                 chat_files=chat_files,
                 mentioned_idents=mentioned_idents
             )
@@ -308,15 +389,11 @@ class RepoMapTool(BaseTool):
                 ranked,
                 definitions,
                 max_tokens=max_tokens,
-                enable_lsp=enable_lsp  # 传递LSP标志
+                enable_lsp=enable_lsp
             )
             
-            # 关闭数据库
-            if self.cache_db:
-                self.cache_db.close()
-                self.cache_db = None
-            
-            return ToolResult(
+            # 构建结果
+            result = ToolResult(
                 success=True,
                 content=repo_map,
                 metadata={
@@ -327,16 +404,18 @@ class RepoMapTool(BaseTool):
                     'original_max_tokens': original_max_tokens,
                     'auto_scaled': auto_scale and (max_tokens != original_max_tokens),
                     'chat_files_count': len(chat_files),
-                    'lsp_enabled': enable_lsp
+                    'lsp_enabled': enable_lsp,
+                    'cache_stats': self.cache_stats.copy()
                 }
             )
             
+            # 🔥 保存到结果级缓存
+            self.map_cache[cache_key] = (result, time.time())
+            
+            return result
+            
         except Exception as e:
             logger.error(f"生成RepoMap失败: {e}", exc_info=True)
-            # 关闭数据库
-            if self.cache_db:
-                self.cache_db.close()
-                self.cache_db = None
             return ToolResult(
                 success=False,
                 content=None,
@@ -344,32 +423,115 @@ class RepoMapTool(BaseTool):
             )
     
     def _init_cache(self, repo_path: Path):
-        """初始化SQLite缓存"""
-        cache_dir = repo_path / ".daoyoucode" / "cache"
+        """初始化 diskcache 缓存"""
+        cache_dir = repo_path / ".daoyoucode" / "cache" / "repomap"
         cache_dir.mkdir(parents=True, exist_ok=True)
         
-        cache_file = cache_dir / "repomap.db"
-        self.cache_db = sqlite3.connect(str(cache_file))
+        # 使用 diskcache（自动管理 SQLite）
+        self.file_cache = Cache(str(cache_dir))
+    
+    def _make_cache_key(
+        self,
+        chat_files: List[str],
+        mentioned_idents: List[str],
+        max_tokens: int
+    ) -> Tuple:
+        """生成结果级缓存键"""
+        return (
+            tuple(sorted(chat_files or [])),
+            tuple(sorted(mentioned_idents or [])),
+            max_tokens
+        )
+    
+    def _check_files_changed(self, repo_path: Path) -> bool:
+        """
+        检查文件是否改动（快速检查）
         
-        # 创建表
-        self.cache_db.execute("""
-            CREATE TABLE IF NOT EXISTS definitions (
-                file_path TEXT,
-                mtime REAL,
-                definitions TEXT,
-                PRIMARY KEY (file_path)
-            )
-        """)
-        self.cache_db.commit()
+        策略：
+        1. 检查 .git/index 的 mtime（最快）
+        2. 采样检查缓存文件的 mtime（较快）
+        """
+        if not self.cache_timestamp:
+            return True
+        
+        # 方法1：检查 .git/index 的 mtime（最快）
+        git_index = repo_path / ".git" / "index"
+        if git_index.exists():
+            index_mtime = git_index.stat().st_mtime
+            if index_mtime > self.cache_timestamp:
+                logger.info("🔄 检测到 Git 改动，清除内存缓存")
+                return True
+        
+        # 方法2：采样检查缓存文件的 mtime（较快）
+        if self.definitions_cache:
+            # 采样检查前10个文件
+            sample_files = list(self.definitions_cache.keys())[:10]
+            for file_path in sample_files:
+                full_path = repo_path / file_path
+                if full_path.exists():
+                    file_mtime = full_path.stat().st_mtime
+                    if file_mtime > self.cache_timestamp:
+                        logger.info(f"🔄 检测到文件改动: {file_path}")
+                        return True
+        
+        return False
+    
+    def _format_cache_stats(self) -> str:
+        """格式化缓存统计信息"""
+        stats = self.cache_stats
+        
+        # 计算命中率
+        result_total = stats['result_hits'] + stats['result_misses']
+        memory_total = stats['memory_hits'] + stats['memory_misses']
+        file_total = stats['file_hits'] + stats['file_misses']
+        
+        result_rate = stats['result_hits'] / result_total if result_total > 0 else 0
+        memory_rate = stats['memory_hits'] / memory_total if memory_total > 0 else 0
+        file_rate = stats['file_hits'] / file_total if file_total > 0 else 0
+        
+        return (
+            f"结果级 {result_rate:.0%} ({stats['result_hits']}/{result_total}), "
+            f"内存级 {memory_rate:.0%} ({stats['memory_hits']}/{memory_total}), "
+            f"文件级 {file_rate:.0%} ({stats['file_hits']}/{file_total})"
+        )
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """获取缓存统计信息（公开API）"""
+        stats = self.cache_stats.copy()
+        
+        # 计算命中率
+        result_total = stats['result_hits'] + stats['result_misses']
+        memory_total = stats['memory_hits'] + stats['memory_misses']
+        file_total = stats['file_hits'] + stats['file_misses']
+        
+        stats['result_hit_rate'] = stats['result_hits'] / result_total if result_total > 0 else 0
+        stats['memory_hit_rate'] = stats['memory_hits'] / memory_total if memory_total > 0 else 0
+        stats['file_hit_rate'] = stats['file_hits'] / file_total if file_total > 0 else 0
+        
+        return stats
     
     def _scan_repository(self, repo_path: Path) -> Dict[str, List[Dict]]:
         """
-        扫描仓库，提取定义
+        扫描仓库，提取定义（支持增量更新）
         
         Returns:
             {file_path: [definition, ...]}
         """
+        definitions, _ = self._scan_repository_incremental(repo_path)
+        return definitions
+    
+    def _scan_repository_incremental(self, repo_path: Path) -> Tuple[Dict[str, List[Dict]], List[str]]:
+        """
+        增量扫描仓库，提取定义
+        
+        Returns:
+            (definitions, changed_files)
+            - definitions: {file_path: [definition, ...]}
+            - changed_files: [改动的文件列表]
+        """
         definitions = {}
+        changed_files = []
+        unchanged_files = []
         
         # 支持的文件扩展名
         extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs"}
@@ -388,29 +550,35 @@ class RepoMapTool(BaseTool):
                 logger.debug(f"跳过文件（subtree_only）: {rel_path_str}")
                 continue
             
-            # 🆕 subtree_only 过滤
-            rel_path_str = str(file_path.relative_to(repo_path))
-            if not self.context.should_include_path(rel_path_str):
-                logger.debug(f"跳过文件（subtree_only）: {rel_path_str}")
-                continue
-            
             # 检查缓存
             rel_path = rel_path_str
             mtime = file_path.stat().st_mtime
             
             cached = self._get_cached_definitions(rel_path, mtime)
             if cached is not None:
+                # 🔥 命中缓存，直接使用
                 definitions[rel_path] = cached
+                unchanged_files.append(rel_path)
                 continue
             
-            # 解析文件
+            # 🔥 未命中缓存，需要重新解析
+            changed_files.append(rel_path)
             file_defs = self._parse_file(file_path)
             definitions[rel_path] = file_defs
             
             # 缓存结果
             self._cache_definitions(rel_path, mtime, file_defs)
         
-        return definitions
+        # 🔥 增量更新日志
+        if changed_files:
+            logger.info(
+                f"🔄 增量更新: {len(changed_files)} 个文件改动, "
+                f"{len(unchanged_files)} 个文件复用缓存"
+            )
+        else:
+            logger.info(f"✅ 全部命中缓存: {len(unchanged_files)} 个文件")
+        
+        return definitions, changed_files
     
     def _should_ignore(self, file_path: Path) -> bool:
         """
@@ -436,29 +604,22 @@ class RepoMapTool(BaseTool):
         return False
     
     def _get_cached_definitions(self, file_path: str, mtime: float) -> Optional[List[Dict]]:
-        """从缓存获取定义"""
-        cursor = self.cache_db.execute(
-            "SELECT mtime, definitions FROM definitions WHERE file_path = ?",
-            (file_path,)
-        )
-        row = cursor.fetchone()
+        """从缓存获取定义（使用 diskcache）"""
+        val = self.file_cache.get(file_path)
         
-        if row is None:
-            return None
+        if val is not None and val.get("mtime") == mtime:
+            self.cache_stats['file_hits'] += 1
+            return val["data"]
         
-        cached_mtime, cached_defs = row
-        if cached_mtime != mtime:
-            return None
-        
-        return json.loads(cached_defs)
+        self.cache_stats['file_misses'] += 1
+        return None
     
     def _cache_definitions(self, file_path: str, mtime: float, definitions: List[Dict]):
-        """缓存定义"""
-        self.cache_db.execute(
-            "INSERT OR REPLACE INTO definitions (file_path, mtime, definitions) VALUES (?, ?, ?)",
-            (file_path, mtime, json.dumps(definitions))
-        )
-        self.cache_db.commit()
+        """缓存定义（使用 diskcache）"""
+        self.file_cache[file_path] = {
+            "mtime": mtime,
+            "data": definitions
+        }
     
     def _parse_file(self, file_path: Path) -> List[Dict]:
         """
@@ -678,6 +839,105 @@ class RepoMapTool(BaseTool):
                         if ref_file != file_path:
                             # 添加边：file_path -> ref_file
                             graph[file_path][ref_file] += 1.0
+        
+        return dict(graph)
+    
+    def _update_reference_graph_incremental(
+        self,
+        old_graph: Dict[str, Dict[str, float]],
+        definitions: Dict[str, List[Dict]],
+        changed_files: List[str],
+        repo_path: Path
+    ) -> Dict[str, Dict[str, float]]:
+        """
+        增量更新引用图（只重新计算改动文件的引用关系）
+        
+        Args:
+            old_graph: 旧的引用图
+            definitions: 所有文件的定义
+            changed_files: 改动的文件列表
+            repo_path: 仓库路径
+        
+        Returns:
+            更新后的引用图
+        """
+        # 复制旧图
+        graph = defaultdict(lambda: defaultdict(float))
+        for source, targets in old_graph.items():
+            graph[source] = defaultdict(float, targets)
+        
+        # 🔥 步骤1：删除改动文件的旧引用关系
+        for file in changed_files:
+            # 删除该文件作为源的引用
+            if file in graph:
+                del graph[file]
+            
+            # 删除指向该文件的引用
+            for source in list(graph.keys()):
+                if file in graph[source]:
+                    del graph[source][file]
+                    # 如果源文件没有其他引用，删除该源
+                    if not graph[source]:
+                        del graph[source]
+        
+        # 🔥 步骤2：重新构建标识符映射（只包含改动文件的定义）
+        ident_to_files = defaultdict(set)
+        
+        # 添加所有文件的定义（用于查找引用目标）
+        for file_path, defs in definitions.items():
+            for d in defs:
+                if d.get("kind") == "def":
+                    ident_to_files[d["name"]].add(file_path)
+        
+        # 🔥 步骤3：重新计算改动文件的引用关系
+        for file_path in changed_files:
+            if file_path not in definitions:
+                continue
+            
+            defs = definitions[file_path]
+            
+            # 收集文件中的所有引用
+            references_in_file = set()
+            for d in defs:
+                if d.get("kind") == "ref":
+                    references_in_file.add(d["name"])
+            
+            # 为每个引用添加边
+            for ident in references_in_file:
+                if ident in ident_to_files:
+                    for ref_file in ident_to_files[ident]:
+                        if ref_file != file_path:
+                            graph[file_path][ref_file] += 1.0
+        
+        # 🔥 步骤4：重新计算指向改动文件的引用
+        # 其他文件可能引用了改动文件中的定义
+        changed_idents = set()
+        for file_path in changed_files:
+            if file_path in definitions:
+                for d in definitions[file_path]:
+                    if d.get("kind") == "def":
+                        changed_idents.add(d["name"])
+        
+        # 扫描所有文件，找到引用了改动标识符的文件
+        for file_path, defs in definitions.items():
+            if file_path in changed_files:
+                continue  # 跳过改动文件（已处理）
+            
+            # 收集文件中的引用
+            references_in_file = set()
+            for d in defs:
+                if d.get("kind") == "ref":
+                    references_in_file.add(d["name"])
+            
+            # 检查是否引用了改动的标识符
+            referenced_changed = references_in_file.intersection(changed_idents)
+            if referenced_changed:
+                # 重新计算该文件指向改动文件的引用
+                for ident in referenced_changed:
+                    if ident in ident_to_files:
+                        for ref_file in ident_to_files[ident]:
+                            if ref_file != file_path and ref_file in changed_files:
+                                graph[file_path][ref_file] += 1.0
         
         return dict(graph)
     
