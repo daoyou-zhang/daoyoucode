@@ -462,13 +462,48 @@ class BaseAgent(ABC):
 6. 不要重复调用
    - 同一轮对话中不要用相同参数重复调用同一工具（如多次 repo_map(repo_path=".")）；若已获得该工具结果，请直接基于结果回答。
 
+7. 分批处理多个文件（重要！）
+   - 如果需要处理多个文件（>5个），**必须分批处理**
+   - 每批处理 3-5 个文件，读取 → 分析/修改 → 下一个
+   - 处理完一批后：
+     * 总结本批处理的文件和结果
+     * 明确告诉用户："已完成 X/Y 个文件，还剩 Z 个"
+     * 询问："是否继续处理剩余文件？"
+   - 当用户回复"继续"、"好的"、"是"时：
+     * 从上次停止的位置继续
+     * 不要重复处理已完成的文件
+     * 继续处理下一批文件
+   - 示例流程：
+     ```
+     第1批（文件1-5）：
+       read_file(file1) → 分析 → write_file(file1)
+       read_file(file2) → 分析 → write_file(file2)
+       ...
+       总结：已完成 5/12 个文件，还剩 7 个
+       询问：是否继续？
+     
+     用户："继续"
+     
+     第2批（文件6-10）：
+       read_file(file6) → 分析 → write_file(file6)
+       ...
+     ```
+
 记住：当前工作目录=项目根；不要用 daoyoucode/ 作为路径前缀，后端代码在 backend/daoyoucode/ 下。
 
 ---
 
 """
-                tool_rules = context.get('tool_rules') or default_tool_rules
-                full_prompt = (tool_rules if isinstance(tool_rules, str) else default_tool_rules) + full_prompt
+                # Skill 特定规则（可选，追加到默认规则后）
+                skill_specific_rules = context.get('tool_rules', '')
+                
+                if skill_specific_rules:
+                    # 合并：默认规则 + Skill 特定规则
+                    tool_rules = default_tool_rules + "\n" + skill_specific_rules + "\n"
+                else:
+                    tool_rules = default_tool_rules
+                
+                full_prompt = tool_rules + full_prompt
             
             # ========== 4. 调用LLM ==========
             if tools:
