@@ -5,12 +5,16 @@
 """
 
 import typer
-from typing import List
+from typing import List, AsyncGenerator
 from pathlib import Path
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.live import Live
+from rich.table import Table
 import time
+import asyncio
+import inspect
 
 
 def main(
@@ -293,3 +297,205 @@ def show_diff_preview_real(files: List[Path], ai_response: str):
         
         console.print(Panel(diff_text, border_style="dim", padding=(0, 1)))
         console.print()
+
+
+
+# ========== 流式编辑显示 ==========
+
+async def display_streaming_edit(
+    edit_generator: AsyncGenerator,
+    console
+):
+    """
+    显示流式编辑过程
+    
+    Args:
+        edit_generator: 编辑事件生成器
+        console: Rich console 对象
+    """
+    from daoyoucode.agents.tools.base import EditEvent
+    
+    with Live(console=console, refresh_per_second=10) as live:
+        current_file = None
+        lines_buffer = []
+        total_lines = 0
+        
+        async for event in edit_generator:
+            if event.type == EditEvent.EDIT_START:
+                current_file = event.data['file_path']
+                total_lines = event.data['total_lines']
+                size = event.data.get('size', 0)
+                
+                panel = Panel(
+                    f"[cyan]📝 开始编辑文件[/cyan]\n\n"
+                    f"[bold]{current_file}[/bold]\n"
+                    f"[dim]总行数: {total_lines} | 大小: {size} 字节[/dim]",
+                    title="✍️  编辑中",
+                    border_style="cyan"
+                )
+                live.update(panel)
+            
+            elif event.type == EditEvent.EDIT_ANALYZING:
+                exists = event.data.get('exists', False)
+                is_code = event.data.get('is_code', False)
+                
+                status = "✓ 文件存在" if exists else "⊕ 新建文件"
+                code_status = "✓ 代码文件" if is_code else "○ 文本文件"
+                
+                panel = Panel(
+                    f"[cyan]🔍 分析文件[/cyan]\n\n"
+                    f"[bold]{current_file}[/bold]\n"
+                    f"[dim]{status} | {code_status}[/dim]",
+                    title="✍️  编辑中",
+                    border_style="cyan"
+                )
+                live.update(panel)
+            
+            elif event.type == EditEvent.EDIT_LINE:
+                line_number = event.data['line_number']
+                content = event.data['content']
+                progress = event.data['progress']
+                
+                # 添加到缓冲区
+                lines_buffer.append(content)
+                
+                # 只显示最后10行
+                display_lines = lines_buffer[-10:]
+                
+                # 创建进度条
+                bar_width = 40
+                filled = int(bar_width * progress)
+                bar = '█' * filled + '░' * (bar_width - filled)
+                
+                # 显示代码预览
+                code_preview = '\n'.join(display_lines)
+                if len(code_preview) > 500:
+                    code_preview = code_preview[:500] + '\n...'
+                
+                # 使用语法高亮
+                try:
+                    syntax = Syntax(
+                        code_preview,
+                        "python",
+                        theme="monokai",
+                        line_numbers=True,
+                        start_line=max(1, line_number - len(display_lines) + 1)
+                    )
+                    code_display = syntax
+                except Exception:
+                    code_display = code_preview
+                
+                panel = Panel(
+                    f"[cyan]✍️  写入代码[/cyan]\n\n"
+                    f"{code_display}\n\n"
+                    f"[cyan]{bar}[/cyan] {progress:.0%} | 行 {line_number}/{total_lines}",
+                    title=f"✍️  编辑中: {current_file}",
+                    border_style="cyan"
+                )
+                live.update(panel)
+            
+            elif event.type == EditEvent.EDIT_VERIFYING:
+                panel = Panel(
+                    f"[yellow]🔍 验证代码[/yellow]\n\n"
+                    f"[bold]{current_file}[/bold]\n"
+                    f"[dim]正在使用 LSP 检查语法和类型...[/dim]",
+                    title="🔍 验证中",
+                    border_style="yellow"
+                )
+                live.update(panel)
+            
+            elif event.type == EditEvent.EDIT_COMPLETE:
+                lines = event.data['lines']
+                size = event.data['size']
+                verified = event.data.get('verified', False)
+                warnings = event.data.get('warnings', [])
+                warning_count = event.data.get('warning_count', 0)
+                
+                success_text = f"[green]✅ 编辑完成！[/green]\n\n"
+                success_text += f"[bold]{current_file}[/bold]\n"
+                success_text += f"[dim]行数: {lines} | 大小: {size} 字节[/dim]\n"
+                
+                if verified:
+                    success_text += f"\n[green]✓ LSP 验证通过[/green]"
+                
+                if warnings:
+                    success_text += f"\n\n[yellow]⚠️  {warning_count} 个警告：[/yellow]\n"
+                    for warning in warnings[:3]:
+                        success_text += f"[dim]  • {warning}[/dim]\n"
+                
+                panel = Panel(
+                    success_text,
+                    title="✅ 完成",
+                    border_style="green"
+                )
+                live.update(panel)
+            
+            elif event.type == EditEvent.EDIT_ERROR:
+                error = event.data.get('error', 'Unknown error')
+                errors = event.data.get('errors', [])
+                error_count = event.data.get('error_count', 0)
+                
+                error_text = f"[red]❌ 编辑失败！[/red]\n\n"
+                error_text += f"[bold]{current_file}[/bold]\n\n"
+                
+                if errors:
+                    error_text += f"[red]{error_count} 个错误：[/red]\n"
+                    for err in errors[:5]:
+                        error_text += f"[dim]  • {err}[/dim]\n"
+                else:
+                    error_text += f"[red]错误: {error}[/red]"
+                
+                panel = Panel(
+                    error_text,
+                    title="❌ 错误",
+                    border_style="red"
+                )
+                live.update(panel)
+
+
+def display_edit_event_simple(event, console):
+    """
+    简单的编辑事件显示（不使用 Live）
+    
+    用于不支持 Live 的环境
+    """
+    from daoyoucode.agents.tools.base import EditEvent
+    
+    if event.type == EditEvent.EDIT_START:
+        console.print(f"\n[cyan]📝 开始编辑: {event.data['file_path']}[/cyan]")
+        console.print(f"[dim]   总行数: {event.data['total_lines']}, 大小: {event.data.get('size', 0)} 字节[/dim]")
+    
+    elif event.type == EditEvent.EDIT_ANALYZING:
+        console.print(f"[cyan]🔍 分析文件...[/cyan]")
+    
+    elif event.type == EditEvent.EDIT_LINE:
+        line_number = event.data['line_number']
+        progress = event.data['progress']
+        
+        # 只显示部分进度（避免刷屏）
+        if line_number % 10 == 0 or line_number == 1:
+            bar_width = 30
+            filled = int(bar_width * progress)
+            bar = '█' * filled + '░' * (bar_width - filled)
+            console.print(f"\r[cyan]✍️  [{bar}] {progress:>6.1%} | 行 {line_number}[/cyan]", end="")
+    
+    elif event.type == EditEvent.EDIT_VERIFYING:
+        console.print(f"\n[yellow]🔍 验证代码...[/yellow]")
+    
+    elif event.type == EditEvent.EDIT_COMPLETE:
+        console.print(f"\n[green]✅ 编辑完成: {event.data['file_path']}[/green]")
+        console.print(f"[dim]   行数: {event.data['lines']}, 大小: {event.data['size']} 字节[/dim]")
+        
+        if event.data.get('verified'):
+            console.print(f"[green]   ✓ LSP 验证通过[/green]")
+        
+        if event.data.get('warnings'):
+            console.print(f"[yellow]   ⚠️  {event.data['warning_count']} 个警告[/yellow]")
+    
+    elif event.type == EditEvent.EDIT_ERROR:
+        console.print(f"\n[red]❌ 编辑失败: {event.data.get('error', 'Unknown')}[/red]")
+        
+        if event.data.get('errors'):
+            console.print(f"[red]   {event.data['error_count']} 个错误：[/red]")
+            for error in event.data['errors'][:3]:
+                console.print(f"[dim]     • {error}[/dim]")

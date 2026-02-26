@@ -4,11 +4,12 @@
 所有工具的基础抽象
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, AsyncGenerator
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from pathlib import Path
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -521,3 +522,65 @@ class ToolRegistry:
                 content=None,
                 error=str(e)
             )
+
+
+# ========== 流式编辑支持 ==========
+
+@dataclass
+class EditEvent:
+    """
+    编辑事件
+    
+    用于流式编辑过程中的事件通知
+    """
+    
+    # 事件类型常量
+    EDIT_START = "edit_start"              # 开始编辑
+    EDIT_ANALYZING = "edit_analyzing"      # 分析文件
+    EDIT_PLANNING = "edit_planning"        # 规划修改
+    EDIT_APPLYING = "edit_applying"        # 应用修改
+    EDIT_LINE = "edit_line"                # 编辑某一行
+    EDIT_BLOCK = "edit_block"              # 编辑代码块
+    EDIT_VERIFYING = "edit_verifying"      # 验证修改
+    EDIT_COMPLETE = "edit_complete"        # 编辑完成
+    EDIT_ERROR = "edit_error"              # 编辑错误
+    
+    type: str
+    data: Dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=time.time)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            'type': self.type,
+            'data': self.data,
+            'timestamp': self.timestamp
+        }
+
+
+class StreamingEditTool(BaseTool):
+    """
+    流式编辑工具基类
+    
+    支持流式显示编辑过程的工具应该继承此类
+    """
+    
+    async def execute_streaming(
+        self,
+        **kwargs
+    ) -> AsyncGenerator[EditEvent, None]:
+        """
+        流式执行编辑
+        
+        子类应该实现此方法，yield EditEvent 来报告编辑进度
+        
+        Yields:
+            EditEvent - 编辑事件
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} 未实现 execute_streaming 方法"
+        )
+    
+    def supports_streaming(self) -> bool:
+        """检查是否支持流式编辑"""
+        return True

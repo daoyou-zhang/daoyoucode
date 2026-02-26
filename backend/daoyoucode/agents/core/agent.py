@@ -907,13 +907,26 @@ class BaseAgent(ABC):
                 if msg['role'] == 'user':
                     last_user_message = msg['content']
                     break
-            response = await self._call_llm(last_user_message, llm_config)
-            return response, []
+            
+            if enable_streaming:
+                # 流式输出
+                async def stream_generator():
+                    async for token in self._stream_llm(last_user_message, llm_config):
+                        yield {'type': 'token', 'content': token}
+                    yield {'type': 'metadata', 'tools_used': []}
+                return stream_generator()
+            else:
+                # 非流式
+                response = await self._call_llm(last_user_message, llm_config)
+                return response, []
         
         # 使用初始消息作为起点
         messages = initial_messages.copy()
         # 同轮去重：相同 (工具名, 参数) 在本轮已执行过则直接复用结果，避免模型重复调用（如连续 5 次 repo_map）
         same_call_cache = {}
+        
+        # 🔥 收集所有编辑事件（用于流式输出）
+        all_edit_events = []
         
         # 工具调用循环
         for iteration in range(max_iterations):
@@ -954,10 +967,37 @@ class BaseAgent(ABC):
                     return stream_generator()
                 
                 elif enable_streaming and iteration > 0:
-                    # 有工具调用后的最终回复
-                    # 直接返回非流式结果（避免模拟流式的复杂性）
-                    self.logger.info(f"工具调用后返回结果（迭代{iteration+1}次）")
-                    return response.get('content', ''), tools_used
+                    # 有工具调用后的最终回复，使用流式输出
+                    self.logger.info(f"🌊 使用流式输出（工具调用后，迭代{iteration+1}次）")
+                    
+                    async def stream_generator():
+                        # 🔥 先发送所有编辑事件
+                        for edit_event in all_edit_events:
+                            yield {'type': 'edit_event', 'event': edit_event}
+                        
+                        # 然后流式输出最终回复
+                        from ..llm import get_client_manager
+                        from ..llm.base import LLMRequest
+                        
+                        client_manager = get_client_manager()
+                        model = (llm_config or {}).get('model', self.config.model)
+                        temperature = (llm_config or {}).get('temperature', self.config.temperature)
+                        client = client_manager.get_client(model=model)
+                        
+                        request = LLMRequest(
+                            prompt="",
+                            model=model,
+                            temperature=temperature,
+                            stream=True
+                        )
+                        request.messages = messages
+                        
+                        async for token in client.stream_chat(request):
+                            yield {'type': 'token', 'content': token}
+                        
+                        yield {'type': 'metadata', 'tools_used': tools_used}
+                    
+                    return stream_generator()
                 
                 else:
                     # 不启用流式，返回完整响应
@@ -1046,16 +1086,47 @@ class BaseAgent(ABC):
             # 显示工具开始
             display.show_tool_start(tool_name, tool_args)
             
+            # 🔥 检查是否是流式编辑工具
+            tool = tool_registry.get_tool(tool_name)
+            is_streaming_edit = False
+            if tool:
+                from ..tools.base import StreamingEditTool
+                is_streaming_edit = isinstance(tool, StreamingEditTool)
+            
             # 执行工具（带进度显示）
             start_time = time.time()
             try:
-                with display.show_progress(tool_name) as progress:
-                    task = progress.add_task(f"正在执行 {tool_name}...", total=100)
+                if is_streaming_edit and context.get('enable_edit_streaming', True) and enable_streaming:
+                    # 🔥 流式编辑工具（仅在启用流式输出时）
+                    self.logger.info(f"使用流式编辑: {tool_name}")
                     
-                    # 模拟进度
-                    progress.update(task, advance=30)
-                    tool_result = await tool_registry.execute_tool(tool_name, **tool_args)
-                    progress.update(task, advance=70)
+                    # 收集编辑事件
+                    async for event in tool.execute_streaming(**tool_args):
+                        all_edit_events.append(event)  # 🔥 添加到全局列表
+                        
+                        # 显示简单进度
+                        from ..tools.base import EditEvent
+                        if event.type == EditEvent.EDIT_LINE:
+                            progress_val = int(event.data.get('progress', 0) * 100)
+                            if progress_val % 20 == 0:  # 每20%显示一次
+                                self.logger.debug(f"编辑进度: {progress_val}%")
+                    
+                    # 流式编辑已经完成了实际操作，只需要构造结果
+                    from ..tools.base import ToolResult
+                    tool_result = ToolResult(
+                        success=True,
+                        content=f"文件已通过流式编辑完成: {tool_args.get('file_path', 'unknown')}",
+                        metadata={'streaming': True, 'tool_name': tool_name}
+                    )
+                else:
+                    # 🔥 普通工具
+                    with display.show_progress(tool_name) as progress:
+                        task = progress.add_task(f"正在执行 {tool_name}...", total=100)
+                        
+                        # 模拟进度
+                        progress.update(task, advance=30)
+                        tool_result = await tool_registry.execute_tool(tool_name, **tool_args)
+                        progress.update(task, advance=70)
                 
                 duration = time.time() - start_time
                 display.show_success(tool_name, duration)

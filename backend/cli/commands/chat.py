@@ -639,6 +639,16 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
                             except (UnicodeEncodeError, UnicodeDecodeError):
                                 # 编码错误，跳过这个 token
                                 pass
+                        elif event.get('type') == 'edit_event':
+                            # 🔥 编辑事件
+                            edit_event = event.get('event')
+                            if edit_event:
+                                # 导入显示函数
+                                from cli.commands.edit import display_edit_event_simple
+                                from cli.ui.console import console
+                                
+                                # 显示编辑事件
+                                display_edit_event_simple(edit_event, console)
                         elif event.get('type') == 'result':
                             # 流式输出完成
                             pass

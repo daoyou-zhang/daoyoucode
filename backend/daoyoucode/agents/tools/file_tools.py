@@ -5,10 +5,11 @@
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, AsyncGenerator
 import os
 import shutil
-from .base import BaseTool, ToolResult
+import asyncio
+from .base import BaseTool, ToolResult, EditEvent, StreamingEditTool
 
 
 class ReadFileTool(BaseTool):
@@ -84,13 +85,13 @@ class ReadFileTool(BaseTool):
         }
 
 
-class WriteFileTool(BaseTool):
-    """写入文件工具（支持LSP验证）"""
+class WriteFileTool(StreamingEditTool):
+    """写入文件工具（支持LSP验证和流式显示）"""
     
     def __init__(self):
         super().__init__(
             name="write_file",
-            description="写入文件内容（自动创建目录，可选LSP验证）"
+            description="写入文件内容（自动创建目录，可选LSP验证，支持流式显示）"
         )
     
     async def execute(
@@ -269,6 +270,145 @@ class WriteFileTool(BaseTool):
                 "required": ["file_path", "content"]
             }
         }
+    
+    async def execute_streaming(
+        self,
+        file_path: str,
+        content: str,
+        encoding: str = "utf-8",
+        create_dirs: bool = True,
+        verify: bool = True
+    ) -> AsyncGenerator[EditEvent, None]:
+        """
+        流式写入文件
+        
+        Yields:
+            EditEvent - 编辑事件
+        """
+        try:
+            path = self.resolve_path(file_path)
+            lines = content.split('\n')
+            total_lines = len(lines)
+            
+            # 1. 开始编辑
+            yield EditEvent(
+                type=EditEvent.EDIT_START,
+                data={
+                    'file_path': file_path,
+                    'total_lines': total_lines,
+                    'size': len(content)
+                }
+            )
+            
+            # 2. 分析文件
+            yield EditEvent(
+                type=EditEvent.EDIT_ANALYZING,
+                data={
+                    'file_path': file_path,
+                    'exists': path.exists(),
+                    'is_code': self._should_verify(path)
+                }
+            )
+            
+            # 3. 创建目录
+            if create_dirs and not path.parent.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 4. 逐行写入（模拟流式显示）
+            # 注意：实际写入是一次性的，这里只是为了显示进度
+            for i, line in enumerate(lines):
+                yield EditEvent(
+                    type=EditEvent.EDIT_LINE,
+                    data={
+                        'line_number': i + 1,
+                        'content': line[:100],  # 只显示前100个字符
+                        'progress': (i + 1) / total_lines
+                    }
+                )
+                
+                # 模拟延迟（让用户看到过程）
+                # 小文件快速，大文件适当延迟
+                if total_lines > 100:
+                    if i % 10 == 0:  # 每10行更新一次
+                        await asyncio.sleep(0.01)
+                elif total_lines > 20:
+                    if i % 5 == 0:  # 每5行更新一次
+                        await asyncio.sleep(0.01)
+                else:
+                    await asyncio.sleep(0.005)  # 小文件也要有延迟
+            
+            # 5. 实际写入文件
+            with open(path, 'w', encoding=encoding) as f:
+                f.write(content)
+            
+            # 6. LSP验证
+            if verify and self._should_verify(path):
+                yield EditEvent(
+                    type=EditEvent.EDIT_VERIFYING,
+                    data={'file_path': file_path}
+                )
+                
+                diagnostics = await self._verify_with_lsp(path)
+                
+                if diagnostics:
+                    error_count = len([d for d in diagnostics if d.get('severity') == 1])
+                    warning_count = len([d for d in diagnostics if d.get('severity') == 2])
+                    
+                    if error_count > 0:
+                        # 有错误
+                        error_messages = [
+                            f"Line {d.get('range', {}).get('start', {}).get('line', '?') + 1}: {d.get('message', 'Unknown')}"
+                            for d in diagnostics if d.get('severity') == 1
+                        ]
+                        
+                        yield EditEvent(
+                            type=EditEvent.EDIT_ERROR,
+                            data={
+                                'file_path': file_path,
+                                'error_count': error_count,
+                                'errors': error_messages[:5]
+                            }
+                        )
+                        return
+                    elif warning_count > 0:
+                        # 只有警告，继续但提示
+                        warning_messages = [
+                            f"Line {d.get('range', {}).get('start', {}).get('line', '?') + 1}: {d.get('message', 'Unknown')}"
+                            for d in diagnostics if d.get('severity') == 2
+                        ]
+                        
+                        yield EditEvent(
+                            type=EditEvent.EDIT_COMPLETE,
+                            data={
+                                'file_path': file_path,
+                                'lines': total_lines,
+                                'size': len(content),
+                                'verified': True,
+                                'warnings': warning_messages[:3],
+                                'warning_count': warning_count
+                            }
+                        )
+                        return
+            
+            # 7. 完成
+            yield EditEvent(
+                type=EditEvent.EDIT_COMPLETE,
+                data={
+                    'file_path': file_path,
+                    'lines': total_lines,
+                    'size': len(content),
+                    'verified': verify and self._should_verify(path)
+                }
+            )
+            
+        except Exception as e:
+            yield EditEvent(
+                type=EditEvent.EDIT_ERROR,
+                data={
+                    'file_path': file_path,
+                    'error': str(e)
+                }
+            )
 
 
 class ListFilesTool(BaseTool):
