@@ -55,7 +55,8 @@ def _register_builtin_tools():
     )
     from .diff_tools import (
         SearchReplaceTool,
-        ApplyPatchTool
+        ApplyPatchTool,
+        IntelligentDiffEditTool
     )
     from .repomap_tools import (
         RepoMapTool,
@@ -103,7 +104,7 @@ def _register_builtin_tools():
     _tool_registry.register(RunTestTool())
     _tool_registry.register(RunLintTool())
     
-    # Diff工具（1个）
+    # Diff工具（3个）
     try:
         _tool_registry.register(SearchReplaceTool())
     except Exception as e:
@@ -112,6 +113,11 @@ def _register_builtin_tools():
         _tool_registry.register(ApplyPatchTool())
     except Exception as e:
         logger.error(f"注册ApplyPatchTool失败: {e}")
+    try:
+        _tool_registry.register(IntelligentDiffEditTool())
+        logger.info("✓ IntelligentDiffEditTool注册成功")
+    except Exception as e:
+        logger.error(f"注册IntelligentDiffEditTool失败: {e}")
     
     # RepoMap工具（3个）
     try:

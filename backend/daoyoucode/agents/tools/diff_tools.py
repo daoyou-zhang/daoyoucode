@@ -8,10 +8,11 @@ Diff工具 - 智能替换策略
 - 模糊匹配和容错
 """
 
-from typing import Dict, Any, Generator, Optional, List, Tuple
+from typing import Dict, Any, Generator, Optional, List, Tuple, AsyncGenerator
 from pathlib import Path
 import re
-from .base import BaseTool, ToolResult
+import asyncio
+from .base import BaseTool, ToolResult, StreamingEditTool, EditEvent
 
 
 # ========== Levenshtein距离算法 ==========
@@ -730,5 +731,595 @@ class ApplyPatchTool(BaseTool):
                     }
                 },
                 "required": ["diff"]
+            }
+        }
+
+
+
+# ========== 智能 Diff 编辑工具（流式） ==========
+
+class IntelligentDiffEditTool(StreamingEditTool):
+    """
+    智能 Diff 编辑工具（支持流式显示）
+    
+    功能：
+    1. 精确匹配 - 直接查找替换
+    2. 模糊匹配 - 使用 Levenshtein 距离
+    3. 智能回退 - 验证失败时自动回滚
+    4. 流式显示 - 实时显示编辑过程
+    
+    优势：
+    - 精确到行，不需要完整文件内容
+    - 自动处理空白差异
+    - 支持模糊匹配（相似度阈值）
+    - LSP 验证集成
+    """
+    
+    def __init__(self):
+        super().__init__(
+            name="intelligent_diff_edit",
+            description="使用智能 Diff 编辑文件（精确到行，支持模糊匹配和自动回退）"
+        )
+    
+    async def execute(
+        self,
+        file_path: str,
+        search_block: str,
+        replace_block: str,
+        fuzzy_match: bool = True,
+        similarity_threshold: float = 0.8,
+        verify: bool = True
+    ) -> ToolResult:
+        """
+        执行智能 Diff 编辑
+        
+        Args:
+            file_path: 文件路径
+            search_block: 要查找的代码块
+            replace_block: 替换的代码块
+            fuzzy_match: 是否启用模糊匹配
+            similarity_threshold: 相似度阈值（0.0-1.0）
+            verify: 是否使用 LSP 验证
+        
+        Returns:
+            ToolResult
+        """
+        try:
+            # 解析路径
+            path = self.resolve_path(file_path)
+            
+            if not path.exists():
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"文件不存在: {file_path}"
+                )
+            
+            # 读取文件
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 查找最佳匹配
+            match_result = self._find_best_match(
+                content,
+                search_block,
+                fuzzy_match,
+                similarity_threshold
+            )
+            
+            if not match_result:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error="未找到匹配的代码块"
+                )
+            
+            match_start, match_end, similarity = match_result
+            matched_text = content[match_start:match_end]
+            
+            # 应用替换
+            new_content = (
+                content[:match_start] +
+                replace_block +
+                content[match_end:]
+            )
+            
+            # 生成 Diff
+            import difflib
+            diff_lines = list(difflib.unified_diff(
+                content.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"a/{file_path}",
+                tofile=f"b/{file_path}",
+                lineterm=''
+            ))
+            
+            diff_text = ''.join(diff_lines) if diff_lines else "No changes"
+            
+            # 写入文件
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            # LSP 验证
+            diagnostics = []
+            if verify and self._should_verify(path):
+                diagnostics = await self._verify_with_lsp(path)
+                
+                if diagnostics:
+                    error_count = len([d for d in diagnostics if d.get('severity') == 1])
+                    
+                    if error_count > 0:
+                        # 有错误，回退
+                        with open(path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        
+                        error_messages = [
+                            f"Line {d.get('range', {}).get('start', {}).get('line', '?') + 1}: {d.get('message', 'Unknown')}"
+                            for d in diagnostics if d.get('severity') == 1
+                        ]
+                        
+                        return ToolResult(
+                            success=False,
+                            content=None,
+                            error=f"验证失败，已回退。{error_count} 个错误:\n" + "\n".join(error_messages[:5])
+                        )
+            
+            # 构建结果消息
+            result_message = f"✅ 成功编辑 {file_path}\n\n"
+            result_message += f"📊 匹配信息:\n"
+            result_message += f"  • 相似度: {similarity:.1%}\n"
+            result_message += f"  • 匹配位置: {match_start}-{match_end}\n"
+            result_message += f"  • 匹配内容:\n```\n{matched_text[:200]}{'...' if len(matched_text) > 200 else ''}\n```\n\n"
+            result_message += f"📝 变更:\n```diff\n{diff_text}\n```"
+            
+            if diagnostics:
+                warning_count = len([d for d in diagnostics if d.get('severity') == 2])
+                if warning_count > 0:
+                    result_message += f"\n\n⚠️  {warning_count} 个警告（已忽略）"
+            
+            return ToolResult(
+                success=True,
+                content=result_message,
+                metadata={
+                    'file_path': str(path),
+                    'similarity': similarity,
+                    'match_start': match_start,
+                    'match_end': match_end,
+                    'diff': diff_text,
+                    'verified': verify and self._should_verify(path),
+                    'diagnostics': diagnostics
+                }
+            )
+            
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                content=None,
+                error=str(e)
+            )
+    
+    async def execute_streaming(
+        self,
+        file_path: str,
+        search_block: str,
+        replace_block: str,
+        fuzzy_match: bool = True,
+        similarity_threshold: float = 0.8,
+        verify: bool = True
+    ) -> AsyncGenerator[EditEvent, None]:
+        """
+        流式执行智能 Diff 编辑
+        
+        实时显示编辑过程：
+        1. 分析文件
+        2. 查找匹配
+        3. 应用修改
+        4. 验证代码
+        
+        Yields:
+            EditEvent - 编辑事件
+        """
+        try:
+            # 解析路径
+            path = self.resolve_path(file_path)
+            
+            # 事件1: 开始编辑
+            yield EditEvent(
+                type=EditEvent.EDIT_START,
+                data={
+                    'file_path': file_path,
+                    'action': 'intelligent_diff_edit'
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            if not path.exists():
+                yield EditEvent(
+                    type=EditEvent.EDIT_ERROR,
+                    data={
+                        'error': f"文件不存在: {file_path}"
+                    }
+                )
+                return
+            
+            # 事件2: 分析文件
+            yield EditEvent(
+                type=EditEvent.EDIT_ANALYZING,
+                data={
+                    'file_path': file_path,
+                    'status': '读取文件内容'
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 读取文件
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            file_size = len(content)
+            line_count = content.count('\n') + 1
+            
+            yield EditEvent(
+                type=EditEvent.EDIT_ANALYZING,
+                data={
+                    'file_path': file_path,
+                    'status': '分析完成',
+                    'size': file_size,
+                    'lines': line_count
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 事件3: 查找匹配
+            yield EditEvent(
+                type=EditEvent.EDIT_PLANNING,
+                data={
+                    'status': '查找匹配的代码块',
+                    'fuzzy_match': fuzzy_match,
+                    'similarity_threshold': similarity_threshold
+                }
+            )
+            
+            await asyncio.sleep(0.02)
+            
+            # 查找最佳匹配
+            match_result = self._find_best_match(
+                content,
+                search_block,
+                fuzzy_match,
+                similarity_threshold
+            )
+            
+            if not match_result:
+                yield EditEvent(
+                    type=EditEvent.EDIT_ERROR,
+                    data={
+                        'error': "未找到匹配的代码块"
+                    }
+                )
+                return
+            
+            match_start, match_end, similarity = match_result
+            matched_text = content[match_start:match_end]
+            
+            # 计算匹配的行号
+            match_start_line = content[:match_start].count('\n') + 1
+            match_end_line = content[:match_end].count('\n') + 1
+            
+            yield EditEvent(
+                type=EditEvent.EDIT_PLANNING,
+                data={
+                    'status': '找到匹配',
+                    'similarity': similarity,
+                    'match_start_line': match_start_line,
+                    'match_end_line': match_end_line,
+                    'matched_lines': match_end_line - match_start_line + 1
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 事件4: 应用修改
+            yield EditEvent(
+                type=EditEvent.EDIT_APPLYING,
+                data={
+                    'status': '应用修改',
+                    'old_size': len(matched_text),
+                    'new_size': len(replace_block)
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 应用替换
+            new_content = (
+                content[:match_start] +
+                replace_block +
+                content[match_end:]
+            )
+            
+            # 生成 Diff
+            import difflib
+            diff_lines = list(difflib.unified_diff(
+                content.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"a/{file_path}",
+                tofile=f"b/{file_path}",
+                lineterm=''
+            ))
+            
+            diff_text = ''.join(diff_lines) if diff_lines else "No changes"
+            
+            # 统计变更
+            added_lines = len([l for l in diff_lines if l.startswith('+')])
+            removed_lines = len([l for l in diff_lines if l.startswith('-')])
+            
+            yield EditEvent(
+                type=EditEvent.EDIT_BLOCK,
+                data={
+                    'status': '生成 Diff',
+                    'added_lines': added_lines,
+                    'removed_lines': removed_lines,
+                    'diff_preview': diff_text[:500]  # 只显示前500字符
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 写入文件
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            yield EditEvent(
+                type=EditEvent.EDIT_APPLYING,
+                data={
+                    'status': '文件已写入'
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 事件5: LSP 验证
+            if verify and self._should_verify(path):
+                yield EditEvent(
+                    type=EditEvent.EDIT_VERIFYING,
+                    data={
+                        'status': '使用 LSP 验证代码'
+                    }
+                )
+                
+                await asyncio.sleep(0.02)
+                
+                diagnostics = await self._verify_with_lsp(path)
+                
+                if diagnostics:
+                    error_count = len([d for d in diagnostics if d.get('severity') == 1])
+                    warning_count = len([d for d in diagnostics if d.get('severity') == 2])
+                    
+                    yield EditEvent(
+                        type=EditEvent.EDIT_VERIFYING,
+                        data={
+                            'status': '验证完成',
+                            'errors': error_count,
+                            'warnings': warning_count
+                        }
+                    )
+                    
+                    await asyncio.sleep(0.01)
+                    
+                    if error_count > 0:
+                        # 有错误，回退
+                        with open(path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        
+                        error_messages = [
+                            f"Line {d.get('range', {}).get('start', {}).get('line', '?') + 1}: {d.get('message', 'Unknown')}"
+                            for d in diagnostics if d.get('severity') == 1
+                        ]
+                        
+                        yield EditEvent(
+                            type=EditEvent.EDIT_ERROR,
+                            data={
+                                'error': f"验证失败，已回退。{error_count} 个错误",
+                                'error_messages': error_messages[:5]
+                            }
+                        )
+                        return
+                else:
+                    yield EditEvent(
+                        type=EditEvent.EDIT_VERIFYING,
+                        data={
+                            'status': '验证通过，无错误'
+                        }
+                    )
+                    
+                    await asyncio.sleep(0.01)
+            
+            # 事件6: 编辑完成
+            yield EditEvent(
+                type=EditEvent.EDIT_COMPLETE,
+                data={
+                    'file_path': file_path,
+                    'similarity': similarity,
+                    'match_start_line': match_start_line,
+                    'match_end_line': match_end_line,
+                    'added_lines': added_lines,
+                    'removed_lines': removed_lines,
+                    'verified': verify and self._should_verify(path)
+                }
+            )
+            
+        except Exception as e:
+            yield EditEvent(
+                type=EditEvent.EDIT_ERROR,
+                data={
+                    'error': str(e)
+                }
+            )
+    
+    def _find_best_match(
+        self,
+        content: str,
+        search_block: str,
+        fuzzy_match: bool,
+        similarity_threshold: float
+    ) -> Optional[Tuple[int, int, float]]:
+        """
+        查找最佳匹配
+        
+        Returns:
+            (match_start, match_end, similarity) 或 None
+        """
+        
+        # 1. 精确匹配
+        if search_block in content:
+            start = content.index(search_block)
+            end = start + len(search_block)
+            return (start, end, 1.0)
+        
+        if not fuzzy_match:
+            return None
+        
+        # 2. 模糊匹配
+        content_lines = content.split('\n')
+        search_lines = search_block.split('\n')
+        
+        best_match = None
+        best_similarity = 0.0
+        
+        # 滑动窗口
+        for i in range(len(content_lines) - len(search_lines) + 1):
+            window = content_lines[i:i + len(search_lines)]
+            
+            # 计算相似度
+            similarity = self._calculate_similarity(
+                window,
+                search_lines
+            )
+            
+            if similarity > best_similarity and similarity >= similarity_threshold:
+                best_similarity = similarity
+                
+                # 计算字符位置
+                start = sum(len(content_lines[j]) + 1 for j in range(i))
+                end = start + sum(len(window[j]) + 1 for j in range(len(window))) - 1
+                
+                best_match = (start, end, similarity)
+        
+        return best_match
+    
+    def _calculate_similarity(
+        self,
+        lines1: List[str],
+        lines2: List[str]
+    ) -> float:
+        """
+        计算两组行的相似度
+        
+        使用 Levenshtein 距离
+        """
+        if len(lines1) != len(lines2):
+            return 0.0
+        
+        total_similarity = 0.0
+        
+        for line1, line2 in zip(lines1, lines2):
+            # 归一化空白
+            line1_norm = ' '.join(line1.split())
+            line2_norm = ' '.join(line2.split())
+            
+            if line1_norm == line2_norm:
+                total_similarity += 1.0
+            else:
+                # Levenshtein 距离
+                max_len = max(len(line1_norm), len(line2_norm))
+                if max_len == 0:
+                    total_similarity += 1.0
+                else:
+                    distance = levenshtein(line1_norm, line2_norm)
+                    total_similarity += 1.0 - (distance / max_len)
+        
+        return total_similarity / len(lines1)
+    
+    def _should_verify(self, path: Path) -> bool:
+        """判断是否应该验证文件"""
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs'}
+        return path.suffix in code_extensions
+    
+    async def _verify_with_lsp(self, file_path: Path) -> List[Dict]:
+        """
+        使用 LSP 验证代码
+        
+        Returns:
+            诊断信息列表（错误和警告）
+        """
+        try:
+            from .lsp_tools import with_lsp_client
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            result = await with_lsp_client(
+                str(file_path),
+                lambda client: client.diagnostics(str(file_path), wait_time=3.0)
+            )
+            
+            diagnostics = result.get('items', [])
+            logger.debug(f"LSP返回{len(diagnostics)}个诊断信息")
+            
+            # 只返回错误和警告
+            filtered = [
+                d for d in diagnostics 
+                if d.get('severity') in [1, 2]  # 1=Error, 2=Warning
+            ]
+            
+            logger.debug(f"过滤后{len(filtered)}个错误/警告")
+            return filtered
+        
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"LSP验证失败: {e}")
+            return []
+    
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "文件路径（相对于项目根目录）"
+                    },
+                    "search_block": {
+                        "type": "string",
+                        "description": "要查找的代码块"
+                    },
+                    "replace_block": {
+                        "type": "string",
+                        "description": "替换的代码块"
+                    },
+                    "fuzzy_match": {
+                        "type": "boolean",
+                        "description": "是否启用模糊匹配（默认True）",
+                        "default": True
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "相似度阈值（0.0-1.0，默认0.8）",
+                        "default": 0.8
+                    },
+                    "verify": {
+                        "type": "boolean",
+                        "description": "是否使用LSP验证代码（默认True）",
+                        "default": True
+                    }
+                },
+                "required": ["file_path", "search_block", "replace_block"]
             }
         }
