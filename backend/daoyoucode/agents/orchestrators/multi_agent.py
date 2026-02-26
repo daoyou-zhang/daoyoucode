@@ -55,7 +55,7 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                     if prefetch_level == "full":
                         # 完整预取：文档+结构+地图
                         d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
-                        s = await struct_tool.execute(repo_path=".", max_depth=3)
+                        s = await struct_tool.execute(repo_path=".", max_depth=5)
                         r = await repo_map_tool.execute(repo_path=".")
                         
                         ld = len(getattr(d, "content", None) or "") if d and getattr(d, "content", None) else 0
@@ -468,16 +468,50 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         if selected_helpers:
             self.logger.info(f"执行 {len(selected_helpers)} 个辅助Agent")
             
-            helper_tasks = [
-                agent.execute(
-                    prompt_source={'use_agent_default': True},
+            # 🆕 为每个辅助Agent加载其对应的Skill配置
+            from ..core.skill import get_skill_loader
+            skill_loader = get_skill_loader()
+            
+            # Agent名称到Skill名称的映射
+            agent_to_skill = {
+                'code_analyzer': 'code-analysis',
+                'programmer': 'programming',
+                'refactor_master': 'refactoring',
+                'test_expert': 'testing'
+            }
+            
+            helper_tasks = []
+            for agent in selected_helpers:
+                # 获取该Agent对应的Skill配置
+                skill_name = agent_to_skill.get(agent.name)
+                if skill_name:
+                    helper_skill = skill_loader.get_skill(skill_name)
+                    if helper_skill and helper_skill.prompt:
+                        # 使用该Agent自己的Skill配置中的Prompt
+                        prompt_source = helper_skill.prompt
+                        self.logger.info(f"辅助Agent {agent.name} 使用 Skill {skill_name} 的 Prompt")
+                    else:
+                        # 如果没有找到Skill或Prompt，使用Agent默认
+                        prompt_source = {'use_agent_default': True}
+                        self.logger.warning(f"辅助Agent {agent.name} 未找到 Skill {skill_name}，使用默认Prompt")
+                else:
+                    # 未知Agent，使用默认
+                    prompt_source = {'use_agent_default': True}
+                    self.logger.warning(f"辅助Agent {agent.name} 未配置Skill映射，使用默认Prompt")
+                
+                # 🔥 辅助Agent不使用流式输出（显式传递 enable_streaming=False）
+                # 在 context 中添加 agent_name，用于工具执行日志
+                helper_context = {**context, 'agent_name': agent.name}
+                
+                task = agent.execute(
+                    prompt_source=prompt_source,
                     user_input=user_input,
-                    context=context,
+                    context=helper_context,
                     llm_config=skill.llm,
-                    tools=self._get_tools_for_agent(skill, agent.name)
+                    tools=self._get_tools_for_agent(skill, agent.name),
+                    enable_streaming=False  # 显式禁用流式输出
                 )
-                for agent in selected_helpers
-            ]
+                helper_tasks.append(task)
             
             helper_responses = await asyncio.gather(*helper_tasks, return_exceptions=True)
             
@@ -485,6 +519,7 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                 if isinstance(response, Exception):
                     self.logger.error(f"辅助Agent {agent.name} 失败: {response}")
                 else:
+                    # 辅助Agent应该返回普通结果对象（已禁用流式输出）
                     helper_results.append({
                         'agent': agent.name,
                         'content': response.content if response.success else ""

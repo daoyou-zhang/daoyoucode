@@ -6,7 +6,7 @@ orchestrator: simple
 agent: test_expert
 
 prompt:
-  file: prompts/test.md
+  file: prompts/test.md  # 简洁版本
 
 llm:
   model: qwen-coder-plus
@@ -18,7 +18,9 @@ middleware:
 
 tools:
   - read_file
+  - batch_read_files      # 🆕 批量读取文件
   - write_file
+  - batch_write_files     # 🆕 批量写入文件
   - list_files
   - text_search
   - run_test

@@ -25,7 +25,7 @@ class ToolDisplay:
     def __init__(self):
         self.console = Console() if RICH_AVAILABLE else None
     
-    def show_tool_start(self, tool_name: str, args: dict):
+    def show_tool_start(self, tool_name: str, args: dict, agent_name: Optional[str] = None):
         """显示工具开始执行"""
         if RICH_AVAILABLE:
             # 创建参数表格
@@ -40,10 +40,16 @@ class ToolDisplay:
                     value_str = value_str[:57] + "..."
                 table.add_row(key, value_str)
             
-            self.console.print(f"\n[bold blue]🔧 执行工具:[/bold blue] [cyan]{tool_name}[/cyan]")
+            # 如果有 agent_name，显示在工具名称后面
+            tool_display = f"[cyan]{tool_name}[/cyan]"
+            if agent_name:
+                tool_display += f" [dim]({agent_name})[/dim]"
+            
+            self.console.print(f"\n[bold blue]🔧 执行工具:[/bold blue] {tool_display}")
             self.console.print(table)
         else:
-            print(f"\n🔧 执行工具: {tool_name}")
+            agent_info = f" ({agent_name})" if agent_name else ""
+            print(f"\n🔧 执行工具: {tool_name}{agent_info}")
             print(f"   参数: {args}")
     
     def show_progress(self, tool_name: str, message: str = "正在执行..."):

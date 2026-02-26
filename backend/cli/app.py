@@ -186,12 +186,41 @@ def callback(
     }
     
     # 配置日志
+    import logging
+    import sys
+    
+    # 打印调试信息（确认这段代码被执行）
+    print(f"[DEBUG] 配置日志: verbose={verbose}, debug={debug}", file=sys.stderr)
+    
+    # 强制配置根 logger
+    root_logger = logging.getLogger()
+    
+    # 清除现有的 handlers
+    root_logger.handlers.clear()
+    
+    # 设置日志级别
     if debug:
-        import logging
-        logging.basicConfig(level=logging.DEBUG)
+        root_logger.setLevel(logging.DEBUG)
+        print("[DEBUG] 设置日志级别为 DEBUG", file=sys.stderr)
     elif verbose:
-        import logging
-        logging.basicConfig(level=logging.INFO)
+        root_logger.setLevel(logging.INFO)
+        print("[DEBUG] 设置日志级别为 INFO", file=sys.stderr)
+    else:
+        root_logger.setLevel(logging.WARNING)
+    
+    # 添加控制台 handler（输出到 stderr，避免与 Rich 冲突）
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(logging.DEBUG if debug else (logging.INFO if verbose else logging.WARNING))
+    
+    # 设置格式
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(name)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+    
+    print(f"[DEBUG] 日志配置完成，handlers数量: {len(root_logger.handlers)}", file=sys.stderr)
 
 
 def main():

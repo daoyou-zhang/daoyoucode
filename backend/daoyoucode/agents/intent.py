@@ -18,9 +18,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 关键词兜底：意图/触发词未命中时，用户输入含任一词仍视为「想了解项目」（一处维护，react/multi_agent 共用）
+# 🆕 使用更灵活的关键词，支持部分匹配
 PROJECT_UNDERSTANDING_FALLBACK_KEYWORDS = (
-    "架构", "理解项目", "项目架构", "了解项目", "看看项目", "介绍", "项目是干啥",
-    "理解", "理解下", "当前项目", "介绍一下", "项目介绍", "看看当前项目",
+    "架构", "项目架构", "看看项目", "介绍", "项目是干啥",
+    "理解", "了解", "当前项目", "介绍一下", "项目介绍",
+    "对比", "分析", "优劣势", "优势", "劣势",  # 🆕 添加对比分析相关词
 )
 
 # 默认意图定义：供多场景复用，prompt 中说明含义，模型返回命中的标签
@@ -28,6 +30,7 @@ DEFAULT_INTENT_DEFINITIONS = {
     "understand_project": "用户想了解/探索当前项目：理解、理解下、当前项目、项目是啥、介绍、架构、结构、概览、整体、看看、了解一下等",
     "need_code_context": "用户问题涉及代码实现、查某功能/某处逻辑、需要看代码上下文",
     "edit_or_write": "用户明确要改代码、写文件、新增或修改实现",
+    "run_test": "用户想运行测试、执行测试、测试代码、验证功能：测试、跑测试、运行测试、test、pytest等",
     "general_chat": "一般对话、问候、无关代码的闲聊",
 }
 
@@ -113,7 +116,14 @@ async def should_prefetch_project_understanding(
     """
     user_input_stripped = (user_input or "").strip()
     if not user_input_stripped:
+        logger.debug("用户输入为空，跳过预取")
         return False, [], "none"
+    
+    # 🆕 快速过滤：简单寒暄直接跳过（避免不必要的LLM调用）
+    SIMPLE_GREETINGS = ("你好", "您好", "hi", "hello", "嗨", "在吗", "在不在")
+    if user_input_stripped.lower() in SIMPLE_GREETINGS:
+        logger.info(f"检测到简单寒暄: '{user_input_stripped}'，跳过预取")
+        return False, ["general_chat"], "none"
 
     use_intent = getattr(skill, "project_understanding_use_intent", False)
     need = False
@@ -123,25 +133,31 @@ async def should_prefetch_project_understanding(
     if use_intent:
         intents = await classify_intents(user_input_stripped, getattr(skill, "llm", None))
         context["detected_intents"] = intents
+        logger.info(f"意图识别结果: {intents}")
         
         # 🆕 根据意图确定预取级别
         if "understand_project" in intents:
             need = True
             prefetch_level = "full"
+            logger.info("意图: 了解项目 → 完整预取")
         elif "need_code_context" in intents:
             need = True
             prefetch_level = "medium"
+            logger.info("意图: 需要代码上下文 → 中等预取")
         elif "edit_or_write" in intents:
             need = True
             prefetch_level = "light"
+            logger.info("意图: 编写/修改代码 → 轻量预取")
         elif "general_chat" in intents:
             need = False
             prefetch_level = "none"
+            logger.info("意图: 简单寒暄 → 不预取")
         
-        # 兜底：关键词匹配
+        # 兜底：关键词匹配（但排除简单寒暄）
         if not need and any(k in user_input_stripped for k in PROJECT_UNDERSTANDING_FALLBACK_KEYWORDS):
             need = True
             prefetch_level = "full"
+            logger.info("关键词兜底触发 → 完整预取")
     else:
         triggers = getattr(skill, "project_understanding_triggers", None) or []
         if not triggers and getattr(skill, "name", "") == "chat-assistant":
@@ -150,8 +166,10 @@ async def should_prefetch_project_understanding(
         
         if need:
             prefetch_level = "full"
+            logger.info("触发词匹配 → 完整预取")
         elif any(k in user_input_stripped for k in PROJECT_UNDERSTANDING_FALLBACK_KEYWORDS):
             need = True
             prefetch_level = "full"
+            logger.info("关键词兜底触发 → 完整预取")
 
     return need, intents, prefetch_level

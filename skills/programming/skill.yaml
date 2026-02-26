@@ -10,7 +10,7 @@ agent: programmer
 
 # Prompt配置（使用独立文件）
 prompt:
-  file: prompts/programmer.md
+  file: prompts/programmer.md  # 简洁版本
 
 # LLM配置
 llm:
@@ -25,7 +25,9 @@ middleware:
 # 可用工具（仅使用注册表中存在的名称，避免运行时报 Tool not found）
 tools:
   - read_file
+  - batch_read_files      # 🆕 批量读取文件
   - write_file
+  - batch_write_files     # 🆕 批量写入文件
   - list_files
   - get_file_info
   - text_search

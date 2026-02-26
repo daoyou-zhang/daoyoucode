@@ -140,37 +140,57 @@ class ReActOrchestrator(BaseOrchestrator):
                 from ..tools import get_tool_registry
                 from ..intent import should_prefetch_project_understanding
                 _tool_reg = get_tool_registry()
-                need_project_prefetch, _, prefetch_level = await should_prefetch_project_understanding(skill, user_input_stripped, context)
+                need_project_prefetch, detected_intents, prefetch_level = await should_prefetch_project_understanding(skill, user_input_stripped, context)
+                
+                # 🆕 详细日志
+                logger.info(f"[预取判定] 用户输入: '{user_input_stripped[:100]}'")
+                logger.info(f"[预取判定] 需要预取: {need_project_prefetch}, 级别: {prefetch_level}, 意图: {detected_intents}")
+                
                 use_intent = getattr(skill, "project_understanding_use_intent", False)
                 if need_project_prefetch and all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map")):
+                    logger.info(f"[预取执行] 开始预取项目理解（级别: {prefetch_level}）")
                     try:
                         docs_tool = _tool_reg.get_tool("discover_project_docs")
                         struct_tool = _tool_reg.get_tool("get_repo_structure")
                         repo_map_tool = _tool_reg.get_tool("repo_map")
-                        # 传足 max_doc_length，否则工具内部默认 5000 会截断，导致「文档没给到」
-                        d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
-                        s = await struct_tool.execute(repo_path=".", max_depth=3)
-                        r = await repo_map_tool.execute(repo_path=".")
-                        # 预取块上限：默认 8000/3500/4500；skill 配了 project_understanding_max_chars 时按比例缩小
-                        _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 8000, 3500, 4500
-                        max_total = getattr(skill, "project_understanding_max_chars", None)
-                        if max_total is not None and max_total > 0:
-                            _DOC_CHARS = min(8000, max(500, int(max_total * 0.50)))
-                            _STRUCT_CHARS = min(3500, max(300, int(max_total * 0.22)))
-                            _REPOMAP_CHARS = min(4500, max(300, int(max_total * 0.28)))
-                        header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                        
+                        # 根据级别决定调用哪些工具
                         parts = []
-                        if d and getattr(d, "content", None) and d.content:
-                            parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
-                        if s and getattr(s, "content", None) and s.content:
-                            parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
-                        if r and getattr(r, "content", None) and r.content:
-                            parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                        header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                        
+                        if prefetch_level in ("full", "medium", "light"):
+                            # 传足 max_doc_length，否则工具内部默认 5000 会截断，导致「文档没给到」
+                            if prefetch_level == "full":
+                                logger.info("[预取执行] 调用 discover_project_docs")
+                                d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
+                                if d and getattr(d, "content", None) and d.content:
+                                    _DOC_CHARS = 8000
+                                    parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
+                                    logger.info(f"[预取执行] discover_project_docs 完成，内容长度: {len(d.content)}")
+                            
+                            if prefetch_level in ("full", "medium"):
+                                logger.info("[预取执行] 调用 get_repo_structure")
+                                s = await struct_tool.execute(repo_path=".", max_depth=3)
+                                if s and getattr(s, "content", None) and s.content:
+                                    _STRUCT_CHARS = 3500
+                                    parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
+                                    logger.info(f"[预取执行] get_repo_structure 完成，内容长度: {len(s.content)}")
+                            
+                            # 所有级别都调用 repo_map
+                            logger.info("[预取执行] 调用 repo_map")
+                            r = await repo_map_tool.execute(repo_path=".")
+                            if r and getattr(r, "content", None) and r.content:
+                                _REPOMAP_CHARS = 4500
+                                parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                                logger.info(f"[预取执行] repo_map 完成，内容长度: {len(r.content)}")
+                        
                         if parts:
                             context["project_understanding_block"] = header + "\n\n".join(parts)
-                            logger.info("已预取了解项目三层结果并注入 context（编排器内、智能体循环前）")
+                            logger.info(f"[预取完成] 已注入 project_understanding_block，总长度: {len(context['project_understanding_block'])}")
+                        else:
+                            logger.warning("[预取完成] 没有获取到任何内容")
                     except Exception as e:
-                        logger.warning("预取了解项目三层失败: %s", e)
+                        logger.error(f"[预取失败] {e}", exc_info=True)
                 # 复用意图：need_code_context 时预取 semantic_code_chunks（若 context 已含则跳过，避免与 executor 重复）
                 if use_intent and "need_code_context" in context.get("detected_intents", []) and "semantic_code_chunks" not in context:
                     skill_tools = getattr(skill, "tools", None) or []
@@ -204,6 +224,14 @@ class ReActOrchestrator(BaseOrchestrator):
             from ..tools import get_tool_registry
             tool_registry = get_tool_registry()
             tools_to_use = tool_registry.filter_tool_names(skill.tools if skill.tools else None)
+            
+            # 🆕 如果已经预取了项目理解，从工具列表中移除这3个工具，避免重复调用
+            if 'project_understanding_block' in context:
+                project_tools = {'discover_project_docs', 'get_repo_structure', 'repo_map'}
+                removed_tools = [t for t in tools_to_use if t in project_tools]
+                tools_to_use = [t for t in tools_to_use if t not in project_tools]
+                if removed_tools:
+                    logger.info(f"[工具过滤] 已预取项目理解，移除工具: {removed_tools}")
             
             # 5. 执行Agent（带工具）
             result = await agent.execute(

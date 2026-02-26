@@ -8,7 +8,7 @@ agent: MainAgent
 
 # Prompt配置
 prompt:
-  file: prompts/chat_assistant.md  # 改进版本（采用业界最佳实践）
+  file: prompts/chat_assistant.md  # 简化版本
 
 # 「了解项目」预取：用 LLM 判断意图（如「我想知道架构」也会触发），不再依赖写死触发词
 project_understanding_use_intent: true
@@ -39,9 +39,11 @@ tools:
   - repo_map              # 代码地图
   - semantic_code_search  # 按问题语义检索相关代码（Cursor 同级）
   - read_file             # 读取文件
+  - batch_read_files      # 🆕 批量读取文件（并行处理，提高效率）
   - text_search           # 文本搜索（修正：原来是grep_search）
   - regex_search          # 正则搜索
   - write_file            # 写入文件（如果需要）
+  - batch_write_files     # 🆕 批量写入文件（并行处理，支持流式显示）
   - search_replace        # 🆕 搜索替换（修改代码）
   - apply_patch           # 🆕 应用补丁（细粒度编辑）
   - list_files            # 列出目录（修正：原来是list_directory）

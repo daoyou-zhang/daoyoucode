@@ -16,7 +16,7 @@ agents:
 
 # Prompt配置
 prompt:
-  file: prompts/sisyphus.md
+  file: prompts/sisyphus.md  # 简洁版本
 
 # 了解项目预取：用 LLM 意图判断，避免死关键词漏掉「理解下当前项目」等说法
 project_understanding_use_intent: true
@@ -33,16 +33,29 @@ tools:
   - get_repo_structure
   - text_search
   - read_file
+  - batch_read_files      # 🆕 批量读取文件
 
 # 按 Agent 分配工具（最优调度：各智能体仅获得其职责所需工具）
 agent_tools:
-  sisyphus:           # 主编排：只需理解与协调
+  sisyphus:           # 主编排：理解、协调、执行
+    - discover_project_docs  # 🆕 了解项目
     - repo_map
     - get_repo_structure
     - text_search
+    - regex_search           # 🆕 正则搜索
+    - semantic_code_search   # 🆕 语义搜索
     - read_file
+    - batch_read_files
+    - write_file             # 🆕 写文件
+    - batch_write_files      # 🆕 批量写文件
+    - list_files             # 🆕 列出文件
+    - search_replace         # 🆕 搜索替换
+    - get_file_symbols       # 🆕 获取符号
+    - git_status             # 🆕 Git 状态
+    - git_diff               # 🆕 Git diff
   code_analyzer:      # 架构分析：读 + 地图 + LSP/符号
     - read_file
+    - batch_read_files
     - repo_map
     - get_repo_structure
     - text_search
@@ -53,7 +66,9 @@ agent_tools:
     - lsp_symbols
   programmer:         # 编程：读写 + 搜索 + Git + 编辑
     - read_file
+    - batch_read_files
     - write_file
+    - batch_write_files
     - list_files
     - get_file_info
     - text_search
@@ -64,7 +79,9 @@ agent_tools:
     - search_replace
   refactor_master:    # 重构：读写 + 搜索 + 编辑 + Git
     - read_file
+    - batch_read_files
     - write_file
+    - batch_write_files
     - list_files
     - text_search
     - regex_search
@@ -74,7 +91,9 @@ agent_tools:
     - git_diff
   test_expert:        # 测试：读写 + 搜索 + 运行测试/ lint
     - read_file
+    - batch_read_files
     - write_file
+    - batch_write_files
     - list_files
     - text_search
     - run_test

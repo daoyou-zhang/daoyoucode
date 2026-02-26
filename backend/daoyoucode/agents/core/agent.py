@@ -428,80 +428,7 @@ class BaseAgent(ABC):
             # ========== 3. 渲染Prompt ==========
             full_prompt = self._render_prompt(prompt, user_input, context)
             
-            # 添加工具使用规则（可配置：context['tool_rules'] 覆盖默认，Skill/编排器可传入）
-            if tools:
-                default_tool_rules = """⚠️ 工具使用规则（必须遵守）：
-
-0. 【最重要】分批处理多个文件
-   - 如果需要处理 >3 个文件，**必须分批处理，这是硬性要求！**
-   - 每批最多处理 3 个文件，不要超过！
-   - 处理流程：读取 → 分析/修改 → 下一个（不要一次性读取所有文件）
-   - 完成一批后：
-     * 明确告诉用户："已完成 X/Y 个文件（文件名列表），还剩 Z 个"
-     * 询问："是否继续处理剩余文件？"
-   - 用户回复"继续"时，从下一个文件开始（不要重复已处理的）
-   - 示例：
-     ```
-     第1批（3个文件）：
-       read_file(file1) → 分析 → write_file(file1) ✓
-       read_file(file2) → 分析 → write_file(file2) ✓
-       read_file(file3) → 分析 → write_file(file3) ✓
-       回复："已完成 3/10 个文件（file1, file2, file3），还剩 7 个。是否继续？"
-     
-     用户："继续"
-     
-     第2批（3个文件）：
-       read_file(file4) → 分析 → write_file(file4) ✓
-       ...
-     ```
-
-1. 理解用户意图
-   - 仔细分析用户的**当前输入**，判断是否真的需要工具
-   - 如果用户只是简单回应（如"好的"、"谢谢"、"不错"），不要调用工具
-   - 如果用户是新话题，不要基于历史对话调用工具
-   - 只有当用户明确需要查看代码、分析项目时，才调用工具
-
-2. 路径参数使用 '.' 表示当前工作目录
-   - ✅ 正确：repo_map(repo_path=".")
-   - ❌ 错误：repo_map(repo_path="./your-repo-path")
-   - ❌ 错误：repo_map(repo_path="/path/to/repo")
-
-3. 文件路径：相对**项目根**（当前工作目录即项目根）
-   - 本仓库后端代码在 backend/daoyoucode/ 下，编排器在 backend/daoyoucode/agents/orchestrators/
-   - ✅ 正确：read_file(file_path="backend/daoyoucode/agents/orchestrators/multi_agent.py")
-   - ❌ 错误：read_file(file_path="daoyoucode/orchestrators/multi_agent.py")  （会解析到错误路径）
-
-4. 搜索目录使用 '.' 或省略
-   - ✅ 正确：text_search(query="example", directory=".")
-   - ❌ 错误：text_search(query="example", directory="./src")
-
-5. 细粒度编辑与验证
-   - 可用 apply_patch(diff="...") 提交 unified diff，便于审计和回滚。
-   - 编辑后建议调用 run_lint 或 run_test 验证，再根据输出修复。
-
-6. 单文件符号（AST 深度）
-   - 已知文件时可调用 get_file_symbols(file_path) 获取类/函数/方法及行号。
-
-7. 不要重复调用
-   - 同一轮对话中不要用相同参数重复调用同一工具（如多次 repo_map(repo_path=".")）；若已获得该工具结果，请直接基于结果回答。
-
-记住：当前工作目录=项目根；不要用 daoyoucode/ 作为路径前缀，后端代码在 backend/daoyoucode/ 下。
-
----
-
-"""
-                # Skill 特定规则（可选，追加到默认规则后）
-                skill_specific_rules = context.get('tool_rules', '')
-                
-                if skill_specific_rules:
-                    # 合并：默认规则 + Skill 特定规则
-                    tool_rules = default_tool_rules + "\n" + skill_specific_rules + "\n"
-                else:
-                    tool_rules = default_tool_rules
-                
-                full_prompt = tool_rules + full_prompt
-            
-            # ========== 4. 调用LLM ==========
+            # ========== 4. 准备工具调用 ==========
             if tools:
                 # 🆕 意图识别：判断是否需要工具
                 # 如果是简单寒暄（general_chat），跳过工具调用
@@ -523,7 +450,22 @@ class BaseAgent(ABC):
                 
                 # 如果是简单寒暄，不使用工具
                 if 'general_chat' in detected_intents and len(detected_intents) == 1:
-                    self.logger.info("🌊 检测到简单寒暄，跳过工具调用，直接流式输出")
+                    self.logger.info("🌊 检测到简单寒暄，跳过工具调用，直接回复")
+                    
+                    if enable_streaming:
+                        async def stream_generator():
+                            async for token in self._stream_llm(full_prompt, llm_config):
+                                yield {'type': 'token', 'content': token}
+                            yield {'type': 'metadata', 'tools_used': []}
+                        
+                        return stream_generator()
+                    else:
+                        response = await self._call_llm(full_prompt, llm_config)
+                        tools_used = []
+                
+                # 🆕 如果没有检测到任何明确意图，也跳过工具调用
+                elif not detected_intents:
+                    self.logger.info("⚠️ 未检测到明确意图，跳过工具调用，直接回复")
                     
                     if enable_streaming:
                         async def stream_generator():
@@ -1069,7 +1011,8 @@ class BaseAgent(ABC):
                 tools_used.append(tool_name)
                 from ..ui import get_tool_display
                 display = get_tool_display()
-                display.show_tool_start(tool_name, tool_args)
+                agent_name = context.get('agent_name') if context else None
+                display.show_tool_start(tool_name, tool_args, agent_name)
                 display.show_success(tool_name, 0)  # 显示完成，避免 UI 悬空
                 tool_result_str = same_call_cache[cache_key] + "\n\n[系统提示：上文为本轮回调相同参数的结果，请直接基于该结果回答，不要再次调用同一工具。]"
                 messages.append({"role": "assistant", "content": None, "function_call": function_call})
@@ -1083,8 +1026,11 @@ class BaseAgent(ABC):
             from ..ui import get_tool_display
             display = get_tool_display()
             
+            # 从 context 获取 agent_name（如果有）
+            agent_name = context.get('agent_name') if context else None
+            
             # 显示工具开始
-            display.show_tool_start(tool_name, tool_args)
+            display.show_tool_start(tool_name, tool_args, agent_name)
             
             # 🔥 检查是否是流式编辑工具
             tool = tool_registry.get_tool(tool_name)

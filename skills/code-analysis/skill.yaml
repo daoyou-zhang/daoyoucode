@@ -8,9 +8,9 @@ orchestrator: simple
 # 使用代码分析Agent
 agent: code_analyzer
 
-# Prompt配置（使用独立文件）
+# Prompt配置（使用oracle的prompt）
 prompt:
-  file: prompts/oracle.md
+  file: ../oracle/prompts/oracle.md
 
 # LLM配置
 llm:
