@@ -742,3 +742,394 @@ class DeleteFileTool(BaseTool):
                 "required": ["path"]
             }
         }
+
+
+class BatchReadFilesTool(BaseTool):
+    """批量读取文件工具"""
+    
+    MAX_OUTPUT_CHARS = 20000  # 批量读取允许更多内容
+    MAX_OUTPUT_LINES = 1000
+    
+    def __init__(self):
+        super().__init__(
+            name="batch_read_files",
+            description="批量读取多个文件内容（并行处理，提高效率）"
+        )
+    
+    async def execute(
+        self,
+        file_paths: List[str],
+        encoding: str = "utf-8"
+    ) -> ToolResult:
+        """
+        批量读取文件
+        
+        Args:
+            file_paths: 文件路径列表
+            encoding: 编码格式
+        
+        Returns:
+            ToolResult，content 为字典 {file_path: content}
+        """
+        try:
+            results = {}
+            errors = {}
+            
+            # 并行读取所有文件
+            async def read_one_file(file_path: str):
+                try:
+                    path = self.resolve_path(file_path)
+                    
+                    if not path.exists():
+                        return file_path, None, f"File not found: {file_path}"
+                    
+                    with open(path, 'r', encoding=encoding) as f:
+                        content = f.read()
+                    
+                    return file_path, content, None
+                except Exception as e:
+                    return file_path, None, str(e)
+            
+            # 并行执行
+            tasks = [read_one_file(fp) for fp in file_paths]
+            read_results = await asyncio.gather(*tasks)
+            
+            # 整理结果
+            for file_path, content, error in read_results:
+                if error:
+                    errors[file_path] = error
+                else:
+                    results[file_path] = content
+            
+            # 构建响应消息
+            success_count = len(results)
+            error_count = len(errors)
+            
+            message = f"✅ 成功读取 {success_count} 个文件"
+            if error_count > 0:
+                message += f"，{error_count} 个失败"
+            
+            message += "\n\n"
+            
+            # 显示每个文件的内容
+            for file_path, content in results.items():
+                lines = content.count('\n') + 1
+                size = len(content)
+                message += f"📄 {file_path} ({lines} 行, {size} 字节)\n"
+                message += "```\n"
+                message += content
+                message += "\n```\n\n"
+            
+            # 显示错误
+            if errors:
+                message += "❌ 失败的文件:\n"
+                for file_path, error in errors.items():
+                    message += f"  • {file_path}: {error}\n"
+            
+            return ToolResult(
+                success=error_count == 0,  # 只有全部成功才算成功
+                content=message,
+                metadata={
+                    'success_count': success_count,
+                    'error_count': error_count,
+                    'results': results,
+                    'errors': errors
+                }
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                content=None,
+                error=str(e)
+            )
+    
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "文件路径列表，例如: ['backend/file1.py', 'backend/file2.py']"
+                    },
+                    "encoding": {
+                        "type": "string",
+                        "description": "编码格式",
+                        "default": "utf-8"
+                    }
+                },
+                "required": ["file_paths"]
+            }
+        }
+
+
+class BatchWriteFilesTool(StreamingEditTool):
+    """批量写入文件工具（支持流式显示）"""
+    
+    def __init__(self):
+        super().__init__(
+            name="batch_write_files",
+            description="批量写入多个文件（并行处理，支持流式显示）"
+        )
+    
+    async def execute(
+        self,
+        files: List[Dict[str, str]],
+        encoding: str = "utf-8",
+        verify: bool = True
+    ) -> ToolResult:
+        """
+        批量写入文件
+        
+        Args:
+            files: 文件列表，每个元素为 {"path": "file_path", "content": "content"}
+            encoding: 编码格式
+            verify: 是否使用 LSP 验证
+        
+        Returns:
+            ToolResult
+        """
+        try:
+            results = []
+            errors = {}
+            
+            # 并行写入所有文件
+            async def write_one_file(file_info: Dict[str, str]):
+                file_path = file_info.get('path')
+                content = file_info.get('content', '')
+                
+                try:
+                    path = self.resolve_path(file_path)
+                    
+                    # 创建目录
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # 写入文件
+                    with open(path, 'w', encoding=encoding) as f:
+                        f.write(content)
+                    
+                    # LSP 验证（如果需要）
+                    diagnostics = []
+                    if verify and self._should_verify(path):
+                        diagnostics = await self._verify_with_lsp(path)
+                        
+                        # 如果有错误，回退
+                        if diagnostics:
+                            error_count = len([d for d in diagnostics if d.get('severity') == 1])
+                            if error_count > 0:
+                                return file_path, False, f"LSP 验证失败: {error_count} 个错误"
+                    
+                    return file_path, True, None
+                except Exception as e:
+                    return file_path, False, str(e)
+            
+            # 并行执行
+            tasks = [write_one_file(f) for f in files]
+            write_results = await asyncio.gather(*tasks)
+            
+            # 整理结果
+            for file_path, success, error in write_results:
+                if success:
+                    results.append(file_path)
+                else:
+                    errors[file_path] = error
+            
+            # 构建响应消息
+            success_count = len(results)
+            error_count = len(errors)
+            
+            message = f"✅ 成功写入 {success_count} 个文件"
+            if error_count > 0:
+                message += f"，{error_count} 个失败"
+            
+            message += "\n\n"
+            
+            # 显示成功的文件
+            if results:
+                message += "📝 成功写入:\n"
+                for file_path in results:
+                    message += f"  • {file_path}\n"
+            
+            # 显示错误
+            if errors:
+                message += "\n❌ 失败的文件:\n"
+                for file_path, error in errors.items():
+                    message += f"  • {file_path}: {error}\n"
+            
+            return ToolResult(
+                success=error_count == 0,
+                content=message,
+                metadata={
+                    'success_count': success_count,
+                    'error_count': error_count,
+                    'results': results,
+                    'errors': errors
+                }
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                content=None,
+                error=str(e)
+            )
+    
+    async def execute_streaming(
+        self,
+        files: List[Dict[str, str]],
+        encoding: str = "utf-8",
+        verify: bool = True
+    ) -> AsyncGenerator[EditEvent, None]:
+        """
+        流式批量写入文件
+        
+        Yields:
+            EditEvent - 编辑事件
+        """
+        try:
+            total_files = len(files)
+            
+            # 事件1: 开始编辑
+            yield EditEvent(
+                type=EditEvent.EDIT_START,
+                data={
+                    'action': 'batch_write_files',
+                    'total_files': total_files
+                }
+            )
+            
+            await asyncio.sleep(0.01)
+            
+            # 逐个处理文件（显示进度）
+            success_count = 0
+            error_count = 0
+            
+            for index, file_info in enumerate(files, 1):
+                file_path = file_info.get('path')
+                content = file_info.get('content', '')
+                
+                # 事件2: 处理当前文件
+                yield EditEvent(
+                    type=EditEvent.EDIT_APPLYING,
+                    data={
+                        'file_path': file_path,
+                        'progress': index / total_files,
+                        'current': index,
+                        'total': total_files
+                    }
+                )
+                
+                await asyncio.sleep(0.01)
+                
+                try:
+                    path = self.resolve_path(file_path)
+                    
+                    # 创建目录
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # 写入文件
+                    with open(path, 'w', encoding=encoding) as f:
+                        f.write(content)
+                    
+                    success_count += 1
+                    
+                    # 事件3: 文件写入成功
+                    yield EditEvent(
+                        type=EditEvent.EDIT_LINE,
+                        data={
+                            'file_path': file_path,
+                            'status': 'success',
+                            'size': len(content)
+                        }
+                    )
+                    
+                except Exception as e:
+                    error_count += 1
+                    
+                    # 事件4: 文件写入失败
+                    yield EditEvent(
+                        type=EditEvent.EDIT_ERROR,
+                        data={
+                            'file_path': file_path,
+                            'error': str(e)
+                        }
+                    )
+                
+                await asyncio.sleep(0.01)
+            
+            # 事件5: 批量写入完成
+            yield EditEvent(
+                type=EditEvent.EDIT_COMPLETE,
+                data={
+                    'total_files': total_files,
+                    'success_count': success_count,
+                    'error_count': error_count
+                }
+            )
+            
+        except Exception as e:
+            yield EditEvent(
+                type=EditEvent.EDIT_ERROR,
+                data={'error': str(e)}
+            )
+    
+    def _should_verify(self, path: Path) -> bool:
+        """判断是否应该验证文件"""
+        code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs'}
+        return path.suffix in code_extensions
+    
+    async def _verify_with_lsp(self, file_path: Path) -> List[Dict]:
+        """使用 LSP 验证代码"""
+        try:
+            from .lsp_tools import with_lsp_client
+            
+            result = await with_lsp_client(
+                str(file_path),
+                lambda client: client.diagnostics(str(file_path), wait_time=3.0)
+            )
+            
+            diagnostics = result.get('items', [])
+            
+            # 只返回错误和警告
+            return [
+                d for d in diagnostics 
+                if d.get('severity') in [1, 2]
+            ]
+        except Exception:
+            return []
+    
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "content": {"type": "string"}
+                            },
+                            "required": ["path", "content"]
+                        },
+                        "description": "文件列表，每个元素包含 path 和 content"
+                    },
+                    "encoding": {
+                        "type": "string",
+                        "description": "编码格式",
+                        "default": "utf-8"
+                    },
+                    "verify": {
+                        "type": "boolean",
+                        "description": "是否使用 LSP 验证代码",
+                        "default": True
+                    }
+                },
+                "required": ["files"]
+            }
+        }
