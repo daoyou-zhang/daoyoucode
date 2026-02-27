@@ -93,9 +93,12 @@ logs/
 # 旧版本备份（不上传）
 .daoyou.backups/
 
-# 代码索引缓存（不上传）
+# 代码索引缓存（不上传，包含大文件）
 .daoyoucode/cache/
 .daoyoucode/codebase_index/
+*.npy
+*.pkl
+*.index
 
 # 对话历史（不上传，包含敏感信息）
 .daoyoucode/chat.history.md
@@ -107,3 +110,6 @@ logs/
 # 会话摘要（不上传）
 .daoyoucode/summaries.json
 .daoyoucode/key_info.json
+
+# Debug 文件（不上传）
+backend/debug_llm_request_*.json
