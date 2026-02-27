@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**新一代 AI 编程助手**
+**新一代 AI 编程助手 - 多 Agent 协作 + 智能编排**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
@@ -16,48 +16,38 @@
 
 ## 📖 项目简介
 
-**DaoyouCode** 是新一代 AI 编程助手，采用智能编排系统、完整工具链和多 Agent 协作架构，为开发者提供强大的代码理解、编写和重构能力。
+**DaoyouCode** 是一个基于多 Agent 协作的新一代 AI 编程助手，采用智能编排系统、完整工具链和深度代码理解能力，为开发者提供强大的代码分析、编写和重构支持。
 
-### 核心特性
+### ✨ 核心特性
 
-- 🎯 **智能编排系统** - 7 种编排器（Simple、ReAct、Multi-Agent、Parallel 等），自动选择最优策略
-- 🛠️ **完整工具链** - 25+ 专业工具，LSP/AST 深度集成，Git 操作支持
-- 🧠 **多 Agent 协作** - 6 个专业 Agent 各司其职，智能任务路由
+- 🤖 **多 Agent 协作** - 6 个专业 Agent（代码分析、编程、重构、测试等）智能协作
+- 🎯 **智能编排系统** - 7 种编排策略（ReAct、Multi-Agent、Parallel 等），自动选择最优方案
+- 🛠️ **完整工具链** - 34+ 专业工具，LSP/AST 深度集成，Git 操作支持
+- 🧠 **智能记忆系统** - 对话历史、长期记忆、用户画像、智能上下文加载
 - 🌐 **国产 LLM 优化** - 深度支持通义千问、DeepSeek，多 Key 轮询
 - 📝 **Skill 系统** - 14+ 预置技能，灵活配置，可扩展
-- 🔄 **记忆系统** - 智能上下文管理，对话树结构，长期记忆
 
-## 🎯 技术亮点
+### 🎯 技术亮点
 
-### 18 大核心系统
+**多 Agent 协作架构**
+- **Sisyphus 编排器** - 主 Agent，负责任务理解、专家调度、结果综合
+- **Code Analyzer** - 架构分析、代码审查、技术选型
+- **Programmer** - 代码编写、Bug 修复、功能实现
+- **Refactor Master** - 代码重构、性能优化、设计改进
+- **Test Expert** - 测试编写、测试修复、质量保证
+- **4 种协作模式** - Sequential（顺序）、Parallel（并行）、Debate（辩论）、Main-with-Helpers（主从）
 
-1. **Agent 系统** - 6 个专业 Agent（MainAgent、Programmer、Oracle、Librarian 等）
-2. **编排器系统** - 7 种编排策略（Simple、ReAct、Multi-Agent、Parallel、Conditional、Workflow、Sisyphus）
-3. **工具系统** - 25+ 专业工具（LSP、AST、Git、文件操作、搜索等）
-4. **LLM 系统** - 统一客户端管理，支持多提供商，智能降级
-5. **记忆系统** - 对话历史、长期记忆、用户画像、智能加载
-6. **Skill 系统** - 配置驱动，Prompt 管理，灵活组合
-7. **权限系统** - 100+ 规则，读写执行控制，安全可控
-8. **验证系统** - 4 级验证（语法、类型、测试、人工）
-9. **Hook 系统** - 生命周期钩子，日志、指标、重试
-10. **中间件系统** - 上下文管理、追问检测、记忆集成
-11. **任务系统** - 任务树、状态管理、并行执行
-12. **恢复系统** - 自动重试、失败分析、降级策略
-13. **超时系统** - 超时检测、自动恢复、Prompt 简化
-14. **路由系统** - 智能任务路由、Agent 选择
-15. **上下文系统** - 智能选择、相关文件、代码库评估
-16. **模型选择** - 根据任务复杂度动态选择模型
-17. **并行执行** - 多任务并行、资源管理
-18. **反馈系统** - 用户反馈、质量评估、持续改进
+**深度代码理解**
+- **LSP 集成** - 类型信息、引用关系、代码诊断、智能重命名
+- **AST 分析** - 语法树解析、结构化代码理解
+- **语义搜索** - 基于向量的代码检索，理解代码意图
+- **智能代码地图** - 自动生成项目结构概览
 
-### 核心优势
-
-- **深度代码理解** - LSP 集成提供类型信息、引用关系、代码质量分析
-- **智能路径解析** - 自动处理路径问题，支持多项目、虚拟环境
-- **超时恢复机制** - 自动重试、增加超时、简化 Prompt、切换模型
-- **工具调用优化** - 同轮去重、结果缓存、智能后处理
-- **Diff 自动显示** - 修改代码后自动生成并显示 unified diff
-- **会话管理** - 支持多会话、历史清除、上下文隔离
+**智能编排系统**
+- **ReAct 模式** - 推理-行动循环，支持复杂工具调用
+- **Multi-Agent 模式** - 多专家并行分析，综合决策
+- **Conditional 模式** - 条件分支，动态路由
+- **Workflow 模式** - 工作流编排，复杂任务分解
 
 ## 🚀 快速开始
 
@@ -65,7 +55,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/你的用户名/daoyoucode.git
+git clone https://github.com/daoyou-zhang/daoyoucode.git
 cd daoyoucode
 
 # 安装依赖
@@ -87,7 +77,7 @@ default:
   model: "qwen-max"
   temperature: 0.7
   max_tokens: 4000
-  timeout: 1800  # 30 分钟
+  timeout: 1800
 ```
 
 ### 使用
@@ -96,10 +86,13 @@ default:
 # 交互式对话（默认 chat-assistant）
 daoyoucode chat
 
-# 使用特定 Skill
-daoyoucode chat --skill programming
-daoyoucode chat --skill oracle  # 架构分析
-daoyoucode chat --skill librarian  # 代码搜索
+# 使用多 Agent 编排（Sisyphus）
+daoyoucode chat --skill sisyphus-orchestrator
+
+# 使用特定专家
+daoyoucode chat --skill programming      # 编程专家
+daoyoucode chat --skill code-analysis    # 代码分析
+daoyoucode chat --skill refactoring      # 重构专家
 
 # 单次编辑
 daoyoucode edit "把 timeout 改成 60"
@@ -111,51 +104,84 @@ daoyoucode skills list
 daoyoucode doctor
 ```
 
-### 对话中的命令
+## 🎓 使用示例
 
+### 示例 1: 多 Agent 协作分析代码
+
+```bash
+daoyoucode chat --skill sisyphus-orchestrator
+
+你 > 分析 backend/daoyoucode/agents/core/agent.py 的设计
+
+AI 会自动：
+1. Code Analyzer 分析架构设计
+2. Programmer 评估代码质量
+3. Sisyphus 综合两位专家的意见
+4. 给出完整的分析报告和改进建议
 ```
-/help          - 显示帮助
-/skill [name]  - 切换 Skill
-/clear         - 清空对话历史
-/history       - 查看对话历史
-/exit          - 退出对话
+
+### 示例 2: 智能代码重构
+
+```bash
+你 > 重构 agent.py，提升可维护性
+
+AI 会：
+1. Code Analyzer 识别职责过多的问题
+2. Refactor Master 提出拆分方案
+3. Programmer 给出具体实现步骤
+4. Sisyphus 整合方案，给出执行计划
 ```
 
-## 📚 文档
+### 示例 3: Bug 修复
 
-| 文档 | 说明 |
-|------|------|
-| [**ARCHITECTURE.md**](ARCHITECTURE.md) | 代码级架构一览（主数据流、关键目录、快速理解入口） |
-| [backend/README.md](backend/README.md) | 后端文档导航、Skill/编排器/Agent 概念 |
-| [backend/QUICK_START.md](backend/QUICK_START.md) | 快速开始指南 |
-| [backend/CLI命令参考.md](backend/CLI命令参考.md) | CLI 命令与示例 |
-| [backend/USAGE_GUIDE.md](backend/USAGE_GUIDE.md) | 使用指南 |
-| [docs/README.md](docs/README.md) | 文档导航 |
-| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | 快速参考卡 |
+```bash
+你 > 修复登录功能的 Bug
+
+AI 会：
+1. Code Analyzer 定位问题代码
+2. Programmer 提供修复方案
+3. Test Expert 建议测试用例
+4. Sisyphus 综合决策，执行修复
+```
+
+### 示例 4: 了解项目
+
+```bash
+你 > 了解这个项目
+
+AI 会自动：
+1. 调用 discover_project_docs 读取 README
+2. 调用 get_repo_structure 查看目录结构
+3. 调用 repo_map 生成代码地图
+4. 用简洁的语言概括项目特点
+```
 
 ## 🏗️ 项目结构
 
 ```
 daoyoucode/
-├── ARCHITECTURE.md    # 代码级架构一览
-├── backend/           # Python 核心实现
-│   ├── daoyoucode.py  # CLI 入口
-│   ├── cli/           # CLI 命令（chat, edit, doctor, skills 等）
-│   ├── daoyoucode/    # 核心包
-│   │   └── agents/    # Agent、编排器、工具、LLM、记忆
-│   ├── config/        # 配置文件
-│   ├── tests/         # 测试
-│   └── README.md      # 后端文档
-├── skills/            # Skill 配置与 Prompt
-│   ├── chat-assistant/      # 交互式对话
-│   ├── programming/         # 编程专家
-│   ├── oracle/              # 架构顾问
-│   ├── librarian/           # 代码搜索
-│   ├── refactoring/         # 重构专家
-│   ├── testing/             # 测试专家
+├── backend/                    # Python 核心实现
+│   ├── daoyoucode.py          # CLI 入口
+│   ├── cli/                   # CLI 命令
+│   ├── daoyoucode/
+│   │   └── agents/
+│   │       ├── core/          # Agent 核心（执行、Prompt、Skill）
+│   │       ├── orchestrators/ # 编排器（Simple、ReAct、Multi-Agent 等）
+│   │       ├── tools/         # 工具系统（34+ 工具）
+│   │       ├── llm/           # LLM 客户端
+│   │       ├── memory/        # 记忆系统
+│   │       └── middleware/    # 中间件
+│   ├── config/                # 配置文件
+│   └── tests/                 # 测试
+├── skills/                    # Skill 配置与 Prompt
+│   ├── sisyphus-orchestrator/ # 多 Agent 编排
+│   ├── chat-assistant/        # 交互式对话
+│   ├── programming/           # 编程专家
+│   ├── code-analysis/         # 代码分析
+│   ├── refactoring/           # 重构专家
+│   ├── testing/               # 测试专家
 │   └── ...
-├── docs/              # 文档
-└── config/            # 全局配置
+└── docs/                      # 文档
 ```
 
 ## 🤖 核心概念
@@ -164,126 +190,105 @@ daoyoucode/
 
 6 个专业 Agent，各司其职：
 
-- **MainAgent** - 主对话 Agent，处理用户交互
-- **Programmer** - 编程专家，代码编写和修改
-- **Oracle** - 架构顾问，技术决策和分析
-- **Librarian** - 代码搜索专家，快速定位代码
-- **RefactorMaster** - 重构专家，代码优化
-- **TestExpert** - 测试专家，测试生成
+| Agent | 职责 | 擅长领域 |
+|-------|------|---------|
+| **Sisyphus** | 任务编排、专家调度、结果综合 | 复杂任务分解、多专家协作 |
+| **Code Analyzer** | 架构分析、代码审查 | 技术选型、设计评估 |
+| **Programmer** | 代码编写、Bug 修复 | 功能实现、问题解决 |
+| **Refactor Master** | 代码重构、性能优化 | 设计改进、代码质量 |
+| **Test Expert** | 测试编写、质量保证 | 测试策略、用例设计 |
+| **Librarian** | 代码搜索、快速定位 | 信息检索、代码导航 |
 
 ### Orchestrator（编排器）
 
 7 种编排策略，适应不同场景：
 
-- **Simple** - 简单编排，单 Agent 执行
-- **ReAct** - 推理-行动循环，支持工具调用
-- **Multi-Agent** - 多 Agent 协作，任务分解
-- **Parallel** - 并行执行，提高效率
-- **Conditional** - 条件分支，动态决策
-- **Workflow** - 工作流编排，复杂任务
-- **Sisyphus** - 迭代优化，持续改进
+| 编排器 | 特点 | 适用场景 |
+|--------|------|---------|
+| **Simple** | 单 Agent 执行 | 简单任务 |
+| **ReAct** | 推理-行动循环 | 需要工具调用的任务 |
+| **Multi-Agent** | 多 Agent 协作 | 复杂任务、需要多专家 |
+| **Parallel** | 并行执行 | 独立子任务 |
+| **Conditional** | 条件分支 | 动态决策 |
+| **Workflow** | 工作流编排 | 固定流程 |
+| **Sisyphus** | 迭代优化 | 持续改进 |
 
-### Skill（技能）
+### 协作模式
 
-14+ 预置技能，灵活配置：
+**Main-with-Helpers（主从模式）**
+```
+1. 系统根据用户意图自动选择辅助 Agent
+2. 辅助 Agent 并行执行分析
+3. 主 Agent（Sisyphus）综合所有专家意见
+4. 给出完整方案
+```
 
-- **chat-assistant** - 交互式对话助手
-- **programming** - 编程专家服务
-- **oracle** - 架构分析和咨询
-- **librarian** - 代码搜索和查找
-- **refactoring** - 代码重构
-- **testing** - 测试生成
-- **translation** - 代码翻译
-- **sisyphus-orchestrator** - 复杂任务编排
-- ...
+**Sequential（顺序模式）**
+```
+Agent1 → Agent2 → Agent3
+每个 Agent 处理前一个的输出
+```
 
-### 工具（Tools）
+**Parallel（并行模式）**
+```
+Agent1 ↘
+Agent2 → 聚合结果
+Agent3 ↗
+```
 
-25+ 专业工具：
+**Debate（辩论模式）**
+```
+多轮辩论，共享记忆，达成共识
+```
 
-**代码理解**：
+### 工具系统（34+ 工具）
+
+**项目理解**（3 个）
 - `discover_project_docs` - 发现项目文档
 - `get_repo_structure` - 获取目录结构
-- `repo_map` - 生成智能代码地图
-- `semantic_code_search` - 语义代码检索
+- `repo_map` - 智能代码地图
 
-**LSP 工具**：
+**代码搜索**（4 个）
+- `text_search` - 文本搜索
+- `regex_search` - 正则搜索
+- `semantic_code_search` - 语义检索
+- `ast_grep_search` - AST 搜索
+
+**LSP 工具**（8 个）
 - `lsp_diagnostics` - 代码诊断
-- `lsp_goto_definition` - 跳转到定义
+- `lsp_goto_definition` - 跳转定义
 - `lsp_find_references` - 查找引用
 - `lsp_symbols` - 获取符号
-- `lsp_rename` - 重命名符号
+- `lsp_rename` - 重命名
+- `lsp_hover` - 悬停信息
+- `lsp_completion` - 代码补全
+- `lsp_signature_help` - 签名帮助
 
-**代码编辑**：
-- `read_file` - 读取文件
-- `write_file` - 写入文件
+**文件操作**（6 个）
+- `read_file` / `batch_read_files` - 读取文件
+- `write_file` / `batch_write_files` - 写入文件
 - `search_replace` - 搜索替换
 - `apply_patch` - 应用补丁
 
-**搜索工具**：
-- `text_search` - 文本搜索
-- `regex_search` - 正则搜索
-- `ast_grep_search` - AST 搜索
-
-**Git 工具**：
+**Git 工具**（3 个）
 - `git_status` - Git 状态
 - `git_diff` - Git 差异
 - `git_log` - Git 日志
 
-## 🎓 使用示例
-
-### 示例 1: 了解项目
-
-```bash
-daoyoucode chat
-
-你 > 了解下这个项目
-
-AI 会自动：
-1. 调用 discover_project_docs 读取 README
-2. 调用 get_repo_structure 查看目录结构
-3. 调用 repo_map 生成代码地图
-4. 用 2-5 句话概括项目
-```
-
-### 示例 2: 修改代码
-
-```bash
-你 > 修改 backend/config/llm_config.yaml，将 max_tokens 从 4000 改为 8000
-
-AI 会：
-1. 调用 search_replace 工具修改文件
-2. 自动生成并显示 diff
-3. 确认修改完成
-```
-
-### 示例 3: 架构分析
-
-```bash
-daoyoucode chat --skill oracle
-
-你 > 分析 backend/daoyoucode/agents/ 的架构设计
-
-AI 会：
-1. 使用 repo_map 理解代码结构
-2. 使用 read_file 查看关键文件
-3. 提供架构分析和建议
-```
-
-### 示例 4: 代码搜索
-
-```bash
-daoyoucode chat --skill librarian
-
-你 > 找到所有使用 asyncio 的代码
-
-AI 会：
-1. 使用 text_search 搜索关键词
-2. 使用 semantic_code_search 语义检索
-3. 整理并展示结果
-```
+**其他工具**（10+ 个）
+- `execute_command` - 执行命令
+- `list_files` - 列出文件
+- `get_file_symbols` - 获取符号
+- ...
 
 ## 🔧 高级功能
+
+### 智能上下文管理
+
+- **自动预取** - 根据任务类型自动加载相关信息
+- **对话历史** - 智能压缩，保留关键信息
+- **长期记忆** - 用户偏好、项目知识持久化
+- **语义检索** - 基于向量的相关代码检索
 
 ### 自动显示 Diff
 
@@ -293,74 +298,69 @@ AI 会：
 ✅ Successfully modified backend/test.py
 
 📝 Changes:
-```diff
 --- a/backend/test.py
 +++ b/backend/test.py
 @@ -10,7 +10,7 @@
 -    timeout = 120
 +    timeout = 1800
 ```
-```
 
-### 会话管理
-
-```bash
-# 清空对话历史，开始新会话
-你 > /clear
-
-# 查看对话历史
-你 > /history
-
-# 切换 Skill
-你 > /skill programming
-```
-
-### 智能路径解析
-
-自动处理路径问题：
-
-- 检测占位符路径（your-repo-path 等）
-- 检测其他项目名称（防止混淆）
-- 自动修正路径格式
-- 提供友好的错误提示
-
-### 超时恢复
+### 超时恢复机制
 
 自动处理超时问题：
-
 1. 第一次：正常执行
 2. 第二次：增加超时时间
 3. 第三次：简化 Prompt + 增加超时
 4. 第四次：使用备用模型
 
-## 🤝 贡献
+### 工具调用优化
 
-欢迎贡献！项目正在积极开发中。
+- **同轮去重** - 避免重复调用相同工具
+- **结果缓存** - 缓存工具执行结果
+- **批量操作** - 支持批量读写文件
+- **智能后处理** - 自动格式化工具输出
 
-- 提交 Issue：[GitHub Issues](https://github.com/你的用户名/daoyoucode/issues)
-- 提交 PR：[Pull Requests](https://github.com/你的用户名/daoyoucode/pulls)
-- 加入讨论：[GitHub Discussions](https://github.com/你的用户名/daoyoucode/discussions)
+## 📚 文档
 
-## 📄 许可证
+| 文档 | 说明 |
+|------|------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 代码级架构一览 |
+| [backend/README.md](backend/README.md) | 后端文档导航 |
+| [backend/01_CLI命令参考.md](backend/01_CLI命令参考.md) | CLI 命令详解 |
+| [backend/02_ORCHESTRATORS编排器介绍.md](backend/02_ORCHESTRATORS编排器介绍.md) | 编排器详解 |
+| [backend/03_AGENTS智能体介绍.md](backend/03_AGENTS智能体介绍.md) | Agent 详解 |
+| [backend/04_TOOLS工具参考.md](backend/04_TOOLS工具参考.md) | 工具详解 |
+| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | 快速参考卡 |
 
-[MIT License](LICENSE)
+## 🎯 技术栈
 
-## 🙏 致谢
-
-感谢以下技术和工具：
-
-- **Python** - 核心编程语言
+- **Python 3.10+** - 核心编程语言
 - **Typer** - CLI 框架
 - **Tree-sitter** - 代码解析
 - **LSP** - Language Server Protocol
 - **通义千问** - 国产 LLM
 - **DeepSeek** - 代码专用 LLM
+- **Rich** - 终端美化
+- **Jinja2** - Prompt 模板
 
-## 📞 联系方式
+## 🤝 贡献
 
-- GitHub: [@你的用户名](https://github.com/你的用户名)
-- Email: your.email@example.com
-- 微信群: （待建立）
+欢迎贡献！项目正在积极开发中。
+
+- 提交 Issue：[GitHub Issues](https://github.com/daoyou-zhang/daoyoucode/issues)
+- 提交 PR：[Pull Requests](https://github.com/daoyou-zhang/daoyoucode/pulls)
+
+## 📄 许可证
+
+[MIT License](LICENSE)
+
+## � 致谢
+
+感谢以下技术和工具的支持：
+- Python 生态系统
+- Tree-sitter 社区
+- LSP 协议
+- 通义千问、DeepSeek 等 LLM 提供商
 
 ---
 
@@ -368,6 +368,8 @@ AI 会：
 
 **道友同行，智能编程**
 
-Made with ❤️ by DaoyouCode Team
+Made with ❤️ by [daoyou-zhang](https://github.com/daoyou-zhang)
+
+⭐ 如果这个项目对你有帮助，请给个 Star！
 
 </div>
