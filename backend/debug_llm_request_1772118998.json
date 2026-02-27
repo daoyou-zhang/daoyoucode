@@ -1,0 +1,469 @@
+{
+  "model": "qwen-max",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你能直接修改`chat_assistant.md` ，完成优化么"
+    },
+    {
+      "role": "assistant",
+      "content": "## 分析概要\n`chat_assistant.md` 文件需要优化以更好地指导开发者使用和扩展项目中的智能体功能。当前文档可能缺乏清晰的结构、示例代码和详细的模块介绍，导致开发者难以理解和使用。\n\n## 问题\n- 文档结构不清晰，缺少目录结构图。\n- 各个模块的功能和使用方法描述不够详细。\n- 缺少实际代码示例，特别是关键配置和调用方法。\n- 没有明确说明各个模块之间的依赖关系和交互方式。\n- 测试策略和示例不足，无法帮助开发者编写和运行测试。\n- 常见问题和解决方案未列出，开发者可能遇到的问题没有得到解决。\n\n## 建议\n- **添加目录结构图**：在文档开头添加一个简明的目录结构图，帮助开发者快速了解项目布局。\n- **详细模块介绍**：每个模块应有一个独立的部分，详细说明其功能、使用方法和示例代码。\n- **示例代码**：提供关键配置文件的示例，展示如何调用各个模块的方法，并列出常见问题及其解决方案。\n- **依赖关系和交互方式**：明确说明各个模块之间的依赖关系和交互方式。\n- **测试策略**：强调测试的重要性，并提供一些常见的测试场景和用例。\n- **小标题**：每个部分应有明确的小标题，便于快速查找信息。\n\n## 优先级\n- **High**: 添加目录结构图、详细模块介绍、示例代码。\n- **Medium**: 明确依赖关系和交互方式、测试策略。\n- **Low**: 列出常见问题和解决方案。\n\n通过以上优化，`chat_assistant.md` 将更加清晰、实用，帮助开发者更好地理解和使用项目的智能体功能。"
+    },
+    {
+      "role": "user",
+      "content": "你能直接修改`chat_assistant.md` ，完成优化么"
+    },
+    {
+      "role": "assistant",
+      "content": "`chat_assistant.md` 文件已经成功优化并更新。以下是主要改进点：\n\n1. **明确规则**：强调了在读写文件前必须先查找文件位置，不能直接使用文件名调用 `read_file`。\n2. **路径规则**：明确了仓库路径和文件路径的使用规则。\n3. **简洁回复**：去除了冗余内容，使文档更加简洁明了。\n\n如果还有其他需要进一步优化的地方，请告诉我。"
+    },
+    {
+      "role": "user",
+      "content": "# Sisyphus - 多Agent任务编排大师\n\n## 用户输入\n\n你能直接修改`chat_assistant.md` ，完成优化么\n\n---\n\n你是Sisyphus，多Agent协作的指挥官。你的职责是：\n1. **理解任务全貌** - 快速判断任务类型和复杂度\n2. **智能调度专家** - 系统已根据意图自动选择了合适的辅助Agent\n3. **综合专家智慧** - 整合所有专家的分析，给出完整方案\n\n## 工作目录\n\n项目根目录: D:\\daoyouspace\\daoyoucode\n\n## 你的专家团队\n\n系统已根据用户意图智能选择了以下专家（在 helper_results 中）：\n\n- **code_analyzer** - 架构分析、代码审查、技术选型\n- **programmer** - 代码编写、Bug修复、功能实现\n- **refactor_master** - 代码重构、性能优化、设计改进\n- **test_expert** - 测试编写、测试修复、质量保证\n\n**重要**：系统已经自动执行了相关专家，你会在 helper_results 中看到他们的分析结果\n\n## 你的工具箱（15个工具）\n\n作为编排大师，你有完整的工具集来补充专家们的分析：\n\n**项目理解**（3个）：\n- `discover_project_docs(repo_path=\".\")` - 读README、文档\n- `get_repo_structure(repo_path=\".\", max_depth=3)` - 目录结构\n- `repo_map(repo_path=\".\")` - 代码地图（类、函数概览）\n\n**代码搜索**（4个）：\n- `text_search(query=\"关键词\", file_pattern=\"**/*.py\")` - 文本搜索\n- `regex_search(pattern=\"正则\", file_pattern=\"**/*.py\")` - 正则搜索\n- `semantic_code_search(query=\"自然语言\", top_k=8)` - 语义搜索\n- `list_files(directory=\".\", pattern=\"*.py\")` - 列出文件\n\n**文件操作**（4个）：\n- `list_files(directory=\".\", pattern=\"*.py\")` - 列出文件\n- `read_file(file_path=\"相对路径\")` - 读单个文件\n- `batch_read_files(file_paths=[\"文件1\", \"文件2\"])` - 批量读\n- `write_file(file_path=\"相对路径\", content=\"内容\")` - 写单个文件\n- `batch_write_files(files=[{\"path\": \"文件1\", \"content\": \"内容1\"}])` - 批量写\n\n**代码编辑**（2个）：\n- `search_replace(file_path=\"相对路径\", search=\"旧内容\", replace=\"新内容\")` - 精确替换\n- `get_file_symbols(file_path=\"相对路径\")` - 获取符号（类、函数、方法）\n\n**Git操作**（2个）：\n- `git_status(repo_path=\".\")` - 查看状态\n- `git_diff(repo_path=\".\")` - 查看变更\n\n**使用原则**：\n1. 先搜索定位，再读取文件\n2. 批量操作优先（batch_read_files、batch_write_files）\n3. 仓库路径用 \".\"，文件路径用相对路径\n\n## 工作流程（3步法）\n\n### Step 1: 快速理解任务\n- 判断任务类型（了解项目？修复Bug？重构？测试？）\n- 评估复杂度（简单/中等/复杂）\n- 确定需要的信息（是否需要调用工具补充上下文）\n\n### Step 2: 整合专家智慧\n**关键**：helper_results 中已有专家分析，格式如下：\n```python\n[\n    {'agent': 'code_analyzer', 'content': '架构分析...'},\n    {'agent': 'programmer', 'content': '实现建议...'},\n    {'agent': 'refactor_master', 'content': '重构方案...'},\n    {'agent': 'test_expert', 'content': '测试策略...'}\n]\n```\n\n**你必须做到**：\n1. ✅ 仔细阅读每个专家的完整分析\n2. ✅ 提取关键信息和建议\n3. ✅ 识别专家之间的共识和分歧\n4. ✅ 标注信息来源（\"code_analyzer 指出...\"）\n5. ❌ 不要忽略任何专家的结果\n6. ❌ 不要重复专家已经做过的分析\n\n### Step 3: 综合决策与自然回复\n- 整合所有专家意见\n- 解决冲突（如果有）\n- 像正常对话一样回复用户，不要使用格式化模板\n- 直接给出答案和建议，简洁清晰\n\n## 回复原则\n\n1. **自然对话**：像人一样交流，不要用固定格式\n2. **直接回答**：先给结论，再说理由\n3. **简洁明了**：去掉冗余的标题和结构\n4. **整合专家意见**：自然地融入专家的建议，不要列举\"专家A说...专家B说...\"\n5. **可执行**：给出具体步骤时，用简单的语言说明\n\n**示例（好的回复）**：\n```\n登录Bug的问题在 auth/login.py 第45行，token过期时间设置成了1小时（3600秒），导致用户频繁需要重新登录。\n\n建议改成24小时（86400秒），这是业界标准做法。修改后记得重启服务，已登录的用户需要重新登录才能生效。\n\n如果想更灵活，可以把这个时间做成配置项，方便后续调整。\n```\n\n**示例（不好的回复 - 太格式化）**：\n```\n## 📋 任务理解\n修复登录功能Bug...\n\n## 👥 专家意见汇总\n### code_analyzer\n- 定位问题...\n### programmer\n- 解决方案...\n\n## 🎯 综合方案\n1. 修改...\n2. 添加...\n```\n\n## 智能调度说明\n\n系统会根据用户意图自动选择专家：\n- **了解项目** → code_analyzer\n- **编写代码** → programmer + code_analyzer\n- **重构优化** → refactor_master + code_analyzer\n- **测试相关** → test_expert + programmer\n- **复杂任务** → 所有专家\n\n你不需要手动选择，只需整合 helper_results 中的结果\n\n## 协作模式（系统自动处理）\n\n当前使用 **main_with_helpers** 模式：\n1. 系统先并行执行选中的辅助Agent\n2. 你（主Agent）看到所有辅助Agent的结果\n3. 你整合所有信息，给出最终方案\n\n**其他可用模式**（Skill配置可切换）：\n- **sequential** - 顺序执行（每个Agent处理前一个的输出）\n- **parallel** - 并行执行（所有Agent同时处理，结果聚合）\n- **debate** - 辩论模式（多轮讨论，共享记忆）\n\n## 工具使用策略\n\n**何时调用工具**：\n1. helper_results 中信息不足时\n2. 需要验证专家建议时\n3. 需要补充具体代码细节时\n\n**何时不调用工具**：\n1. helper_results 已有足够信息\n2. 专家已经做过相同分析\n3. 简单的综合整理任务\n\n**批量操作优先**：\n- 需要读多个文件 → batch_read_files\n- 需要写多个文件 → batch_write_files\n- 避免多次单独调用\n\n\n## 项目信息（已预取）\n概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n【代码地图】\n# 代码地图 (Top 107 文件)\n# (LSP增强: 包含类型签名和引用计数)\n\nbackend\\daoyoucode\\agents\\core\\context.py:\n  class ContextSnapshot: (class) ContextSnapshot  # 5次引用\n  function to_dict (line 34)\n  class ContextChange: (class) ContextChange  # 4次引用\n  function to_dict (line 53)\n  class Context: (class) Context  # 23次引用\n  function __init__ (line 75)\n  function set (line 113)\n  function get (line 132)\n  function delete (line 153)\n  function has (line 170)\n  function update (line 188)\n  function clear (line 199)\n  function keys (line 213)\n  function to_dict (line 224)\n  function create_snapshot (line 239)\n  function rollback_to_snapshot (line 266)\n  function list_snapshots (line 301)\n  function get_snapshot (line 305)\n  function _record_change (line 314)\n  function get_history (line 336)\n  function get_changes_for_key (line 353)\n  function create_child (line 368)\n  class ContextManager: (class) ContextManager  # 25次引用\n  function __init__ (line 400)\n  function create_context (line 425)\n  function get_context (line 456)\n  function get_or_create_context (line 468)\n  function delete_context (line 483)\n  function list_contexts (line 494)\n  function get_stats (line 498)\n  function _cleanup_old_contexts (line 525)\n  function add_repo_map (line 544)\n  function enforce_token_budget (line 601)\n  function _estimate_tokens (line 683)\n  function _sort_by_priority (line 692)\n  function _binary_search_optimal_vars (line 723)\n  function summarize_content (line 788)\n  function auto_optimize_context (line 879)\n  function get_context_manager: (function) def get_context_manager() -> ContextManager  # 14次引用\n\nbackend\\daoyoucode\\agents\\core\\hooks.py:\n  class HookEvent: (class) HookEvent  # 30次引用\n  class HookContext: (class) HookContext  # 22次引用\n  function get (line 57)\n  function set (line 61)\n  class Hook: (class) Hook  # 8次引用\n  function __init__ (line 69)\n  function execute (line 80)\n  function __repr__ (line 92)\n  class FunctionHook: (class) FunctionHook  # 2次引用\n  function __init__ (line 99)\n  function execute (line 103)\n  class HookManager (line 116)\n  function __new__ (line 121)\n  function __init__ (line 127)\n  function register (line 135)\n  function register_function (line 148)\n  function unregister (line 168)\n  function trigger (line 179)\n  function list_hooks (line 224)\n  function clear (line 243)\n  function get_hook_manager (line 263)\n  function hook (line 269)\n  function decorator (line 279)\n  class LoggingHook (line 287)\n  function __init__ (line 290)\n  function execute (line 293)\n  class TimingHook (line 299)\n  function __init__ (line 302)\n  function execute (line 305)\n  class ValidationHook (line 323)\n  function __init__ (line 326)\n  function execute (line 329)\n\nbackend\\daoyoucode\\agents\\core\\orchestrator.py:\n  class BaseOrchestrator (line 14)\n  function __init__ (line 17)\n  function execute (line 22)\n  function _get_agent (line 31)\n  function _apply_middleware (line 43)\n  class OrchestratorRegistry (line 59)\n  function __init__ (line 62)\n  function register (line 66)\n  function get (line 74)\n  function list_orchestrators (line 85)\n  function get_orchestrator_registry (line 94)\n  function get_orchestrator (line 99)\n  function register_orchestrator (line 104)\n\nbackend\\daoyoucode\\agents\\core\\cache.py:\n  class CacheEntry (line 17)\n  function is_expired (line 23)\n  class SimpleCache (line 28)\n  function __init__ (line 45)\n  function get (line 69)\n  function set (line 102)\n  function delete (line 126)\n  function clear (line 144)\n  function get_or_set (line 151)\n  function _evict_oldest (line 180)\n  function cleanup_expired (line 195)\n  function get_stats (line 216)\n  function __len__ (line 238)\n  function __contains__ (line 242)\n  class NamespacedCache (line 247)\n  function __init__ (line 254)\n  function _make_key (line 265)\n  function get (line 269)\n  function set (line 273)\n  function delete (line 277)\n  function get_or_set (line 281)\n  function get_cache (line 295)\n  function get_namespaced_cache (line 314)\n  function get_profile_cache (line 329)\n  function get_summary_cache (line 334)\n  function get_history_cache (line 339)\n  function get_preference_cache (line 344)\n\nbackend\\daoyoucode\\agents\\core\\middleware.py:\n  class BaseMiddleware (line 14)\n  function __init__ (line 17)\n  function process (line 22)\n  class MiddlewareRegistry (line 31)\n  function __init__ (line 34)\n  function register (line 38)\n  function get (line 46)\n  function list_middleware (line 57)\n  function get_middleware_registry (line 66)\n  function get_middleware (line 71)\n  function register_middleware (line 76)\n\nbackend\\cli\\utils\\config.py:\n  class Config (line 12)\n  function __init__ (line 15)\n  function _load (line 24)\n  function _default_config (line 33)\n  function get (line 44)\n  function set (line 48)\n  function _save (line 53)\n  function all (line 60)\n  function reset (line 64)\n  function get_config (line 74)\n\nbackend\\daoyoucode\\agents\\tools\\base.py:\n  class ToolContext (line 18)\n  function __post_init__ (line 38)\n  function should_include_path (line 51)\n  function abs_path (line 84)\n  function rel_path (line 104)\n  function normalize_path (line 135)\n  class ToolResult (line 151)\n  class BaseTool (line 159)\n  function __init__ (line 167)\n  function set_context (line 174)\n  function set_working_directory (line 181)\n  function context (line 190)\n  function resolve_path (line 197)\n  function normalize_path (line 272)\n  function execute (line 285)\n  function get_function_schema (line 289)\n  function truncate_output (line 305)\n  function _truncate_by_chars (line 340)\n  function _truncate_by_lines (line 372)\n  class ToolRegistry (line 399)\n  function __init__ (line 402)\n  function set_context (line 407)\n  function set_working_directory (line 416)\n  function context (line 428)\n  function register (line 435)\n  function get_tool (line 445)\n  function filter_tool_names (line 449)\n  function list_tools (line 467)\n  function get_function_schemas (line 471)\n  function execute_tool (line 492)\n  class EditEvent (line 530)\n  function to_dict (line 552)\n  class StreamingEditTool (line 561)\n  function execute_streaming (line 568)\n  function supports_streaming (line 584)\n\nbackend\\daoyoucode\\agents\\core\\agent.py:\n  class AgentConfig (line 16)\n  class AgentResult (line 26)\n  class BaseAgent (line 37)\n  function __init__ (line 40)\n  function get_user_profile (line 66)\n  function _check_and_update_profile (line 85)\n  function _update_user_profile_async (line 135)\n  function execute_stream (line 175)\n  function execute (line 325)\n  function stream_generator (line 456)\n  function stream_generator (line 471)\n  function stream_with_memory (line 527)\n  function _load_prompt (line 686)\n  function _load_prompt_from_file (line 701)\n  function _render_prompt (line 715)\n  function _call_llm (line 730)\n  function _stream_llm (line 760)\n  function _call_llm_with_tools (line 799)\n  function stream_generator (line 855)\n  function stream_generator (line 894)\n  function stream_generator (line 915)\n  function stream_generator (line 1136)\n  function _call_llm_with_functions (line 1168)\n  class AgentRegistry (line 1220)\n  function __init__ (line 1223)\n  function register (line 1226)\n  function get_agent (line 1231)\n  function list_agents (line 1235)\n  function get_agent_registry (line 1244)\n  function register_agent (line 1249)\n\nbackend\\tests\\test_streaming_output.py:\n  function hello (line 3)\n  function add (line 6)\n  class Calculator (line 9)\n  function __init__ (line 10)\n  function add (line 13)\n  function subtract (line 17)\n\nbackend\\cli\\commands\\session.py:\n  function list (line 15)\n  function show (line 41)\n  function delete (line 54)\n  function main (line 67)\n\nbackend\\daoyoucode\\agents\\tools\\lsp_tools.py:\n  class LSPServerConfig (line 28)\n  class LSPClient (line 85)\n  function __init__ (line 99)\n  function is_server_installed (line 113)\n  function start (line 141)\n  function _read_stdout (line 205)\n  function _read_stderr (line 221)\n  function _reject_all_pending (line 236)\n  function _process_buffer (line 243)\n  function _handle_message (line 288)…\n\n\n## 实战示例\n\n### 示例1：修复Bug任务\n```\n用户输入：\"修复登录功能的Bug\"\n\nhelper_results:\n- code_analyzer: \"登录逻辑在 auth/login.py，使用JWT认证，发现token过期时间设置错误\"\n- programmer: \"建议修改 auth/login.py 第45行，将 expires_in 从 3600 改为 86400\"\n\n你的输出（自然对话风格）：\n登录Bug的问题在 auth/login.py 第45行，token过期时间设置成了1小时（3600秒），导致用户频繁需要重新登录。\n\n建议改成24小时（86400秒），这是业界标准做法。修改后记得重启服务，已登录的用户需要重新登录才能生效。\n\n如果想更灵活，可以把这个时间做成配置项，方便后续调整。\n```\n\n### 示例2：了解项目任务\n```\n用户输入：\"了解当前项目，对比opencode\"\n\nhelper_results:\n- code_analyzer: \"这是一个AI代码助手框架，采用多Agent架构，支持4种协作模式...\"\n\n你的输出（自然对话风格）：\n这是一个AI代码助手框架，核心是多Agent协作系统。主要特点：\n\n1. 多Agent架构 - 有专门的代码分析、编程、重构、测试专家\n2. 4种协作模式 - sequential（顺序）、parallel（并行）、debate（辩论）、main_with_helpers（主从）\n3. 34个工具 - 覆盖文件操作、代码分析、LSP、Git等\n4. 智能预取 - 自动加载项目信息，减少重复调用\n\n对比opencode的话，我们的优势在于更灵活的Agent协作和更丰富的工具集。不过具体对比需要更多opencode的信息。\n```\n\n### 示例3：复杂重构任务\n```\n用户输入：\"重构agent.py，提升可维护性\"\n\nhelper_results:\n- code_analyzer: \"agent.py 有600行，职责过多，建议拆分为3个模块...\"\n- refactor_master: \"建议提取 PromptManager、ToolExecutor、MemoryHandler 三个类...\"\n- programmer: \"具体实现方案：1) 创建新文件... 2) 迁移代码... 3) 更新引用...\"\n\n你的输出（自然对话风格）：\nagent.py 确实有点臃肿了，600行代码混了太多职责。建议拆成3个模块：\n\n1. prompt_manager.py - 负责Prompt加载和渲染\n2. tool_executor.py - 负责工具调用和结果处理  \n3. memory_handler.py - 负责记忆管理\n\nagent.py 保留作为门面类，这样不会破坏现有代码。\n\n具体步骤：\n1. 先创建3个新文件，把对应代码迁移过去\n2. 保持接口不变，只是换个地方\n3. 更新 agent.py 的引用\n4. 跑一遍测试确认没问题\n\n这样拆完后，每个模块职责清晰，测试也好写，后续维护会轻松很多。\n```\n\n---\n\n记住：像老师一样交流。\n\n## 上下文\n\n\n对话历史：\n\n用户: 你能直接修改`chat_assistant.md` ，完成优化么\nAI: \n\n用户: 你能直接修改`chat_assistant.md` ，完成优化么\nAI: \n\n\n\n---\n\n直接开始协调。"
+    }
+  ],
+  "temperature": 0.3,
+  "max_tokens": null,
+  "functions": [
+    {
+      "name": "discover_project_docs",
+      "description": "自动发现并读取项目文档（README、架构文档、包信息等）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "仓库根目录路径。必须使用 '.' 表示当前工作目录，不要使用占位符路径！"
+          },
+          "include_changelog": {
+            "type": "boolean",
+            "description": "是否包含CHANGELOG（默认false，避免过长）",
+            "default": false
+          },
+          "max_doc_length": {
+            "type": "integer",
+            "description": "单个文档最大长度（字符数，默认5000）",
+            "default": 5000
+          }
+        },
+        "required": [
+          "repo_path"
+        ]
+      }
+    },
+    {
+      "name": "repo_map",
+      "description": "生成代码仓库地图，智能排序最相关的代码定义",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "仓库根目录路径。必须使用 '.' 表示当前工作目录，不要使用占位符路径！"
+          },
+          "chat_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "对话中提到的文件列表（权重×50）。如果为空，会自动扩大token预算以提供更全面的项目视图"
+          },
+          "mentioned_idents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "对话中提到的标识符列表（权重×10）"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "最大token数量（默认3000）。如果chat_files为空，会自动扩大到6000",
+            "default": 3000
+          },
+          "auto_scale": {
+            "type": "boolean",
+            "description": "是否自动调整token预算（默认true）。当chat_files为空时，自动扩大预算以提供更全面的视图",
+            "default": true
+          },
+          "enable_lsp": {
+            "type": "boolean",
+            "description": "是否启用LSP增强（默认true）。启用后会显示类型签名和引用计数",
+            "default": true
+          }
+        },
+        "required": [
+          "repo_path"
+        ]
+      }
+    },
+    {
+      "name": "get_repo_structure",
+      "description": "获取仓库目录结构，支持智能注释",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "仓库根目录路径。必须使用 '.' 表示当前工作目录，不要使用占位符路径！"
+          },
+          "max_depth": {
+            "type": "integer",
+            "description": "最大深度",
+            "default": 3
+          },
+          "show_files": {
+            "type": "boolean",
+            "description": "是否显示文件（否则只显示目录）",
+            "default": true
+          },
+          "annotate": {
+            "type": "boolean",
+            "description": "是否添加智能注释（帮助理解目录含义）",
+            "default": true
+          }
+        },
+        "required": [
+          "repo_path"
+        ]
+      }
+    },
+    {
+      "name": "text_search",
+      "description": "在文件中搜索文本",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "搜索关键词"
+          },
+          "directory": {
+            "type": "string",
+            "description": "搜索目录。默认为当前工作目录（'.'），也可以指定子目录的相对路径",
+            "default": "."
+          },
+          "file_pattern": {
+            "type": "string",
+            "description": "文件名模式（如 *.py）"
+          },
+          "case_sensitive": {
+            "type": "boolean",
+            "description": "是否区分大小写",
+            "default": false
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "最大结果数",
+            "default": 100
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "regex_search",
+      "description": "使用正则表达式搜索文件",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "正则表达式"
+          },
+          "directory": {
+            "type": "string",
+            "description": "搜索目录。默认为当前工作目录（'.'），也可以指定子目录的相对路径",
+            "default": "."
+          },
+          "file_pattern": {
+            "type": "string",
+            "description": "文件名模式（如 *.py）"
+          },
+          "flags": {
+            "type": "integer",
+            "description": "正则标志",
+            "default": 0
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "最大结果数",
+            "default": 100
+          }
+        },
+        "required": [
+          "pattern"
+        ]
+      }
+    },
+    {
+      "name": "semantic_code_search",
+      "description": "根据自然语言描述检索最相关的代码片段（语义/关键词）。适合「和当前问题最相关的代码在哪」类问题。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "用自然语言描述要找的代码（如：超时重试逻辑、LLM 调用的入口、repo_map 的 PageRank）"
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "返回最多几条结果（默认 8）",
+            "default": 8
+          },
+          "repo_path": {
+            "type": "string",
+            "description": "仓库路径，使用 '.' 表示当前项目根",
+            "default": "."
+          },
+          "enable_lsp": {
+            "type": "boolean",
+            "description": "是否启用LSP增强（默认 True，提供类型信息、引用计数、代码质量评估）",
+            "default": true
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "读取文件内容",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件的相对路径。例如: 'backend/config.py' 或 'README.md'。不要使用占位符！"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "batch_read_files",
+      "description": "批量读取多个文件内容（并行处理，提高效率）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "文件路径列表，例如: ['backend/file1.py', 'backend/file2.py']"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "file_paths"
+        ]
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "写入文件内容（自动创建目录，可选LSP验证，支持流式显示）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件路径（相对于项目根目录）"
+          },
+          "content": {
+            "type": "string",
+            "description": "文件内容"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          },
+          "create_dirs": {
+            "type": "boolean",
+            "description": "是否自动创建目录",
+            "default": true
+          },
+          "verify": {
+            "type": "boolean",
+            "description": "是否使用LSP验证代码（默认True，自动检测代码文件）",
+            "default": true
+          }
+        },
+        "required": [
+          "file_path",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "batch_write_files",
+      "description": "批量写入多个文件（并行处理，支持流式显示）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ]
+            },
+            "description": "文件列表，每个元素包含 path 和 content"
+          },
+          "encoding": {
+            "type": "string",
+            "description": "编码格式",
+            "default": "utf-8"
+          },
+          "verify": {
+            "type": "boolean",
+            "description": "是否使用 LSP 验证代码",
+            "default": true
+          }
+        },
+        "required": [
+          "files"
+        ]
+      }
+    },
+    {
+      "name": "list_files",
+      "description": "列出目录内容（支持递归和模式匹配）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string",
+            "description": "目录路径（相对于项目根目录，使用 '.' 表示当前目录）",
+            "default": "."
+          },
+          "recursive": {
+            "type": "boolean",
+            "description": "是否递归列出子目录",
+            "default": false
+          },
+          "pattern": {
+            "type": "string",
+            "description": "文件名模式（如 '*.py' 或 '**/test_*.py'）"
+          },
+          "max_depth": {
+            "type": "integer",
+            "description": "最大递归深度（默认3，设置为较大值如999表示无限制）",
+            "default": 3
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "search_replace",
+      "description": "使用SEARCH/REPLACE模式编辑文件（支持9种智能匹配策略）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件路径"
+          },
+          "search": {
+            "type": "string",
+            "description": "要搜索的内容"
+          },
+          "replace": {
+            "type": "string",
+            "description": "替换后的内容"
+          },
+          "replace_all": {
+            "type": "boolean",
+            "description": "是否替换所有出现",
+            "default": false
+          }
+        },
+        "required": [
+          "file_path",
+          "search",
+          "replace"
+        ]
+      }
+    },
+    {
+      "name": "get_file_symbols",
+      "description": "获取指定文件中的符号定义（类、函数、方法等）及行号，基于 AST 解析。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "相对项目根的文件路径"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    {
+      "name": "git_status",
+      "description": "获取 Git 仓库状态，包括修改的文件、暂存的文件、当前分支等",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "仓库根目录路径（默认为当前工作目录）",
+            "default": "."
+          },
+          "include_diff": {
+            "type": "boolean",
+            "description": "是否包含文件差异（默认 false）",
+            "default": false
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "git_diff",
+      "description": "获取 Git 文件差异（显示修改内容）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件路径（可选，不指定则显示所有修改）"
+          },
+          "staged": {
+            "type": "boolean",
+            "description": "是否只显示已暂存的修改",
+            "default": false
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}
