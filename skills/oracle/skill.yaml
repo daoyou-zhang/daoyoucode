@@ -1,9 +1,9 @@
 name: oracle
 version: 1.0.0
-description: 高IQ咨询Agent - 架构分析和技术建议（只读）
+description: 高IQ咨询Agent - 架构分析和技术建议（只读，继承 sisyphus-orchestrator 工作流）
 
-# 使用简单编排器
-orchestrator: react
+# 🎯 特化：使用简单编排器（单Agent，不需要协作）
+orchestrator: simple
 
 # 使用Oracle Agent
 agent: oracle
@@ -12,25 +12,41 @@ agent: oracle
 prompt:
   file: prompts/oracle.md  # 简洁版本
 
-# LLM配置
+# 🆕 工作流配置（继承 + 特化）
+workflows:
+  source: sisyphus-orchestrator  # 从 sisyphus-orchestrator 继承工作流
+  preferred_intents:              # 只使用咨询相关的意图
+    - consult
+    - analyze_code
+    - review_code
+
+# 意图识别
+project_understanding_use_intent: true
+
+# LLM配置（🎯 特化：使用最强模型）
 llm:
   model: qwen-max  # 使用最强模型
   temperature: 0.1  # 低温度，更准确
   max_tokens: 4000
 
-# 工具配置（只读，名称与 registry 一致）
+# 🎯 特化：只读工具（不能修改代码）
 tools:
-  - repo_map
-  - get_repo_structure
   - read_file
-  - batch_read_files      # 🆕 批量读取文件
+  - batch_read_files
   - text_search
   - regex_search
+  - semantic_code_search
+  - get_repo_structure
+  - repo_map
+  - discover_project_docs
   - get_file_symbols
   - lsp_diagnostics
   - lsp_find_references
   - lsp_symbols
   - ast_grep_search
+
+# 🎯 oracle 是单 Agent，不需要 agent_tools 配置
+# 所有工具都是只读的，符合咨询角色
 
 # 中间件
 middleware:

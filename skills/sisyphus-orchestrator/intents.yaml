@@ -1,0 +1,106 @@
+# Sisyphus Orchestrator 意图配置
+# 
+# 这个文件定义了 Sisyphus 能够识别的所有意图，以及对应的工作流
+# 
+# 配置格式：
+#   intent_id:
+#     description: "意图描述（用于 LLM 分类）"
+#     keywords: ["关键词1", "关键词2"]  # 可选，用于关键词兜底
+#     workflow:
+#       prompt_file: "prompts/workflows/xxx.md"
+#       enabled: true/false
+#     priority: 1-10  # 可选，优先级（数字越大优先级越高）
+
+intents:
+  # ========== 工作流相关意图 ==========
+  
+  delete_file:
+    description: "用户想删除文件或目录：删除、delete、移除、remove、清理、清除等"
+    keywords: ["删除", "delete", "移除", "remove", "清理"]
+    workflow:
+      prompt_file: "prompts/workflows/delete_file.md"
+      enabled: true
+    priority: 8
+  
+  search_code:
+    description: "用户想搜索代码、查找文件、定位功能：搜索、查找、find、search、在哪里、哪个文件等"
+    keywords: ["搜索", "查找", "find", "search", "在哪"]
+    workflow:
+      prompt_file: "prompts/workflows/search_code.md"
+      enabled: true
+    priority: 8
+  
+  refactor_code:
+    description: "用户想重构代码、优化结构、改进设计：重构、refactor、优化、改进、整理、重新组织等"
+    keywords: ["重构", "refactor", "优化", "改进"]
+    workflow:
+      prompt_file: "prompts/workflows/refactor.md"
+      enabled: false  # 待创建工作流
+    priority: 7
+  
+  debug_code:
+    description: "用户想调试代码、修复Bug、排查问题：调试、debug、修复、fix、bug、错误、问题、不工作等"
+    keywords: ["调试", "debug", "修复", "fix", "bug"]
+    workflow:
+      prompt_file: "prompts/workflows/debug.md"
+      enabled: false  # 待创建工作流
+    priority: 7
+  
+  analyze_code:
+    description: "用户想分析代码、理解逻辑、查看实现：分析、analyze、怎么实现、如何工作、原理、逻辑等"
+    keywords: ["分析", "analyze", "怎么实现", "如何工作"]
+    workflow:
+      prompt_file: "prompts/workflows/analyze.md"
+      enabled: false  # 待创建工作流
+    priority: 6
+  
+  # ========== 通用意图（不需要工作流）==========
+  
+  understand_project:
+    description: "用户想了解/探索当前项目：理解、理解下、当前项目、项目是啥、介绍、架构、结构、概览、整体、看看、了解一下等"
+    keywords: ["了解", "理解", "项目", "架构", "介绍"]
+    workflow: null  # 不需要工作流，由预取机制处理
+    priority: 9
+  
+  need_code_context:
+    description: "用户问题涉及代码实现、查某功能/某处逻辑、需要看代码上下文"
+    keywords: ["代码", "实现", "逻辑"]
+    workflow: null  # 不需要工作流，由预取机制处理
+    priority: 7
+  
+  edit_or_write:
+    description: "用户明确要改代码、写文件、新增或修改实现"
+    keywords: ["修改", "改", "写", "新增", "添加"]
+    workflow: null  # 不需要工作流，直接执行
+    priority: 8
+  
+  run_test:
+    description: "用户想运行测试、执行测试、测试代码、验证功能：测试、跑测试、运行测试、test、pytest等"
+    keywords: ["测试", "test", "pytest", "运行测试"]
+    workflow: null  # 不需要工作流，直接执行
+    priority: 7
+  
+  general_chat:
+    description: "一般对话、问候、无关代码的闲聊"
+    keywords: ["你好", "您好", "hi", "hello", "嗨"]
+    workflow: null  # 不需要工作流
+    priority: 1
+
+# ========== 配置说明 ==========
+#
+# 1. 添加新意图：
+#    - 在上面添加新的意图定义
+#    - 如果需要工作流，创建对应的 .md 文件
+#    - 设置 enabled: true
+#
+# 2. 禁用意图：
+#    - 设置 enabled: false
+#    - 或者直接删除该意图定义
+#
+# 3. 优先级：
+#    - 数字越大优先级越高
+#    - 当多个意图匹配时，优先使用高优先级的
+#
+# 4. 关键词兜底：
+#    - keywords 用于 LLM 分类失败时的兜底匹配
+#    - 可选，但建议配置

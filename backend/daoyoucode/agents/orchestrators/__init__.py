@@ -11,7 +11,6 @@ from .workflow import WorkflowOrchestrator
 from .conditional import ConditionalOrchestrator
 from .parallel import ParallelOrchestrator
 from .parallel_explore import ParallelExploreOrchestrator
-from .react import ReActOrchestrator
 
 
 def register_builtin_orchestrators():
@@ -22,7 +21,11 @@ def register_builtin_orchestrators():
     register_orchestrator('conditional', ConditionalOrchestrator)
     register_orchestrator('parallel', ParallelOrchestrator)
     register_orchestrator('parallel_explore', ParallelExploreOrchestrator)
-    register_orchestrator('react', ReActOrchestrator)
+    
+    # 向后兼容：react 指向 simple
+    # 说明：ReAct循环已在Agent层通过Function Calling实现
+    #      SimpleOrchestrator 包含了原 ReActOrchestrator 的所有功能（预取、重试等）
+    register_orchestrator('react', SimpleOrchestrator)
 
 
 # 自动注册
@@ -36,6 +39,5 @@ __all__ = [
     'ConditionalOrchestrator',
     'ParallelOrchestrator',
     'ParallelExploreOrchestrator',
-    'ReActOrchestrator',
     'register_builtin_orchestrators',
 ]

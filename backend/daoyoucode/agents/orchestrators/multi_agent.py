@@ -31,13 +31,17 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         if context is None:
             context = {}
         
+        # 🆕 将 skill_dir 添加到 context，供 Agent 使用
+        if skill.skill_path:
+            context['skill_dir'] = str(skill.skill_path)
+        
         self.logger.info(f"多Agent执行Skill: {skill.name}")
         
         # 0. 与 ReAct 一致：是否预取由 intent.should_prefetch_project_understanding 统一判定
         user_input_stripped = (user_input or "").strip()
         if user_input_stripped:
             from ..tools import get_tool_registry
-            from ..intent import should_prefetch_project_understanding
+            from ..core.intent import should_prefetch_project_understanding
             _tool_reg = get_tool_registry()
             need_project_prefetch, intents, prefetch_level = await should_prefetch_project_understanding(skill, user_input_stripped, context)
             has_tools = all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map"))

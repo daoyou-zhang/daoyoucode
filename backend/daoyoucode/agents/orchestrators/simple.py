@@ -1,7 +1,17 @@
 """
-简单编排器（增强版）
+单Agent编排器（增强版）
 
-直接执行单个Agent，支持重试和结果验证
+直接执行单个Agent，支持：
+- 自动重试机制
+- 结果验证
+- 成本追踪
+- 执行时间统计
+- 项目信息预取（ReAct模式）
+
+说明：
+- ReAct循环（Reason-Act-Observe-Reflect）已在Agent层通过Function Calling实现
+- 编排器负责调用Agent、预取信息、重试和结果验证
+- 原ReActOrchestrator已合并到此编排器
 """
 
 from typing import Dict, Any, Optional
@@ -12,13 +22,21 @@ from ..core.orchestrator import BaseOrchestrator
 
 class SimpleOrchestrator(BaseOrchestrator):
     """
-    简单编排器（增强版）
+    单Agent编排器（增强版）
     
-    新增功能：
+    功能：
     - 自动重试机制
     - 结果验证
     - 成本追踪
     - 执行时间统计
+    - 项目信息预取（可选）
+    
+    ReAct循环说明：
+    - Thought（思考）：LLM分析问题
+    - Action（行动）：调用工具
+    - Observation（观察）：获取工具结果
+    - Reflect（反思）：LLM决定下一步
+    以上循环已在Agent层通过Function Calling自动实现
     """
     
     def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
@@ -105,6 +123,9 @@ class SimpleOrchestrator(BaseOrchestrator):
     ) -> Dict[str, Any]:
         """执行一次（不重试）"""
         
+        # 🆕 0. 项目信息预取（如果需要）
+        await self._prefetch_project_info(skill, user_input, context)
+        
         # 1. 应用中间件
         if skill.middleware:
             for middleware_name in skill.middleware:
@@ -159,6 +180,82 @@ class SimpleOrchestrator(BaseOrchestrator):
             'tokens_used': result.tokens_used,
             'cost': result.cost
         }
+    
+    async def _prefetch_project_info(
+        self,
+        skill: 'SkillConfig',
+        user_input: str,
+        context: Dict[str, Any]
+    ) -> None:
+        """
+        预取项目信息（可选）
+        
+        根据意图判断是否需要预取项目文档、目录结构、代码地图
+        """
+        user_input_stripped = (user_input or "").strip()
+        if not user_input_stripped:
+            return
+        
+        try:
+            from ..tools import get_tool_registry
+            from ..core.intent import should_prefetch_project_understanding
+            
+            _tool_reg = get_tool_registry()
+            need_project_prefetch, detected_intents, prefetch_level = await should_prefetch_project_understanding(
+                skill, user_input_stripped, context
+            )
+            
+            self.logger.info(f"[预取判定] 需要预取: {need_project_prefetch}, 级别: {prefetch_level}, 意图: {detected_intents}")
+            
+            # 检查工具是否可用
+            has_tools = all(_tool_reg.get_tool(n) for n in ("discover_project_docs", "get_repo_structure", "repo_map"))
+            
+            if need_project_prefetch and has_tools and prefetch_level != "none":
+                self.logger.info(f"[预取执行] 开始预取项目理解（级别: {prefetch_level}）")
+                
+                docs_tool = _tool_reg.get_tool("discover_project_docs")
+                struct_tool = _tool_reg.get_tool("get_repo_structure")
+                repo_map_tool = _tool_reg.get_tool("repo_map")
+                
+                parts = []
+                header = getattr(skill, "project_understanding_header", None) or \
+                    "理解项目时，重点关注【代码地图】（核心代码和架构），【目录结构】帮助定位，【项目文档】提供背景。用1-2段话概括项目核心，不要逐条罗列。\n\n"
+                
+                # 根据级别决定调用哪些工具
+                if prefetch_level == "full":
+                    # 完整预取：文档+结构+地图
+                    self.logger.info("[预取执行] 调用 discover_project_docs")
+                    d = await docs_tool.execute(repo_path=".", max_doc_length=12000)
+                    if d and getattr(d, "content", None) and d.content:
+                        _DOC_CHARS = 8000
+                        parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
+                        self.logger.info(f"[预取执行] discover_project_docs 完成，内容长度: {len(d.content)}")
+                
+                if prefetch_level in ("full", "medium"):
+                    # 中等预取：结构+地图
+                    self.logger.info("[预取执行] 调用 get_repo_structure")
+                    s = await struct_tool.execute(repo_path=".", max_depth=3)
+                    if s and getattr(s, "content", None) and s.content:
+                        _STRUCT_CHARS = 3500
+                        parts.append("【目录结构】\n" + ((s.content[:_STRUCT_CHARS] + "…") if len(s.content) > _STRUCT_CHARS else s.content))
+                        self.logger.info(f"[预取执行] get_repo_structure 完成，内容长度: {len(s.content)}")
+                
+                # 所有级别都调用 repo_map
+                self.logger.info("[预取执行] 调用 repo_map")
+                r = await repo_map_tool.execute(repo_path=".")
+                if r and getattr(r, "content", None) and r.content:
+                    _REPOMAP_CHARS = 4500
+                    parts.append("【代码地图】仅作参考\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
+                    self.logger.info(f"[预取执行] repo_map 完成，内容长度: {len(r.content)}")
+                
+                if parts:
+                    context["project_understanding_block"] = header + "\n\n".join(parts)
+                    self.logger.info(f"[预取完成] 已注入 project_understanding_block，总长度: {len(context['project_understanding_block'])}")
+                else:
+                    self.logger.warning("[预取完成] 没有获取到任何内容")
+        
+        except Exception as e:
+            self.logger.warning(f"[预取失败] {e}", exc_info=True)
     
     def _validate_result(self, result: Dict[str, Any]) -> bool:
         """

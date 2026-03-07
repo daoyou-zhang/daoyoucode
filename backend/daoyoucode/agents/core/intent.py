@@ -48,13 +48,20 @@ async def classify_intents(
         user_input: 用户输入
         llm_config: Skill 的 llm 配置（model、temperature 等）
         intent_definitions: 意图 id -> 说明文案；None 用 DEFAULT_INTENT_DEFINITIONS
+                           🆕 支持从 Skill 的 intents.yaml 传入自定义定义
 
     Returns:
         命中的意图 id 列表，如 ["understand_project", "need_code_context"]；解析失败返回 []。
     """
     if not (user_input and user_input.strip()):
         return []
-    defs = intent_definitions or DEFAULT_INTENT_DEFINITIONS
+    
+    # 🆕 优先使用传入的意图定义，兜底到默认定义
+    defs = intent_definitions if intent_definitions else DEFAULT_INTENT_DEFINITIONS
+    
+    if not defs:
+        logger.warning("没有可用的意图定义，返回空列表")
+        return []
     lines = [f"- {k}: {v}" for k, v in defs.items()]
     defs_text = "\n".join(lines)
     prompt = (
@@ -66,8 +73,8 @@ async def classify_intents(
         "用户输入：\n" + (user_input.strip()[:600])
     )
     try:
-        from .llm import get_client_manager
-        from .llm.base import LLMRequest
+        from ..llm import get_client_manager
+        from ..llm.base import LLMRequest
         cfg = llm_config or {}
         model = cfg.get("model", "qwen-max")
         client_manager = get_client_manager()

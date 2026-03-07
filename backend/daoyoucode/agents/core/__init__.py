@@ -10,6 +10,8 @@ from .router import IntelligentRouter, TaskFeatures, RoutingDecision, get_intell
 from .context import Context, ContextManager, ContextSnapshot, ContextChange, get_context_manager
 from .planner import ExecutionPlanner, ExecutionPlan, ExecutionStep, get_execution_planner
 from .feedback import FeedbackLoop, Evaluation, FailureAnalysis, get_feedback_loop
+from .workflow_manager import WorkflowManager
+from .intent import classify_intents, should_prefetch_project_understanding
 
 __all__ = [
     # Agent
@@ -58,4 +60,9 @@ __all__ = [
     'Evaluation',
     'FailureAnalysis',
     'get_feedback_loop',
+    
+    # Workflow & Intent
+    'WorkflowManager',
+    'classify_intents',
+    'should_prefetch_project_understanding',
 ]

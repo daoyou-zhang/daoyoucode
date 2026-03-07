@@ -14,9 +14,11 @@ agents:
   - refactor_master     # 辅助：代码重构
   - test_expert         # 辅助：测试编写
 
-# Prompt配置
+# Prompt配置（总分关系）
+# - 总：prompts/sisyphus.md（通用原则、角色定位、可用工具）
+# - 分：prompts/workflows/*.md（具体任务的详细步骤，根据意图动态加载）
 prompt:
-  file: prompts/sisyphus.md  # 简洁版本
+  file: prompts/sisyphus.md  # 总原则：角色定位、工具说明、通用策略
 
 # 了解项目预取：用 LLM 意图判断，避免死关键词漏掉「理解下当前项目」等说法
 project_understanding_use_intent: true
@@ -33,6 +35,10 @@ llm:
   temperature: 0.3
   max_tokens: 8000
 
+# 🆕 工作流配置已迁移到 intents.yaml
+# 意图定义和工作流配置现在统一在 intents.yaml 中管理
+# 这样实现了逻辑和数据分离，更加干净纯粹
+
 # 默认工具（未在 agent_tools 中列出的 Agent 使用）
 tools:
   - repo_map
@@ -40,6 +46,8 @@ tools:
   - text_search
   - read_file
   - batch_read_files      # 🆕 批量读取文件
+  - delete_file           # 🆕 删除文件
+  - batch_delete_files    # 🆕 批量删除文件
 
 # 按 Agent 分配工具（最优调度：各智能体仅获得其职责所需工具）
 agent_tools:
@@ -55,6 +63,8 @@ agent_tools:
     - write_file             # 🆕 写文件
     - batch_write_files      # 🆕 批量写文件
     - list_files             # 🆕 列出文件
+    - delete_file            # 🆕 删除文件
+    - batch_delete_files     # 🆕 批量删除文件
     - search_replace         # 🆕 搜索替换
     - get_file_symbols       # 🆕 获取符号
     - git_status             # 🆕 Git 状态
@@ -77,6 +87,8 @@ agent_tools:
     - batch_write_files
     - list_files
     - get_file_info
+    - delete_file
+    - batch_delete_files
     - text_search
     - regex_search
     - get_file_symbols

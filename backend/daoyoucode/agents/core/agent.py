@@ -20,6 +20,18 @@ class AgentConfig:
     model: str
     temperature: float = 0.7
     system_prompt: str = ""
+    skill_dir: Optional[str] = None  # 🆕 Skill 目录（用于工作流管理器）
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            'name': self.name,
+            'description': self.description,
+            'model': self.model,
+            'temperature': self.temperature,
+            'system_prompt': self.system_prompt,
+            'skill_dir': self.skill_dir,
+        }
 
 
 @dataclass
@@ -55,6 +67,9 @@ class BaseAgent(ABC):
         from ..tools.postprocessor import get_tool_postprocessor
         self.tool_postprocessor = get_tool_postprocessor()
         self.logger.debug("工具后处理器已就绪")
+        
+        # 🆕 工作流管理器（延迟初始化，在 execute 时根据 context 中的 skill_dir 创建）
+        self.workflow_manager = None
         
         # 用户画像缓存（按需加载，避免每轮都读取）
         self._user_profile_cache: Dict[str, Dict[str, Any]] = {}
@@ -380,6 +395,12 @@ class BaseAgent(ABC):
         tools_used = []
         
         try:
+            # 🆕 0. 初始化工作流管理器（如果 context 中有 skill_dir）
+            if not self.workflow_manager and context.get('skill_dir'):
+                from .workflow_manager import WorkflowManager
+                self.workflow_manager = WorkflowManager({'skill_dir': context['skill_dir']})
+                self.logger.debug(f"工作流管理器已初始化: {len(self.workflow_manager.workflows)} 个工作流")
+            
             # ========== 1. 获取记忆（智能加载）==========
             
             # 1.1 判断是否为追问
@@ -442,11 +463,17 @@ class BaseAgent(ABC):
                 
                 if not detected_intents:
                     # 如果编排器没有做意图识别，这里做一次
-                    from ..intent import classify_intents
+                    from .intent import classify_intents
                     try:
+                        # 🆕 从工作流管理器获取意图定义（如果有）
+                        intent_defs = None
+                        if self.workflow_manager and self.workflow_manager.intent_config:
+                            intent_defs = self.workflow_manager.get_intent_definitions()
+                        
                         detected_intents = await classify_intents(
                             user_input,
-                            llm_config
+                            llm_config,
+                            intent_definitions=intent_defs  # 🆕 传入自定义意图定义（可能为 None）
                         )
                         context['detected_intents'] = detected_intents
                         self.logger.info(f"🎯 意图识别: {detected_intents}")
@@ -730,14 +757,78 @@ class BaseAgent(ABC):
         user_input: str,
         context: Dict[str, Any]
     ) -> str:
-        """渲染Prompt（支持Jinja2模板）"""
+        """
+        渲染Prompt（支持Jinja2模板 + 工作流动态加载）
+        
+        Args:
+            prompt: 主 Prompt 模板
+            user_input: 用户输入
+            context: 上下文（包含 detected_intents）
+        
+        Returns:
+            渲染后的完整 Prompt
+        """
         try:
+            # 🆕 1. 尝试加载工作流 Prompt
+            workflow_prompt = None
+            detected_intents = context.get('detected_intents', [])
+            
+            if detected_intents:
+                workflow_prompt = self.workflow_manager.get_workflow_prompt(
+                    intents=detected_intents,
+                    user_input=user_input
+                )
+            
+            # 🆕 2. 如果有工作流 Prompt，组合到主 Prompt
+            if workflow_prompt:
+                prompt = self._build_prompt_with_workflow(prompt, workflow_prompt)
+                self.logger.info(f"✅ 已加载工作流指导 (意图: {detected_intents})")
+            
+            # 3. 渲染 Jinja2 模板
             from jinja2 import Template
             template = Template(prompt)
             return template.render(user_input=user_input, **context)
+        
         except Exception as e:
             self.logger.warning(f"Prompt渲染失败: {e}")
             return prompt.replace('{{user_input}}', user_input)
+    
+    def _build_prompt_with_workflow(
+        self,
+        main_prompt: str,
+        workflow_prompt: str
+    ) -> str:
+        """
+        组合主 Prompt 和工作流 Prompt（总分关系）
+        
+        总分关系：
+        - 总（main_prompt）：角色定位、可用工具、通用原则
+        - 分（workflow_prompt）：当前任务的具体步骤和注意事项
+        
+        Args:
+            main_prompt: 主 Prompt（sisyphus.md - 总原则）
+            workflow_prompt: 工作流 Prompt（workflows/*.md - 具体步骤）
+        
+        Returns:
+            组合后的完整 Prompt
+        """
+        return f"""{main_prompt}
+
+---
+
+## 🎯 当前任务专项工作流
+
+**说明**：以下是针对当前任务的详细执行步骤，请在遵循上述总体原则的基础上，严格按照此工作流执行。
+
+{workflow_prompt}
+
+---
+
+**执行要求**：
+1. 遵循上述总体原则（角色定位、工具使用规范）
+2. 严格按照专项工作流的步骤执行
+3. 确保每个步骤都正确完成后再进入下一步
+"""
     
     async def _call_llm(
         self,

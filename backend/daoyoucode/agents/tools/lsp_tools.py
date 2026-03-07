@@ -1046,37 +1046,133 @@ async def with_lsp_client(file_path: str, callback):
     使用LSP客户端执行操作的辅助函数
     
     采用标准LSP操作模式
+    
+    Args:
+        file_path: 文件路径（必须是存在的文件，且有扩展名）
+        callback: LSP 操作回调函数
+    
+    Raises:
+        ValueError: 参数无效（空路径、目录、无扩展名等）
+        FileNotFoundError: 文件不存在
+        RuntimeError: LSP 服务器未配置或启动失败
     """
-    file_path_obj = Path(file_path).resolve()
+    import logging
+    logger = logging.getLogger(__name__)
     
+    # 🆕 1. 验证文件路径不为空
+    if not file_path or not file_path.strip():
+        error_msg = "文件路径不能为空，请提供有效的文件路径"
+        logger.error(f"LSP 工具错误: {error_msg}")
+        raise ValueError(error_msg)
+    
+    # 🆕 2. 解析并验证路径
+    try:
+        file_path_obj = Path(file_path).resolve()
+    except Exception as e:
+        error_msg = f"无效的文件路径 '{file_path}': {e}"
+        logger.error(f"LSP 工具错误: {error_msg}")
+        raise ValueError(error_msg)
+    
+    # 🆕 3. 验证文件存在
     if not file_path_obj.exists():
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = (
+            f"文件不存在: {file_path}\n"
+            f"提示: 文件可能已被删除或移动，请先使用搜索工具定位文件"
+        )
+        logger.warning(f"LSP 工具错误: {error_msg}")
+        raise FileNotFoundError(error_msg)
     
-    # 查找LSP服务器
+    # 🆕 4. 验证是文件而不是目录
+    if file_path_obj.is_dir():
+        error_msg = (
+            f"期望文件，但得到目录: {file_path}\n"
+            f"提示: LSP 工具只能处理文件，不能处理目录。"
+            f"请指定具体的文件路径（例如: {file_path}/main.py）"
+        )
+        logger.error(f"LSP 工具错误: {error_msg}")
+        raise ValueError(error_msg)
+    
+    # 🆕 5. 获取并验证文件扩展名
     ext = file_path_obj.suffix
+    if not ext:
+        error_msg = (
+            f"文件没有扩展名: {file_path}\n"
+            f"提示: LSP 工具需要带扩展名的文件（如 .py, .js, .ts）。"
+            f"不支持无扩展名的文件"
+        )
+        logger.error(f"LSP 工具错误: {error_msg}")
+        raise ValueError(error_msg)
+    
+    # 🆕 6. 查找 LSP 服务器配置
     manager = get_lsp_manager()
     server_config = manager.find_server_for_extension(ext)
     
     if not server_config:
-        raise ValueError(f"No LSP server found for {ext} files")
+        # 提供更有帮助的错误信息
+        supported_exts = manager.get_supported_extensions() if hasattr(manager, 'get_supported_extensions') else []
+        error_msg = (
+            f"未配置 {ext} 文件的 LSP 服务器\n"
+            f"文件: {file_path}\n"
+        )
+        if supported_exts:
+            error_msg += f"支持的扩展名: {', '.join(supported_exts)}\n"
+        error_msg += (
+            f"提示: 请在 LSP 设置中配置 {ext} 文件的服务器，"
+            f"或使用其他工具如 grep_search 或 read_file"
+        )
+        logger.warning(f"LSP 工具错误: {error_msg}")
+        raise ValueError(error_msg)
     
-    # 查找项目根目录
+    # 🆕 7. 查找项目根目录
     root = file_path_obj.parent
-    while root.parent != root:
+    max_depth = 10  # 防止无限循环
+    depth = 0
+    
+    while root.parent != root and depth < max_depth:
         if (root / '.git').exists() or (root / 'package.json').exists() or (root / 'pyproject.toml').exists():
             break
         root = root.parent
+        depth += 1
     
-    # 获取LSP客户端
-    client = await manager.get_client(str(root), server_config)
+    logger.debug(f"LSP: 使用项目根目录: {root}，文件: {file_path}")
     
+    # 🆕 8. 获取 LSP 客户端（带错误处理）
     try:
-        # 执行回调
+        client = await manager.get_client(str(root), server_config)
+        if not client:
+            error_msg = (
+                f"无法获取 {ext} 文件的 LSP 客户端\n"
+                f"服务器: {server_config.id}\n"
+                f"提示: LSP 服务器可能未运行，请检查 LSP 服务器日志"
+            )
+            logger.error(f"LSP 工具错误: {error_msg}")
+            raise RuntimeError(error_msg)
+    except Exception as e:
+        error_msg = (
+            f"启动 {ext} 文件的 LSP 服务器失败: {e}\n"
+            f"服务器: {server_config.id}\n"
+            f"提示: 请检查 LSP 服务器配置，确保服务器已安装"
+        )
+        logger.error(f"LSP 工具错误: {error_msg}")
+        raise RuntimeError(error_msg)
+    
+    # 🆕 9. 执行回调（带错误处理和清理）
+    try:
+        logger.debug(f"LSP: 在 {file_path} 上执行操作")
         result = await callback(client)
+        logger.debug(f"LSP: 操作成功完成")
         return result
+    except Exception as e:
+        # 记录详细错误信息
+        logger.error(f"LSP 操作失败 {file_path}: {type(e).__name__}: {e}")
+        raise
     finally:
-        # 释放客户端
-        manager.release_client(str(root), server_config.id)
+        # 🆕 确保释放客户端（即使出错也要释放）
+        try:
+            manager.release_client(str(root), server_config.id)
+            logger.debug(f"LSP: 已释放客户端 {server_config.id}")
+        except Exception as e:
+            logger.warning(f"释放 LSP 客户端失败: {e}")
 
 
 def format_location(location: Dict[str, Any]) -> str:
@@ -1293,6 +1389,20 @@ class LSPGotoDefinitionTool(BaseTool):
     ) -> ToolResult:
         """跳转到定义"""
         try:
+            # 🆕 参数验证
+            if line < 1:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error="行号必须 >= 1（行号从 1 开始）"
+                )
+            if character < 0:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error="字符位置必须 >= 0（字符位置从 0 开始）"
+                )
+            
             result = await with_lsp_client(file_path, lambda client: client.definition(file_path, line, character))
             
             if not result:
@@ -1326,12 +1436,21 @@ class LSPGotoDefinitionTool(BaseTool):
                 }
             )
             
-        except Exception as e:
-            logger.error(f"LSP goto definition failed: {e}", exc_info=True)
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            # 🆕 已知错误类型，直接返回错误信息
+            logger.warning(f"LSP 跳转定义失败: {e}")
             return ToolResult(
                 success=False,
                 content=None,
                 error=str(e)
+            )
+        except Exception as e:
+            # 🆕 未知错误，记录详细日志
+            logger.error(f"LSP 跳转定义失败: {e}", exc_info=True)
+            return ToolResult(
+                success=False,
+                content=None,
+                error=f"未预期的错误: {type(e).__name__}: {e}"
             )
 
 
@@ -1389,6 +1508,20 @@ class LSPFindReferencesTool(BaseTool):
     ) -> ToolResult:
         """查找引用"""
         try:
+            # 🆕 参数验证
+            if line < 1:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error="行号必须 >= 1（行号从 1 开始）"
+                )
+            if character < 0:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error="字符位置必须 >= 0（字符位置从 0 开始）"
+                )
+            
             result = await with_lsp_client(
                 file_path,
                 lambda client: client.references(file_path, line, character, include_declaration)
@@ -1427,12 +1560,21 @@ class LSPFindReferencesTool(BaseTool):
                 }
             )
             
-        except Exception as e:
-            logger.error(f"LSP find references failed: {e}", exc_info=True)
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            # 🆕 已知错误类型
+            logger.warning(f"LSP 查找引用失败: {e}")
             return ToolResult(
                 success=False,
                 content=None,
                 error=str(e)
+            )
+        except Exception as e:
+            # 🆕 未知错误
+            logger.error(f"LSP 查找引用失败: {e}", exc_info=True)
+            return ToolResult(
+                success=False,
+                content=None,
+                error=f"未预期的错误: {type(e).__name__}: {e}"
             )
 
 
@@ -1490,11 +1632,26 @@ class LSPSymbolsTool(BaseTool):
     ) -> ToolResult:
         """获取符号列表"""
         try:
+            # 🆕 参数验证
+            if scope not in ["document", "workspace"]:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"无效的 scope '{scope}'，必须是 'document' 或 'workspace'"
+                )
+            
             if scope == "workspace" and not query:
                 return ToolResult(
                     success=False,
                     content=None,
-                    error="'query' is required for workspace scope"
+                    error="workspace scope 需要提供 'query' 参数"
+                )
+            
+            if limit < 1:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error="limit 必须 >= 1"
                 )
             
             if scope == "workspace":
@@ -1559,7 +1716,22 @@ class LSPSymbolsTool(BaseTool):
                 }
             )
             
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            # 🆕 已知错误类型
+            logger.warning(f"LSP 符号查询失败: {e}")
+            return ToolResult(
+                success=False,
+                content=None,
+                error=str(e)
+            )
         except Exception as e:
+            # 🆕 未知错误
+            logger.error(f"LSP 符号查询失败: {e}", exc_info=True)
+            return ToolResult(
+                success=False,
+                content=None,
+                error=f"未预期的错误: {type(e).__name__}: {e}"
+            )
             logger.error(f"LSP symbols failed: {e}", exc_info=True)
             return ToolResult(
                 success=False,
