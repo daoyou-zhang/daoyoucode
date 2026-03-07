@@ -45,6 +45,9 @@
 - **TEST_SHARED_CACHE.md** - 共享缓存完整测试计划
 - **IMPLEMENTATION_CHECKLIST.md** - 实施检查清单
 - **TEST_COMPLETE_FLOW.md** - 完整流程测试
+- **VERIFICATION_REPORT.md** - 共享缓存实现验证报告
+- **SISYPHUS_V2_IMPLEMENTATION_COMPLETE.md** - Sisyphus V2 实施完成报告 ⭐ 最新
+- **SISYPHUS_V2_TESTING_GUIDE.md** - Sisyphus V2 测试指南 ⭐ 最新
 
 ### 📖 指南文档 (guides/)
 
