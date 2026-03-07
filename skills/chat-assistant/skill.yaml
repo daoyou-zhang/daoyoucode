@@ -26,6 +26,9 @@ project_understanding_triggers:
 # 可选：预取块总字符上限（不设则默认约 16000）。若模型上下文很小可设小值（如 8000）避免超窗
 # project_understanding_max_chars: 16000
 
+# 可选：预取块的指导语（不设则使用默认）
+# project_understanding_header: "理解项目时，重点关注【代码地图】（核心代码和架构），【目录结构】帮助定位，【项目文档】提供背景。用1-2段话概括项目核心，不要逐条罗列。\n\n"
+
 # LLM配置（max_tokens 为回复长度上限；输入上下文由模型窗口决定，ReAct 不经过 ContextManager 的 token_budget 剪枝）
 llm:
   model: qwen-max

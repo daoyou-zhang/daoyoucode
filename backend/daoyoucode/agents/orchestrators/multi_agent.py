@@ -64,12 +64,12 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                         self.logger.info("[预取] full级别 doc=%s struct=%s repomap=%s (chars)", ld, ls, lr)
                         
                         # 预取块上限
-                        _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 8000, 3500, 4500
+                        _DOC_CHARS, _STRUCT_CHARS, _REPOMAP_CHARS = 4000, 5000, 12000
                         max_total = getattr(skill, "project_understanding_max_chars", None)
                         if max_total is not None and max_total > 0:
-                            _DOC_CHARS = min(8000, max(500, int(max_total * 0.50)))
-                            _STRUCT_CHARS = min(3500, max(300, int(max_total * 0.22)))
-                            _REPOMAP_CHARS = min(4500, max(300, int(max_total * 0.28)))
+                            _DOC_CHARS = min(4000, max(500, int(max_total * 0.50)))
+                            _STRUCT_CHARS = min(5000, max(300, int(max_total * 0.22)))
+                            _REPOMAP_CHARS = min(12000, max(300, int(max_total * 0.28)))
                         
                         if d and getattr(d, "content", None) and d.content:
                             parts.append("【项目文档】\n" + ((d.content[:_DOC_CHARS] + "…") if len(d.content) > _DOC_CHARS else d.content))
@@ -107,7 +107,7 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                             parts.append("【代码地图】\n" + ((r.content[:_REPOMAP_CHARS] + "…") if len(r.content) > _REPOMAP_CHARS else r.content))
                     
                     if parts:
-                        header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                        header = getattr(skill, "project_understanding_header", None) or "理解项目时，重点关注【代码地图】（核心代码和架构），【目录结构】帮助定位，【项目文档】提供背景。用1-2段话概括项目核心，不要逐条罗列。\n\n"
                         context["project_understanding_block"] = header + "\n\n".join(parts)
                         self.logger.info("已预取了解项目（%s级别）并注入 context（multi_agent，智能体循环前） block_len=%s", prefetch_level, len(context["project_understanding_block"]))
                     else:
@@ -416,6 +416,9 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         main_agent = agents[0]
         helper_agents = agents[1:] if len(agents) > 1 else []
         
+        # 🆕 创建共享工具调用缓存（避免辅助Agent重复调用相同工具）
+        shared_tool_cache = {}
+        
         # 🆕 根据意图智能选择辅助Agent
         intents = context.get('detected_intents', [])
         
@@ -501,7 +504,14 @@ class MultiAgentOrchestrator(BaseOrchestrator):
                 
                 # 🔥 辅助Agent不使用流式输出（显式传递 enable_streaming=False）
                 # 在 context 中添加 agent_name，用于工具执行日志
-                helper_context = {**context, 'agent_name': agent.name}
+                # 🆕 标记为辅助Agent，避免重复记录任务
+                # 🆕 传递共享工具调用缓存
+                helper_context = {
+                    **context,
+                    'agent_name': agent.name,
+                    'agent_role': 'helper',
+                    'shared_tool_cache': shared_tool_cache  # 🔥 共享缓存
+                }
                 
                 task = agent.execute(
                     prompt_source=prompt_source,
@@ -530,10 +540,22 @@ class MultiAgentOrchestrator(BaseOrchestrator):
         # 2. 执行主Agent（可以看到辅助Agent的结果）
         self.logger.info(f"执行主Agent: {main_agent.name}")
         
+        # 🆕 主Agent也使用共享缓存（可以复用辅助Agent的工具调用结果）
         main_context = {
             **context,
-            'helper_results': helper_results
+            'helper_results': helper_results,
+            'shared_tool_cache': shared_tool_cache  # 🔥 传递共享缓存
         }
+        
+        # 🆕 记录缓存统计
+        # 注意：shared_tool_cache 的值是字符串（工具结果），不是字典
+        # 缓存条目数 = 有多少个不同的工具调用被缓存
+        # 缓存命中数需要在 agent.py 中单独统计
+        if shared_tool_cache:
+            self.logger.info(
+                f"📊 共享缓存统计: 共缓存了{len(shared_tool_cache)}个工具调用结果"
+            )
+        
         block_len = len(main_context.get("project_understanding_block") or "")
         self.logger.info("[预取] 主Agent 入参 context 含 project_understanding_block=%s (chars)", block_len if block_len else "无")
         

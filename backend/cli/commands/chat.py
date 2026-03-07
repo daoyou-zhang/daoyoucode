@@ -559,7 +559,7 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
         "cwd": ui_context.get("cwd", os.getcwd()),
         "working_directory": repo_path,
         "repo_root": repo_path,
-        "enable_streaming": True,  # 🆕 启用流式输出
+        "enable_streaming": False,  # 🆕 启用流式输出
     }
     
     # 会话级初始化已在main函数中完成，这里不再需要

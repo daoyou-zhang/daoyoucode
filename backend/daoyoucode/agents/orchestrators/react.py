@@ -156,7 +156,7 @@ class ReActOrchestrator(BaseOrchestrator):
                         
                         # 根据级别决定调用哪些工具
                         parts = []
-                        header = getattr(skill, "project_understanding_header", None) or "概括时请以【项目文档】为主说明项目是啥、核心在哪；【目录结构】【代码地图】仅作参考，切勿逐条罗列文件或类名。\n\n"
+                        header = getattr(skill, "project_understanding_header", None) or "理解项目时，重点关注【代码地图】（核心代码和架构），【目录结构】帮助定位，【项目文档】提供背景。用1-2段话概括项目核心，不要逐条罗列。\n\n"
                         
                         if prefetch_level in ("full", "medium", "light"):
                             # 传足 max_doc_length，否则工具内部默认 5000 会截断，导致「文档没给到」

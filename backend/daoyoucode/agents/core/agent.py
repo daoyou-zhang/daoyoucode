@@ -294,13 +294,19 @@ class BaseAgent(ABC):
                     self.logger.warning(f"⚠️ 摘要生成失败: {e}")
             
             # 保存任务
-            self.memory.add_task(user_id, {
-                'agent': self.name,
-                'input': user_input[:200],
-                'result': response_content[:200],
-                'success': True,
-                'stream': True
-            })
+            # 🆕 只有主Agent才记录任务，避免辅助Agent重复记录
+            is_helper = context.get('agent_role') == 'helper'
+            if not is_helper:
+                self.memory.add_task(user_id, {
+                    'agent': self.name,
+                    'input': user_input[:200],
+                    'result': response_content[:200],
+                    'success': True,
+                    'stream': True
+                })
+                self.logger.debug(f"任务已记录: {self.name}")
+            else:
+                self.logger.debug(f"辅助Agent {self.name} 不记录任务（避免重复）")
             
             # 检查是否需要更新用户画像
             await self._check_and_update_profile(user_id, session_id)
@@ -629,13 +635,19 @@ class BaseAgent(ABC):
                     self.logger.warning(f"⚠️ 摘要生成失败: {e}")
             
             # 5.3 保存任务（Agent层记忆）
-            self.memory.add_task(user_id, {
-                'agent': self.name,
-                'input': user_input[:200],  # 限制长度
-                'result': response[:200],   # 限制长度
-                'success': True,
-                'tools_used': tools_used
-            })
+            # 🆕 只有主Agent才记录任务，避免辅助Agent重复记录
+            is_helper = context.get('agent_role') == 'helper'
+            if not is_helper:
+                self.memory.add_task(user_id, {
+                    'agent': self.name,
+                    'input': user_input[:200],  # 限制长度
+                    'result': response[:200],   # 限制长度
+                    'success': True,
+                    'tools_used': tools_used
+                })
+                self.logger.debug(f"任务已记录: {self.name}")
+            else:
+                self.logger.debug(f"辅助Agent {self.name} 不记录任务（避免重复）")
             
             # 5.4 学习用户偏好（Agent层记忆）
             # 例如：如果用户经常问Python问题，记住这个偏好
@@ -1006,7 +1018,12 @@ class BaseAgent(ABC):
             except Exception:
                 args_key = str(tool_args)
             cache_key = (tool_name, args_key)
+            
+            # 🆕 检查共享缓存（跨Agent缓存）
+            shared_tool_cache = context.get('shared_tool_cache', {}) if context else {}
+            
             if cache_key in same_call_cache:
+                # 同轮去重（本Agent内）
                 self.logger.info(f"同轮去重: {tool_name} 与上次参数相同，复用结果，避免重复执行")
                 tools_used.append(tool_name)
                 from ..ui import get_tool_display
@@ -1015,6 +1032,28 @@ class BaseAgent(ABC):
                 display.show_tool_start(tool_name, tool_args, agent_name)
                 display.show_success(tool_name, 0)  # 显示完成，避免 UI 悬空
                 tool_result_str = same_call_cache[cache_key] + "\n\n[系统提示：上文为本轮回调相同参数的结果，请直接基于该结果回答，不要再次调用同一工具。]"
+                messages.append({"role": "assistant", "content": None, "function_call": function_call})
+                messages.append({"role": "function", "name": tool_name, "content": tool_result_str})
+                continue
+            elif cache_key in shared_tool_cache:
+                # 🆕 跨Agent缓存命中（另一个Agent已执行过）
+                agent_name = context.get('agent_name', 'unknown') if context else 'unknown'
+                self.logger.info(
+                    f"🔄 共享缓存命中: {tool_name} ({agent_name}) "
+                    f"- 另一个Agent已执行过，直接使用结果"
+                )
+                tools_used.append(tool_name)
+                from ..ui import get_tool_display
+                display = get_tool_display()
+                display.show_tool_start(tool_name, tool_args, agent_name)
+                display.show_success(tool_name, 0, note="(缓存)")  # 显示缓存标记
+                
+                # 从共享缓存获取结果
+                tool_result_str = shared_tool_cache[cache_key]
+                
+                # 添加到本地缓存
+                same_call_cache[cache_key] = tool_result_str
+                
                 messages.append({"role": "assistant", "content": None, "function_call": function_call})
                 messages.append({"role": "function", "name": tool_name, "content": tool_result_str})
                 continue
@@ -1102,6 +1141,12 @@ class BaseAgent(ABC):
                 if tool_result.success:
                     tool_result_str = str(tool_result.content) if tool_result.content else "工具执行成功，但没有返回内容"
                     same_call_cache[cache_key] = tool_result_str
+                    
+                    # 🆕 保存到共享缓存（供其他Agent使用）
+                    if shared_tool_cache is not None:
+                        shared_tool_cache[cache_key] = tool_result_str
+                        self.logger.debug(f"💾 保存到共享缓存: {tool_name}")
+                    
                     # 显示结果预览（可选）
                     # display.show_result_preview(tool_result_str, max_lines=3)
                 else:

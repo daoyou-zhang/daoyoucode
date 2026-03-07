@@ -86,12 +86,18 @@ class ToolDisplay:
             
             return SimpleProgress()
     
-    def show_success(self, tool_name: str, duration: float):
+    def show_success(self, tool_name: str, duration: float, note: str = None):
         """显示执行成功"""
         if RICH_AVAILABLE:
-            self.console.print(f"   [green]✓[/green] 执行完成 [dim]({duration:.2f}秒)[/dim]")
+            msg = f"   [green]✓[/green] 执行完成 [dim]({duration:.2f}秒)[/dim]"
+            if note:
+                msg += f" [cyan]{note}[/cyan]"
+            self.console.print(msg)
         else:
-            print(f"   ✓ 执行完成 ({duration:.2f}秒)")
+            msg = f"   ✓ 执行完成 ({duration:.2f}秒)"
+            if note:
+                msg += f" {note}"
+            print(msg)
     
     def show_error(self, tool_name: str, error: Exception, duration: float):
         """显示执行错误"""
