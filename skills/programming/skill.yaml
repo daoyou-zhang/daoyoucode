@@ -2,27 +2,46 @@ name: programming
 version: 1.0.0
 description: 编程专家服务（继承 sisyphus-orchestrator 工作流）
 
-# 🆕 使用多Agent编排器（与 sisyphus-orchestrator 一致）
+# orchestrator: 编排器类型（决定执行逻辑）
+#   - multi_agent: 多智能体编排器
+#   - 支持主 agent + 辅助 agents 协作
+#   - 适合：需要分析 + 编程的复杂任务
 orchestrator: multi_agent
+
+# collaboration_mode: 协作模式
+#   - main_with_helpers: 主 agent + 辅助 agents
+#   - sisyphus 负责任务分解和调度
+#   - programmer 负责具体编程
+#   - code_analyzer 负责代码分析
 collaboration_mode: main_with_helpers
 
-# 🆕 精简的 Agent 列表（专注编程）
+# agents: 智能体列表（对应 backend/daoyoucode/agents/builtin/ 下的类）
 agents:
-  - sisyphus          # 主编排
-  - programmer        # 核心Agent
-  - code_analyzer     # 辅助分析
+  - sisyphus          # 主编排：任务分解和调度
+  - programmer        # 核心：代码编写和实现
+  - code_analyzer     # 辅助：代码分析和理解
 
 # Prompt配置（使用独立文件）
 prompt:
-  file: prompts/programmer.md  # 简洁版本
+  file: prompts/programmer.md  # 专业版本（原 v2）
 
-# 🆕 工作流配置（继承 + 特化）
+# 🆕 工作流配置（引用共通工作流）
 workflows:
-  source: sisyphus-orchestrator  # 从 sisyphus-orchestrator 继承工作流
-  preferred_intents:              # 只使用编程相关的意图
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 工作流路径：skills/sisyphus-orchestrator/prompts/workflows/
+  available_workflows:
+    - write_code      # 代码编写工作流
+    - analyze_code    # 代码分析工作流
+    - debug_code      # 调试工作流
+    - need_code_context  # 🆕 获取代码上下文
+  # 编程 agent 优先使用的意图
+  preferred_intents:
     - write_code
+    - edit_or_write  # 🆕 编辑/编写代码
     - edit_file
     - search_code
+    - need_code_context  # 🆕 获取代码上下文
 
 # 意图识别
 project_understanding_use_intent: true

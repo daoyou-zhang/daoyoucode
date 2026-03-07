@@ -25,6 +25,20 @@ prompt:
     请从你的专业角度提供分析和建议。
     注意：其他Agent也在同时分析，你们的结果会被聚合。
 
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 并行分析主要使用分析工作流
+  available_workflows:
+    - analyze_code
+    - refactor_code
+    - write_test
+  # 优先使用的意图
+  preferred_intents:
+    - analyze_code
+    - refactor_code
+
 # LLM配置
 llm:
   model: qwen-max

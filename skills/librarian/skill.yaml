@@ -12,6 +12,18 @@ agent: librarian
 prompt:
   file: prompts/librarian.md
 
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # librarian 专注于搜索和分析
+  available_workflows:
+    - analyze_code
+  # 优先使用的意图
+  preferred_intents:
+    - search_code
+    - analyze_code
+
 # LLM配置
 llm:
   model: qwen-max

@@ -2,23 +2,39 @@ name: oracle
 version: 1.0.0
 description: 高IQ咨询Agent - 架构分析和技术建议（只读，继承 sisyphus-orchestrator 工作流）
 
-# 🎯 特化：使用简单编排器（单Agent，不需要协作）
+# orchestrator: 编排器类型（决定执行逻辑）
+#   - simple: 简单编排器（单 agent）
+#   - 提供基础功能：重试机制、结果验证、项目信息预取、成本追踪
+#   - 适合：单一职责的任务，不需要多 agent 协作
 orchestrator: simple
 
-# 使用Oracle Agent
+# agent: 智能体名称（决定 AI 角色）
+#   - oracle: 高级咨询智能体（backend/daoyoucode/agents/builtin/oracle.py）
+#   - 专注：架构分析、技术建议、代码审查（只读）
 agent: oracle
 
 # Prompt配置
 prompt:
   file: prompts/oracle.md  # 简洁版本
 
-# 🆕 工作流配置（继承 + 特化）
+# 🆕 工作流配置（引用共通工作流）
 workflows:
-  source: sisyphus-orchestrator  # 从 sisyphus-orchestrator 继承工作流
-  preferred_intents:              # 只使用咨询相关的意图
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 工作流路径：skills/sisyphus-orchestrator/prompts/workflows/
+  available_workflows:
+    - analyze_code    # 代码分析工作流
+    - debug_code      # 调试工作流（分析问题）
+    - refactor_code   # 重构建议工作流
+    - find_unused_code  # 🆕 查找未使用代码工作流
+    - need_code_context  # 🆕 获取代码上下文工作流
+  # Oracle agent 优先使用的意图
+  preferred_intents:
     - consult
     - analyze_code
     - review_code
+    - find_unused_code  # 🆕 添加：查找未使用代码
+    - need_code_context  # 🆕 添加：获取代码上下文
 
 # 意图识别
 project_understanding_use_intent: true

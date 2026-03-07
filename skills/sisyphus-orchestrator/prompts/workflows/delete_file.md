@@ -1,10 +1,25 @@
 # 删除文件工作流
 
+## 工具使用原则
+
+⚠️ **必读**：请先阅读 [工具使用指南](tool_usage_guide.md)，了解工具优先级和最佳实践。
+
+**核心原则：优先使用 repo_map 定位文件，避免盲目搜索！**
+
+## 任务目标
+
 你现在需要执行**删除文件**任务。请严格按照以下步骤操作，确保安全准确。
 
 ## 🎯 工作流程
 
 ### 步骤 1：定位文件
+
+**推荐方式（最高效）**：
+1. 使用 `repo_map(repo_path=".", max_depth=3)` 获取项目结构
+2. 从代码地图中找到目标文件的路径
+3. 确认文件位置
+
+**备选方式（repo_map 不够时）**：
 
 **如果用户只提供了文件名**（如 "temp.txt"）：
 1. 使用 `list_files(directory=".", pattern="文件名", recursive=True)` 搜索
@@ -18,7 +33,13 @@
 **示例**：
 ```
 用户："删除 temp.txt"
-你的操作：
+
+✅ 推荐方式：
+1. 调用 repo_map(repo_path=".")
+2. 从结果中找到 "backend/temp.txt"
+3. 继续下一步
+
+备选方式：
 1. 调用 list_files(directory=".", pattern="temp.txt", recursive=True)
 2. 找到 "backend/temp.txt"
 3. 继续下一步

@@ -2,11 +2,23 @@ name: sisyphus-orchestrator
 version: 1.0.0
 description: 主编排Agent - 智能任务分解和多Agent调度（类似Sisyphus）
 
-# 使用多Agent编排器
+# orchestrator: 编排器类型（决定执行逻辑）
+#   - multi_agent: 多智能体编排器
+#   - 支持主 agent + 多个辅助 agents 协作
+#   - 可以并行或顺序调用辅助 agents，聚合结果
+#   - 适合：复杂任务、需要多个专家协作的场景
 orchestrator: multi_agent
+
+# collaboration_mode: 协作模式（multi_agent 编排器专用）
+#   - main_with_helpers: 主 agent + 辅助 agents（默认）
+#   - parallel: 所有 agents 并行执行
+#   - sequential: 所有 agents 顺序执行
+#   - debate: agents 之间辩论讨论
 collaboration_mode: main_with_helpers
 
-# Agent列表（主Agent + 辅助Agent）
+# agents: 智能体列表（multi_agent 编排器专用）
+#   - 第一个是主 agent，其余是辅助 agents
+#   - 每个 agent 对应 backend/daoyoucode/agents/builtin/ 下的 Python 类
 agents:
   - sisyphus            # 主编排Agent（任务分解和调度）
   - code_analyzer       # 辅助：架构分析和技术咨询
@@ -76,10 +88,10 @@ agent_tools:
     - get_repo_structure
     - text_search
     - regex_search
-    - get_file_symbols
-    - lsp_diagnostics
-    - lsp_find_references
-    - lsp_symbols
+    - get_file_symbols      # 获取文件符号（不需要 LSP）
+    - lsp_diagnostics       # LSP 诊断（检查错误）
+    - lsp_find_references   # LSP 查找引用
+    - lsp_symbols           # LSP 符号查询（需要具体文件路径）
   programmer:         # 编程：读写 + 搜索 + Git + 编辑
     - read_file
     - batch_read_files

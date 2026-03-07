@@ -14,6 +14,30 @@
 intents:
   # ========== 工作流相关意图 ==========
   
+  find_unused_code:
+    description: "用户想查找未使用的代码、死代码、冗余代码、没被使用的方法/类/函数。关键词：未使用、没用到、没被使用、死代码、冗余、清理、查找未使用、检查未使用等"
+    keywords: ["未使用", "没用", "没被使用", "死代码", "冗余", "清理代码", "没有使用", "不使用", "查找未使用", "检查未使用"]
+    workflow:
+      prompt_file: "prompts/workflows/find_unused_code.md"
+      enabled: true
+    priority: 8
+  
+  write_code:
+    description: "用户想编写新代码、实现新功能、添加新特性：编写、实现、添加、创建、新增、写代码等"
+    keywords: ["编写", "实现", "添加", "创建", "新增", "写"]
+    workflow:
+      prompt_file: "prompts/workflows/write_code.md"
+      enabled: true  # ✅ 已创建工作流
+    priority: 8
+  
+  write_test:
+    description: "用户想编写测试、添加测试、TDD开发：测试、test、单元测试、集成测试、编写测试等"
+    keywords: ["测试", "test", "单元测试", "TDD", "编写测试"]
+    workflow:
+      prompt_file: "prompts/workflows/write_test.md"
+      enabled: true  # ✅ 已创建工作流
+    priority: 8
+  
   delete_file:
     description: "用户想删除文件或目录：删除、delete、移除、remove、清理、清除等"
     keywords: ["删除", "delete", "移除", "remove", "清理"]
@@ -34,56 +58,66 @@ intents:
     description: "用户想重构代码、优化结构、改进设计：重构、refactor、优化、改进、整理、重新组织等"
     keywords: ["重构", "refactor", "优化", "改进"]
     workflow:
-      prompt_file: "prompts/workflows/refactor.md"
-      enabled: false  # 待创建工作流
+      prompt_file: "prompts/workflows/refactor_code.md"
+      enabled: true  # ✅ 已创建工作流
     priority: 7
   
   debug_code:
     description: "用户想调试代码、修复Bug、排查问题：调试、debug、修复、fix、bug、错误、问题、不工作等"
     keywords: ["调试", "debug", "修复", "fix", "bug"]
     workflow:
-      prompt_file: "prompts/workflows/debug.md"
-      enabled: false  # 待创建工作流
+      prompt_file: "prompts/workflows/debug_code.md"
+      enabled: true  # ✅ 已创建工作流
     priority: 7
   
   analyze_code:
     description: "用户想分析代码、理解逻辑、查看实现：分析、analyze、怎么实现、如何工作、原理、逻辑等"
     keywords: ["分析", "analyze", "怎么实现", "如何工作"]
     workflow:
-      prompt_file: "prompts/workflows/analyze.md"
-      enabled: false  # 待创建工作流
+      prompt_file: "prompts/workflows/analyze_code.md"
+      enabled: true  # ✅ 已创建工作流
     priority: 6
   
-  # ========== 通用意图（不需要工作流）==========
+  # ========== 通用意图（所有意图都有工作流）==========
   
   understand_project:
     description: "用户想了解/探索当前项目：理解、理解下、当前项目、项目是啥、介绍、架构、结构、概览、整体、看看、了解一下等"
     keywords: ["了解", "理解", "项目", "架构", "介绍"]
-    workflow: null  # 不需要工作流，由预取机制处理
+    workflow:
+      prompt_file: "prompts/workflows/understand_project.md"
+      enabled: true
     priority: 9
   
   need_code_context:
     description: "用户问题涉及代码实现、查某功能/某处逻辑、需要看代码上下文"
     keywords: ["代码", "实现", "逻辑"]
-    workflow: null  # 不需要工作流，由预取机制处理
+    workflow:
+      prompt_file: "prompts/workflows/need_code_context.md"
+      enabled: true
     priority: 7
   
   edit_or_write:
     description: "用户明确要改代码、写文件、新增或修改实现"
     keywords: ["修改", "改", "写", "新增", "添加"]
-    workflow: null  # 不需要工作流，直接执行
+    workflow:
+      prompt_file: "prompts/workflows/write_code.md"  # 复用 write_code 工作流
+      enabled: true
     priority: 8
   
   run_test:
     description: "用户想运行测试、执行测试、测试代码、验证功能：测试、跑测试、运行测试、test、pytest等"
     keywords: ["测试", "test", "pytest", "运行测试"]
-    workflow: null  # 不需要工作流，直接执行
+    workflow:
+      prompt_file: "prompts/workflows/run_test.md"
+      enabled: true
     priority: 7
   
   general_chat:
     description: "一般对话、问候、无关代码的闲聊"
     keywords: ["你好", "您好", "hi", "hello", "嗨"]
-    workflow: null  # 不需要工作流
+    workflow:
+      prompt_file: "prompts/workflows/general_chat.md"
+      enabled: true
     priority: 1
 
 # ========== 配置说明 ==========

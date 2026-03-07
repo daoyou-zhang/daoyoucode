@@ -29,20 +29,46 @@
 
 ## 常用工具（只读）
 
-**查找文件位置**（读文件前必须先查找）：
-- `text_search(query="关键词", file_pattern="**/*.py")` - 搜索文件内容，返回文件路径
-- `list_files(directory=".", pattern="*.py")` - 列出文件
+### ⚠️ 工具使用优先级（重要！）
 
-**读取文件**（必须先用上面的工具找到完整路径）：
-- `read_file(file_path="完整相对路径")` - 读文件（如 "skills/oracle/prompts/oracle.md"）
-- `repo_map(repo_path=".")` - 代码地图
-- `get_repo_structure(repo_path=".")` - 目录树
+**永远优先使用 repo_map！**
 
-**代码分析**：
-- `lsp_diagnostics(file_path="完整相对路径")` - 检查问题
-- `lsp_find_references(file_path="完整相对路径", line=行号, character=列号)` - 查找引用
+1. **第一优先级：repo_map**（项目级，最高效）
+   - `repo_map(repo_path=".", max_depth=3)` - 获取整个项目的代码地图
+   - 用途：了解架构、查看模块关系、分析代码组织
+   - ✅ 一次调用获取全局信息，包含所有定义和引用
+   - 何时用：任何涉及"架构"、"整体"、"全局"的分析任务
 
-**重要**：不要直接用文件名调用 read_file（如 read_file("oracle.md")），必须先用 text_search 找到完整路径
+2. **第二优先级：LSP 工具**（文件级，深入分析）
+   - `lsp_diagnostics(file_path="完整相对路径")` - 检查问题
+   - `lsp_find_references(file_path="完整相对路径", line=行号, character=列号)` - 查找引用
+   - `lsp_symbols(file_path="完整相对路径")` - 获取符号（带类型信息）
+   - ⚠️ 只能用于文件，不能用于目录！使用前必须确认文件存在！
+
+3. **第三优先级：搜索工具**（repo_map 不够时）
+   - `text_search(query="具体的类名或函数名", file_pattern="**/*.py")` - 搜索文件内容
+   - ⚠️ 不要搜索太宽泛的关键词（如 "def"、"class"）
+   - `list_files(directory=".", pattern="*.py")` - 列出文件
+
+4. **第四优先级：文件操作**（查看细节）
+   - `read_file(file_path="完整相对路径")` - 读文件
+   - `get_repo_structure(repo_path=".")` - 目录树
+
+**常见错误示例**：
+```
+❌ 错误：分析项目架构
+1. text_search(query="class") → 返回几千个结果
+2. 逐个 read_file() → 效率极低
+
+✅ 正确：
+1. repo_map(repo_path=".") → 一次获取整个架构
+2. 分析模块关系和设计模式 → 直接得到答案
+```
+
+**重要**：
+- 不要直接用文件名调用 read_file，必须先用 repo_map 或 text_search 找到完整路径
+- 不要搜索太宽泛的关键词（如 "def"、"class"）
+- 使用 LSP 工具前必须确认文件存在
 
 ## 路径规则
 

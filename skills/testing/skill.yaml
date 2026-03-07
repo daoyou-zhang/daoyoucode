@@ -14,15 +14,24 @@ agents:
   - code_analyzer     # 辅助分析
 
 prompt:
-  file: prompts/test.md  # 简洁版本
+  file: prompts/test.md  # 专业版本（原 v2）
 
-# 🆕 工作流配置（继承 + 特化）
+# 🆕 工作流配置（引用共通工作流）
 workflows:
-  source: sisyphus-orchestrator  # 从 sisyphus-orchestrator 继承工作流
-  preferred_intents:              # 只使用测试相关的意图
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 工作流路径：skills/sisyphus-orchestrator/prompts/workflows/
+  available_workflows:
+    - write_test      # 测试编写工作流
+    - debug_code      # 调试工作流（修复测试）
+    - analyze_code    # 代码分析工作流
+    - need_code_context  # 🆕 获取代码上下文
+  # 测试 agent 优先使用的意图
+  preferred_intents:
     - write_test
     - debug_test
     - analyze_code
+    - need_code_context  # 🆕 获取代码上下文
 
 # 意图识别
 project_understanding_use_intent: true

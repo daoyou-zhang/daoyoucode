@@ -3,12 +3,41 @@ name: chat-assistant
 version: 1.0.0
 description: 交互式对话助手，支持代码理解、编写和项目分析
 
+# orchestrator: 编排器类型（决定执行逻辑）
+#   - react: ReAct 编排器 = Reason(思考) + Act(行动) + Observe(观察) 循环
+#   - 自动进行推理循环，调用工具，观察结果，直到完成任务
+#   - 适合：交互式对话、需要多步推理的任务
 orchestrator: react
+
+# agent: 智能体名称（决定 AI 角色）
+#   - MainAgent: 通用智能体（backend/daoyoucode/agents/builtin/main_agent.py）
+#   - 适合：通用对话、代码理解、项目分析等多种任务
 agent: MainAgent
 
 # Prompt配置
 prompt:
   file: prompts/chat_assistant.md  # 简化版本
+
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # chat-assistant 是通用助手，可以使用所有工作流
+  available_workflows:
+    - write_code
+    - write_test
+    - analyze_code
+    - debug_code
+    - refactor_code
+    - find_unused_code
+  # 优先使用的意图（通用助手，不限制）
+  preferred_intents:
+    - write_code
+    - write_test
+    - analyze_code
+    - debug_code
+    - refactor_code
+    - search_code
 
 # 「了解项目」预取：用 LLM 判断意图（如「我想知道架构」也会触发），不再依赖写死触发词
 project_understanding_use_intent: true

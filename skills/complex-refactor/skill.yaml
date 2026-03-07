@@ -26,6 +26,22 @@ prompt:
     
     请根据你的专业领域完成你的部分工作。
 
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 复杂重构需要完整的工作流
+  available_workflows:
+    - analyze_code
+    - refactor_code
+    - write_test
+    - debug_code
+  # 优先使用的意图
+  preferred_intents:
+    - refactor_code
+    - analyze_code
+    - write_test
+
 # LLM配置
 llm:
   model: qwen-coder-plus

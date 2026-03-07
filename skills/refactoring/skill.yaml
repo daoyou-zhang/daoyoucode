@@ -14,15 +14,24 @@ agents:
   - test_expert       # 确保测试通过
 
 prompt:
-  file: prompts/refactor.md  # 简洁版本
+  file: prompts/refactor.md  # 专业版本（原 v2）
 
-# 🆕 工作流配置（继承 + 特化）
+# 🆕 工作流配置（引用共通工作流）
 workflows:
-  source: sisyphus-orchestrator  # 从 sisyphus-orchestrator 继承工作流
-  preferred_intents:              # 只使用重构相关的意图
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 工作流路径：skills/sisyphus-orchestrator/prompts/workflows/
+  available_workflows:
+    - refactor_code   # 重构工作流
+    - analyze_code    # 代码分析工作流
+    - write_test      # 测试编写工作流（重构后验证）
+    - need_code_context  # 🆕 获取代码上下文
+  # 重构 agent 优先使用的意图
+  preferred_intents:
     - refactor_code
     - analyze_code
-    - write_test      # 重构后需要测试
+    - write_test
+    - need_code_context  # 🆕 获取代码上下文
 
 # 意图识别
 project_understanding_use_intent: true

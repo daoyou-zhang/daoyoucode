@@ -14,6 +14,19 @@ prompt:
     3. 修改后必须验证：对修改过的文件调用 lsp_diagnostics(file_path="...") 或 run_lint，若有错误需继续修复直至通过。
     当前工作目录即项目根。
 
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 单次编辑主要使用代码编写和调试工作流
+  available_workflows:
+    - write_code
+    - debug_code
+  # 优先使用的意图
+  preferred_intents:
+    - write_code
+    - edit_file
+
 llm:
   model: qwen-max
   temperature: 0.3

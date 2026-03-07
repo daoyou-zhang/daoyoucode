@@ -12,6 +12,24 @@ agent: code_analyzer
 prompt:
   file: ../oracle/prompts/oracle.md
 
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 代码分析专注于分析和理解
+  available_workflows:
+    - analyze_code
+    - debug_code
+    - find_unused_code  # 🆕 添加：查找未使用代码
+    - need_code_context  # 🆕 添加：获取代码上下文
+  # 优先使用的意图
+  preferred_intents:
+    - analyze_code
+    - review_code
+    - find_unused_code  # 🆕 添加：查找未使用代码
+    - need_code_context  # 🆕 添加：获取代码上下文
+    - consult
+
 # LLM配置
 llm:
   model: qwen-max  # 或 gpt-5.2

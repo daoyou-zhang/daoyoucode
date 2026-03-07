@@ -10,6 +10,19 @@ agent: MainAgent
 prompt:
   file: prompts/code_review.md
 
+# 🆕 工作流配置（引用共通工作流）
+workflows:
+  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
+  source: sisyphus-orchestrator
+  # 代码审查专注于分析和建议
+  available_workflows:
+    - analyze_code
+    - refactor_code
+  # 优先使用的意图
+  preferred_intents:
+    - analyze_code
+    - review_code
+
 # LLM配置
 llm:
   model: qwen-max
