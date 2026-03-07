@@ -1133,3 +1133,197 @@ class BatchWriteFilesTool(StreamingEditTool):
                 "required": ["files"]
             }
         }
+
+
+class DeleteFileTool(BaseTool):
+    """删除文件工具"""
+    
+    def __init__(self):
+        super().__init__(
+            name="delete_file",
+            description="删除文件或目录（谨慎使用）"
+        )
+    
+    async def execute(
+        self,
+        file_path: str,
+        recursive: bool = False
+    ) -> ToolResult:
+        """
+        删除文件或目录
+        
+        Args:
+            file_path: 文件或目录的相对路径
+            recursive: 如果是目录，是否递归删除（默认False）
+        
+        Returns:
+            ToolResult: 删除结果
+        """
+        try:
+            # 解析路径
+            path = self.resolve_path(file_path)
+            
+            if not path.exists():
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"File or directory not found: {file_path} (resolved to {path})"
+                )
+            
+            # 删除文件
+            if path.is_file():
+                path.unlink()
+                return ToolResult(
+                    success=True,
+                    content=f"File deleted: {file_path}",
+                    metadata={
+                        'file_path': str(path),
+                        'type': 'file'
+                    }
+                )
+            
+            # 删除目录
+            elif path.is_dir():
+                if not recursive:
+                    return ToolResult(
+                        success=False,
+                        content=None,
+                        error=f"Cannot delete directory without recursive=True: {file_path}"
+                    )
+                
+                shutil.rmtree(path)
+                return ToolResult(
+                    success=True,
+                    content=f"Directory deleted: {file_path}",
+                    metadata={
+                        'file_path': str(path),
+                        'type': 'directory'
+                    }
+                )
+            
+            else:
+                return ToolResult(
+                    success=False,
+                    content=None,
+                    error=f"Unknown file type: {file_path}"
+                )
+        
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                content=None,
+                error=f"Failed to delete {file_path}: {str(e)}"
+            )
+    
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "要删除的文件或目录的相对路径。例如: 'temp.txt' 或 'old_folder/'"
+                    },
+                    "recursive": {
+                        "type": "boolean",
+                        "description": "如果是目录，是否递归删除（默认False，需要明确指定才能删除目录）",
+                        "default": False
+                    }
+                },
+                "required": ["file_path"]
+            }
+        }
+
+
+class BatchDeleteFilesTool(BaseTool):
+    """批量删除文件工具"""
+    
+    def __init__(self):
+        super().__init__(
+            name="batch_delete_files",
+            description="批量删除多个文件"
+        )
+    
+    async def execute(
+        self,
+        file_paths: List[str]
+    ) -> ToolResult:
+        """
+        批量删除文件
+        
+        Args:
+            file_paths: 文件路径列表
+        
+        Returns:
+            ToolResult: 删除结果
+        """
+        try:
+            results = []
+            errors = []
+            
+            for file_path in file_paths:
+                try:
+                    path = self.resolve_path(file_path)
+                    
+                    if not path.exists():
+                        errors.append(f"Not found: {file_path}")
+                        continue
+                    
+                    if path.is_file():
+                        path.unlink()
+                        results.append(f"Deleted: {file_path}")
+                    else:
+                        errors.append(f"Not a file: {file_path}")
+                
+                except Exception as e:
+                    errors.append(f"Failed to delete {file_path}: {str(e)}")
+            
+            # 构建结果消息
+            message_parts = []
+            if results:
+                message_parts.append(f"Successfully deleted {len(results)} file(s):")
+                message_parts.extend([f"  - {r}" for r in results])
+            
+            if errors:
+                message_parts.append(f"\nErrors ({len(errors)}):")
+                message_parts.extend([f"  - {e}" for e in errors])
+            
+            success = len(results) > 0
+            content = "\n".join(message_parts) if message_parts else "No files deleted"
+            
+            return ToolResult(
+                success=success,
+                content=content,
+                metadata={
+                    'deleted_count': len(results),
+                    'error_count': len(errors),
+                    'deleted_files': results,
+                    'errors': errors
+                }
+            )
+        
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                content=None,
+                error=f"Batch delete failed: {str(e)}"
+            )
+    
+    def get_function_schema(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "要删除的文件路径列表。例如: ['temp1.txt', 'temp2.txt']"
+                    }
+                },
+                "required": ["file_paths"]
+            }
+        }

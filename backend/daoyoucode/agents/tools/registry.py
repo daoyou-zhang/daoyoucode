@@ -38,7 +38,8 @@ def _register_builtin_tools():
         CreateDirectoryTool,
         DeleteFileTool,
         BatchReadFilesTool,
-        BatchWriteFilesTool
+        BatchWriteFilesTool,
+        BatchDeleteFilesTool
     )
     from .search_tools import (
         TextSearchTool,
@@ -83,7 +84,7 @@ def _register_builtin_tools():
     from .codebase_search_tool import SemanticCodeSearchTool
     from .code_validation_tool import CodeSnippetValidationTool
 
-    # 文件操作工具（8个）
+    # 文件操作工具（9个）
     _tool_registry.register(ReadFileTool())
     _tool_registry.register(WriteFileTool())
     _tool_registry.register(ListFilesTool())
@@ -92,6 +93,7 @@ def _register_builtin_tools():
     _tool_registry.register(DeleteFileTool())
     _tool_registry.register(BatchReadFilesTool())
     _tool_registry.register(BatchWriteFilesTool())
+    _tool_registry.register(BatchDeleteFilesTool())
     
     # 搜索工具（2个）
     _tool_registry.register(TextSearchTool())
