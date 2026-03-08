@@ -263,7 +263,270 @@
 6. 验证功能不变
 ```
 
-### 模式3：消除重复
+### 模式3：拆分大类 ⭐⭐⭐（重要）
+
+**场景**：一个类太大，承担了太多职责（如 agent.py 超过 1000 行）
+
+**⚠️ 关键原则**：
+1. **小步快跑** - 一次只拆一个职责
+2. **先创建后移动** - 先创建新文件，再移动代码
+3. **保持可运行** - 每步都要保持代码可运行
+4. **验证再继续** - 每步都要验证，失败就回退
+
+**详细步骤**：
+
+#### 步骤1：分析类的职责（5分钟）
+```
+工具：
+1. read_file(file_path="要拆分的文件")
+   → 读取完整代码
+
+2. get_file_symbols(file_path="要拆分的文件")
+   → 分析类结构，列出所有方法
+
+3. 手动分析：
+   → 识别不同的职责（如：LLM调用、工具管理、记忆管理）
+   → 每个职责包含哪些方法
+   → 方法之间的依赖关系
+
+输出：拆分计划
+- 职责1 → 新类A（包含方法1、2、3）
+- 职责2 → 新类B（包含方法4、5、6）
+- 职责3 → 新类C（包含方法7、8、9）
+```
+
+#### 步骤2：创建配置文件（3分钟）⭐
+```
+⚠️ 重要：先创建独立的配置文件，避免循环导入
+
+工具：write_file
+文件：backend/daoyoucode/agents/core/config.py
+
+内容：
+```python
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional, List
+
+@dataclass
+class AgentConfig:
+    """Agent配置"""
+    name: str
+    description: str
+    model: str
+    temperature: float = 0.7
+    system_prompt: str = ""
+
+@dataclass
+class AgentResult:
+    """Agent执行结果"""
+    success: bool
+    content: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
+```
+
+验证：
+lsp_diagnostics(file_path="backend/daoyoucode/agents/core/config.py")
+```
+
+#### 步骤3：创建第一个新类（10分钟）⭐
+```
+⚠️ 重要：一次只创建一个新类，不要同时创建多个
+
+工具：write_file
+文件：backend/daoyoucode/agents/core/llm_caller.py
+
+内容：
+1. 从原类复制相关方法
+2. 添加必要的导入
+3. 确保类可以独立运行
+
+验证：
+lsp_diagnostics(file_path="backend/daoyoucode/agents/core/llm_caller.py")
+
+⚠️ 如果有错误：
+- 修复导入问题
+- 修复类型问题
+- 不要继续下一步，直到这个类没有错误
+```
+
+#### 步骤4：更新原类使用新类（10分钟）⭐
+```
+⚠️ 重要：使用 search_replace，不要用 intelligent_diff_edit
+
+工具：search_replace（多次调用）
+
+第1次：添加导入
+search_replace(
+    file_path="原文件",
+    search="from dataclasses import dataclass, field",
+    replace="""from dataclasses import dataclass, field
+from .config import AgentConfig, AgentResult
+from .llm_caller import LLMCaller"""
+)
+
+第2次：修改 __init__
+search_replace(
+    file_path="原文件",
+    search="def __init__(self, config: AgentConfig):",
+    replace="""def __init__(self, config: AgentConfig):
+        self.config = config
+        self.llm_caller = LLMCaller()"""
+)
+
+第3次：删除已移动的方法（一个一个删）
+search_replace(
+    file_path="原文件",
+    search="def _call_llm(self, ...):\n    完整的方法体",
+    replace="# 已移至 LLMCaller"
+)
+
+验证：
+lsp_diagnostics(file_path="原文件")
+
+⚠️ 如果有错误：
+- 检查导入是否正确
+- 检查方法调用是否更新
+- 不要继续下一步
+```
+
+#### 步骤5：查找并更新引用（10分钟）
+```
+工具：lsp_find_references
+
+1. 查找原类的所有引用
+lsp_find_references(
+    file_path="原文件",
+    line=类定义行号,
+    character=0
+)
+
+2. 对每个引用文件：
+   - 如果调用了已移动的方法，更新调用
+   - 使用 search_replace 精确替换
+   
+   search_replace(
+       file_path="引用文件",
+       search="agent._call_llm(...)",
+       replace="agent.llm_caller.call(...)"
+   )
+
+3. 验证每个文件：
+   lsp_diagnostics(file_path="引用文件")
+```
+
+#### 步骤6：验证整体（5分钟）
+```
+1. 查看所有变更
+git_diff()
+
+2. 运行测试（如果有）
+run_test(test_path=".")
+
+3. 确认功能没有被破坏
+```
+
+#### 步骤7：重复步骤3-6（拆分下一个职责）
+```
+⚠️ 重要：
+- 一次只拆一个职责
+- 每次都要完整走完步骤3-6
+- 不要同时拆多个职责
+```
+
+**完整示例（拆分 agent.py）**：
+
+```
+第1轮：拆分配置类
+1. 创建 config.py（AgentConfig, AgentResult）
+2. 更新 agent.py 导入
+3. 验证
+
+第2轮：拆分 LLM 调用
+1. 创建 llm_caller.py（LLMCaller 类）
+2. 移动 _call_llm, _call_llm_with_functions 等方法
+3. 更新 agent.py 使用 LLMCaller
+4. 查找并更新所有引用
+5. 验证
+
+第3轮：拆分工具管理
+1. 创建 tool_manager.py（ToolManager 类）
+2. 移动工具相关方法
+3. 更新 agent.py 使用 ToolManager
+4. 查找并更新所有引用
+5. 验证
+
+第4轮：拆分记忆管理
+1. 创建 memory_manager.py（MemoryManager 类）
+2. 移动记忆相关方法
+3. 更新 agent.py 使用 MemoryManager
+4. 查找并更新所有引用
+5. 验证
+```
+
+**常见错误和解决方案**：
+
+❌ **错误1：同时创建多个文件**
+```
+# 错误做法
+batch_write_files(files=[
+    {path: "llm_caller.py", content: "..."},
+    {path: "tool_manager.py", content: "..."},
+    {path: "memory_manager.py", content: "..."}
+])
+
+# 正确做法
+write_file(file_path="llm_caller.py", content="...")
+验证
+write_file(file_path="tool_manager.py", content="...")
+验证
+write_file(file_path="memory_manager.py", content="...")
+验证
+```
+
+❌ **错误2：使用 intelligent_diff_edit 修改大文件**
+```
+# 错误做法
+intelligent_diff_edit(
+    file_path="agent.py",
+    search_block="很长的代码块",
+    replace_block="修改后的代码块"
+)
+→ 容易失败，验证错误多
+
+# 正确做法
+search_replace(
+    file_path="agent.py",
+    search="具体的一个方法",
+    replace="# 已移至新类"
+)
+→ 精确、安全
+```
+
+❌ **错误3：忘记先创建 config.py**
+```
+# 错误做法
+直接创建 llm_caller.py，导入 AgentConfig
+→ 循环导入错误
+
+# 正确做法
+1. 先创建 config.py（独立的配置文件）
+2. 再创建 llm_caller.py（导入 config.py）
+3. 最后更新 agent.py（导入 config.py）
+```
+
+❌ **错误4：一次移动太多方法**
+```
+# 错误做法
+一次性移动 10 个方法到新类
+→ 验证失败，难以定位问题
+
+# 正确做法
+一次移动 2-3 个相关方法
+验证通过后再移动下一批
+```
+
+### 模式4：消除重复
 
 **场景**：多处代码重复
 
