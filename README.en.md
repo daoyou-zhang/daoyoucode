@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Next-Generation AI Programming Assistant - Multi-Agent Collaboration + Intelligent Orchestration**
+**Next-Generation AI Programming Assistant - CoreOrchestrator + Workflow Driven**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
@@ -16,38 +16,57 @@
 
 ## 📖 Overview
 
-**DaoyouCode** is a next-generation AI programming assistant based on multi-agent collaboration architecture, featuring intelligent orchestration systems, comprehensive toolchains, and deep code understanding capabilities to provide developers with powerful support for code analysis, writing, and refactoring.
+**DaoyouCode** is a next-generation AI programming assistant based on CoreOrchestrator architecture, featuring intelligent intent recognition, tiered prefetch mechanism, and workflow-driven execution to provide developers with powerful support for code analysis, writing, and refactoring.
 
 ### ✨ Key Features
 
-- 🤖 **Multi-Agent Collaboration** - 6 specialized agents (Code Analysis, Programming, Refactoring, Testing, etc.) working together intelligently
-- 🎯 **Intelligent Orchestration** - 7 orchestration strategies (ReAct, Multi-Agent, Parallel, etc.) automatically selecting optimal solutions
+- 🎯 **Intelligent Intent Recognition** - Fast intent recognition using small model (qwen-turbo) with 95%+ accuracy
+- 📊 **Tiered Prefetch Mechanism** - Dynamically load context based on task complexity (Full/Medium/Light/None)
+- � **Workflow Driven** - Define task execution through Markdown files without writing code
 - 🛠️ **Complete Toolchain** - 34+ professional tools with deep LSP/AST integration and Git operations support
 - 🧠 **Smart Memory System** - Conversation history, long-term memory, user profiles, and intelligent context loading
 - 🌐 **Chinese LLM Optimized** - Deep support for Qwen and DeepSeek with multi-key rotation
-- 📝 **Skill System** - 14+ preset skills, flexible configuration, and extensible
+- ⚙️ **Configuration as Service** - Configure via YAML + Markdown with hot reload support
+- 🎨 **Context Auto-Management** - Automatic path management, search history, and target file protection
 
 ### 🎯 Technical Highlights
 
-**Multi-Agent Collaboration Architecture**
-- **Sisyphus Orchestrator** - Main agent responsible for task understanding, expert scheduling, and result synthesis
-- **Code Analyzer** - Architecture analysis, code review, technology selection
-- **Programmer** - Code writing, bug fixing, feature implementation
-- **Refactor Master** - Code refactoring, performance optimization, design improvement
-- **Test Expert** - Test writing, test fixing, quality assurance
-- **4 Collaboration Modes** - Sequential, Parallel, Debate, Main-with-Helpers
+**CoreOrchestrator Architecture**
+```
+User Input
+  ↓
+Intent Recognition (qwen-turbo, fast & accurate)
+  ↓
+Tiered Prefetch (load context on demand)
+  ├─ Full: Directory structure + Code map + Project docs
+  ├─ Medium: Directory structure + Code map
+  ├─ Light: Code map only
+  └─ None: No prefetch
+  ↓
+Workflow Loading (dynamically load based on intent)
+  ↓
+Agent Execution (dynamically created, no Python class needed)
+  ↓
+Return Results (streaming support)
+```
 
 **Deep Code Understanding**
 - **LSP Integration** - Type information, reference relationships, code diagnostics, intelligent renaming
 - **AST Analysis** - Syntax tree parsing, structured code understanding
 - **Semantic Search** - Vector-based code retrieval, understanding code intent
-- **Smart Code Map** - Automatic project structure overview generation
+- **Smart Code Map** - Automatic project structure overview generation (with LSP enhancement)
 
-**Intelligent Orchestration System**
-- **ReAct Mode** - Reasoning-action loop supporting complex tool invocations
-- **Multi-Agent Mode** - Multi-expert parallel analysis and comprehensive decision-making
-- **Conditional Mode** - Conditional branching and dynamic routing
-- **Workflow Mode** - Workflow orchestration and complex task decomposition
+**Context Auto-Management** 🆕
+- **target_file** - Automatically set on first search, protected from overwriting
+- **search_history** - Record all search operations, traceable
+- **last_search_paths** - Always updated to latest search results
+- **Multi-file support** - Automatically save all file paths
+
+**Configuration as Service**
+- **skill.yaml** - Unified configuration entry (Agent name, role, tools, prefetch parameters)
+- **workflow.md** - Define task execution (goals, steps, principles)
+- **intents.yaml** - Intent configuration (keywords, workflows, prefetch levels)
+- **prompt_template.md** - Base Prompt template
 
 ## 🚀 Quick Start
 
@@ -60,17 +79,27 @@ cd daoyoucode
 
 # Install dependencies
 cd backend
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ### Configuration
 
-Edit `backend/config/llm_config.yaml`:
+Edit `backend/.env`:
+
+```bash
+# Copy configuration file
+cp .env.example .env
+
+# Edit .env and fill in your API Key
+DASHSCOPE_API_KEY=your_key_here
+```
+
+Or edit `backend/config/llm_config.yaml`:
 
 ```yaml
 providers:
   qwen:
-    api_key: ["your-api-key-here"]  # Replace with your API Key
+    api_key: ["your-api-key-here"]
     enabled: true
 
 default:
@@ -83,13 +112,10 @@ default:
 ### Usage
 
 ```bash
-# Interactive chat (default chat-assistant)
+# Interactive chat (default sisyphus-orchestrator)
 daoyoucode chat
 
-# Use multi-agent orchestration (Sisyphus)
-daoyoucode chat --skill sisyphus-orchestrator
-
-# Use specific expert
+# Use specific skill
 daoyoucode chat --skill programming      # Programming expert
 daoyoucode chat --skill code-analysis    # Code analysis
 daoyoucode chat --skill refactoring      # Refactoring expert
@@ -106,30 +132,36 @@ daoyoucode doctor
 
 ## 🎓 Usage Examples
 
-### Example 1: Multi-Agent Collaborative Code Analysis
+### Example 1: Intelligent Code Analysis
 
 ```bash
-daoyoucode chat --skill sisyphus-orchestrator
+daoyoucode chat
 
 You > Analyze the design of backend/daoyoucode/agents/core/agent.py
 
 AI will automatically:
-1. Code Analyzer analyzes architecture design
-2. Programmer evaluates code quality
-3. Sisyphus synthesizes both experts' opinions
-4. Provides complete analysis report and improvement suggestions
+1. Recognize intent: code_analysis
+2. Prefetch: Medium level (directory structure + code map)
+3. Load workflow: analyze_code.md
+4. Execute analysis: Use repo_map, read_file, get_file_symbols
+5. Return complete analysis report
 ```
 
-### Example 2: Intelligent Code Refactoring
+### Example 2: Code Refactoring
 
 ```bash
 You > Refactor agent.py to improve maintainability
 
 AI will:
-1. Code Analyzer identifies excessive responsibilities
-2. Refactor Master proposes splitting plan
-3. Programmer provides specific implementation steps
-4. Sisyphus integrates the plan and provides execution plan
+1. Recognize intent: refactor_code
+2. Prefetch: Full level (complete context)
+3. Load workflow: refactor_code.md
+4. Execute refactoring:
+   - Search target file
+   - Read and understand code
+   - Propose refactoring plan
+   - Execute modifications
+5. Display diff and summary
 ```
 
 ### Example 3: Bug Fixing
@@ -138,10 +170,15 @@ AI will:
 You > Fix the login functionality bug
 
 AI will:
-1. Code Analyzer locates problem code
-2. Programmer provides fix solution
-3. Test Expert suggests test cases
-4. Sisyphus makes comprehensive decision and executes fix
+1. Recognize intent: debug_code
+2. Prefetch: Medium level
+3. Load workflow: debug_code.md
+4. Execute debugging:
+   - Locate problem code
+   - Analyze root cause
+   - Provide fix solution
+   - Execute fix
+5. Verify fix with lsp_diagnostics
 ```
 
 ### Example 4: Understanding Project
@@ -150,10 +187,14 @@ AI will:
 You > Understand this project
 
 AI will automatically:
-1. Call discover_project_docs to read README
-2. Call get_repo_structure to view directory structure
-3. Call repo_map to generate code map
-4. Summarize project features concisely
+1. Recognize intent: understand_project
+2. Prefetch: Full level
+3. Load workflow: understand_project.md
+4. Execute understanding:
+   - Call discover_project_docs to read README
+   - Call get_repo_structure to view directory structure
+   - Call repo_map to generate code map
+5. Summarize project features concisely
 ```
 
 ## 🏗️ Project Structure
@@ -165,120 +206,137 @@ daoyoucode/
 │   ├── cli/                   # CLI commands
 │   ├── daoyoucode/
 │   │   └── agents/
-│   │       ├── core/          # Agent core (execution, Prompt, Skill)
-│   │       ├── orchestrators/ # Orchestrators (Simple, ReAct, Multi-Agent, etc.)
-│   │       ├── tools/         # Tool system (34+ tools)
+│   │       ├── core/          # Agent core
+│   │       │   ├── agent.py           # Agent base class
+│   │       │   ├── context.py         # Context management 🆕
+│   │       │   ├── core_orchestrator.py  # Core orchestrator
+│   │       │   └── skill_loader.py    # Skill loader
+│   │       ├── tools/         # Tool system (35+ tools)
+│   │       │   ├── file_tools.py      # File operations
+│   │       │   ├── search_tools.py    # Search tools
+│   │       │   ├── lsp_tools.py       # LSP tools
+│   │       │   ├── diff_tools.py      # Diff editing
+│   │       │   ├── repomap_tools.py   # Code map
+│   │       │   └── ...
 │   │       ├── llm/           # LLM client
 │   │       ├── memory/        # Memory system
 │   │       └── middleware/    # Middleware
 │   ├── config/                # Configuration files
 │   └── tests/                 # Tests
 ├── skills/                    # Skill configurations and Prompts
-│   ├── sisyphus-orchestrator/ # Multi-agent orchestration
-│   ├── chat-assistant/        # Interactive chat
+│   ├── sisyphus-orchestrator/ # Main orchestrator
+│   │   ├── skill.yaml         # Skill configuration
+│   │   ├── intents.yaml       # Intent configuration
+│   │   ├── prompts/
+│   │   │   ├── base_template.md      # Base template
+│   │   │   └── workflows/            # Workflow definitions
+│   │   │       ├── write_code.md     # Write code
+│   │   │       ├── refactor_code.md  # Refactor code
+│   │   │       ├── analyze_code.md   # Analyze code
+│   │   │       ├── search_code.md    # Search code
+│   │   │       ├── context_usage_guide.md  # Context guide 🆕
+│   │   │       └── ...
 │   ├── programming/           # Programming expert
 │   ├── code-analysis/         # Code analysis
 │   ├── refactoring/           # Refactoring expert
-│   ├── testing/               # Testing expert
 │   └── ...
 └── docs/                      # Documentation
 ```
 
 ## 🤖 Core Concepts
 
-### Agents
+### CoreOrchestrator
 
-6 specialized agents, each with distinct responsibilities:
+The core orchestrator responsible for:
+- **Intent Recognition** - Fast recognition using small model (qwen-turbo)
+- **Tiered Prefetch** - Dynamically load context based on task complexity
+- **Workflow Loading** - Load appropriate workflow based on intent
+- **Agent Execution** - Dynamically create and execute Agent
+- **Result Synthesis** - Synthesize and return results
 
-| Agent | Responsibility | Expertise |
-|-------|---------------|-----------|
-| **Sisyphus** | Task orchestration, expert scheduling, result synthesis | Complex task decomposition, multi-expert collaboration |
-| **Code Analyzer** | Architecture analysis, code review | Technology selection, design evaluation |
-| **Programmer** | Code writing, bug fixing | Feature implementation, problem solving |
-| **Refactor Master** | Code refactoring, performance optimization | Design improvement, code quality |
-| **Test Expert** | Test writing, quality assurance | Test strategy, use case design |
-| **Librarian** | Code search, quick location | Information retrieval, code navigation |
+### Workflows
 
-### Orchestrators
+Define task execution through Markdown files:
 
-7 orchestration strategies for different scenarios:
+| Workflow | Purpose | Prefetch Level |
+|----------|---------|----------------|
+| **write_code.md** | Write new code | Medium |
+| **refactor_code.md** | Refactor code | Full |
+| **analyze_code.md** | Analyze code | Medium |
+| **search_code.md** | Search code | Light |
+| **debug_code.md** | Debug code | Medium |
+| **run_test.md** | Run tests | Light |
+| **understand_project.md** | Understand project | Full |
 
-| Orchestrator | Features | Use Cases |
-|-------------|----------|-----------|
-| **Simple** | Single agent execution | Simple tasks |
-| **ReAct** | Reasoning-action loop | Tasks requiring tool invocations |
-| **Multi-Agent** | Multi-agent collaboration | Complex tasks requiring multiple experts |
-| **Parallel** | Parallel execution | Independent subtasks |
-| **Conditional** | Conditional branching | Dynamic decision-making |
-| **Workflow** | Workflow orchestration | Fixed processes |
-| **Sisyphus** | Iterative optimization | Continuous improvement |
+### Context Auto-Management 🆕
 
-### Collaboration Modes
+System automatically manages file paths and search history:
 
-**Main-with-Helpers Mode**
+**Core Variables**:
+- `target_file` - Main target file (set on first search, protected)
+- `target_files` - Multiple file list (for batch operations)
+- `target_dir` - Target directory
+- `last_search_paths` - Latest search results (always updated)
+- `search_history` - All search history (traceable)
+
+**Usage Example**:
 ```
-1. System automatically selects helper agents based on user intent
-2. Helper agents execute analysis in parallel
-3. Main agent (Sisyphus) synthesizes all expert opinions
-4. Provides complete solution
-```
+1. text_search("agent.py")
+   → target_file = "agent.py" (auto-set)
 
-**Sequential Mode**
-```
-Agent1 → Agent2 → Agent3
-Each agent processes the output of the previous one
-```
+2. read_file(path="{{target_file}}")
+   → Read agent.py
 
-**Parallel Mode**
-```
-Agent1 ↘
-Agent2 → Aggregate results
-Agent3 ↗
-```
+3. text_search("config.yaml")  # Search other files
+   → target_file remains unchanged (still agent.py)
+   → last_search_paths = ["config.yaml"]
 
-**Debate Mode**
-```
-Multiple rounds of debate, shared memory, reaching consensus
+4. write_file(path="{{target_file}}", content="...")
+   → Modify agent.py (correct file)
 ```
 
-### Tool System (34+ Tools)
+### Tool System (35+ Tools)
 
 **Project Understanding** (3 tools)
 - `discover_project_docs` - Discover project documentation
 - `get_repo_structure` - Get directory structure
-- `repo_map` - Smart code map
+- `repo_map` - Smart code map (with LSP enhancement)
 
 **Code Search** (4 tools)
 - `text_search` - Text search
-- `regex_search` - Regex search
+- `regex_search` - Regex search (formerly grep_search)
 - `semantic_code_search` - Semantic retrieval
 - `ast_grep_search` - AST search
 
-**LSP Tools** (8 tools)
+**LSP Tools** (6 tools)
 - `lsp_diagnostics` - Code diagnostics
 - `lsp_goto_definition` - Jump to definition
 - `lsp_find_references` - Find references
 - `lsp_symbols` - Get symbols
 - `lsp_rename` - Rename
-- `lsp_hover` - Hover information
-- `lsp_completion` - Code completion
-- `lsp_signature_help` - Signature help
+- `lsp_code_actions` - Code actions
 
-**File Operations** (6 tools)
+**File Operations** (9 tools)
 - `read_file` / `batch_read_files` - Read files
 - `write_file` / `batch_write_files` - Write files
 - `search_replace` - Search and replace
+- `intelligent_diff_edit` - Intelligent diff editing
 - `apply_patch` - Apply patch
+- `list_files` - List files
+- `delete_file` / `batch_delete_files` - Delete files
 
-**Git Tools** (3 tools)
+**Git Tools** (4 tools)
 - `git_status` - Git status
 - `git_diff` - Git diff
+- `git_commit` - Git commit
 - `git_log` - Git log
 
-**Other Tools** (10+ tools)
-- `execute_command` - Execute command
-- `list_files` - List files
-- `get_file_symbols` - Get symbols
+**Other Tools** (9+ tools)
+- `run_command` - Execute command
+- `run_test` - Run tests
+- `run_lint` - Run lint
+- `get_file_symbols` - Get file symbols
+- `code_snippet_validation` - Code validation
 - ...
 
 ## 🔧 Advanced Features
@@ -286,9 +344,18 @@ Multiple rounds of debate, shared memory, reaching consensus
 ### Intelligent Context Management
 
 - **Auto-prefetch** - Automatically load relevant information based on task type
+- **Tiered loading** - Full/Medium/Light/None four levels
 - **Conversation History** - Intelligent compression, retaining key information
 - **Long-term Memory** - User preferences and project knowledge persistence
 - **Semantic Retrieval** - Vector-based relevant code retrieval
+
+### Context Auto-Management 🆕
+
+- **Automatic path management** - No need to hardcode paths
+- **Target file protection** - target_file won't be overwritten by subsequent searches
+- **Search history** - Record all search operations, traceable
+- **Multi-file support** - Automatically save all file paths
+- **Simplified workflows** - Reduce repetitive code, improve readability
 
 ### Auto Display Diff
 
@@ -331,6 +398,7 @@ Automatically handle timeout issues:
 | [backend/03_AGENTS智能体介绍.md](backend/03_AGENTS智能体介绍.md) | Agent introduction |
 | [backend/04_TOOLS工具参考.md](backend/04_TOOLS工具参考.md) | Tool reference |
 | [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | Quick reference card |
+| [Context Usage Guide](skills/sisyphus-orchestrator/prompts/workflows/context_usage_guide.md) | Context variable usage guide 🆕 |
 
 ## 🎯 Tech Stack
 
@@ -342,6 +410,25 @@ Automatically handle timeout issues:
 - **DeepSeek** - Code-specialized LLM
 - **Rich** - Terminal beautification
 - **Jinja2** - Prompt templates
+
+## 🆕 Recent Updates
+
+### Context Integration (Latest)
+
+- ✅ **Context auto-management** - Automatic path management, no hardcoding needed
+- ✅ **Search history** - Record all search operations, traceable
+- ✅ **Target file protection** - target_file won't be overwritten
+- ✅ **Multi-file support** - Automatically save all file paths
+- ✅ **Workflow optimization** - Added Context usage guide and examples
+- ✅ **Tool name fixes** - Unified correct tool names (grep_search → regex_search)
+- ✅ **Complete test suite** - 24/24 tests passed
+
+### CoreOrchestrator Architecture
+
+- ✅ **Intent recognition** - Fast recognition using small model (qwen-turbo)
+- ✅ **Tiered prefetch** - Dynamically load context based on task complexity
+- ✅ **Workflow driven** - Define task execution through Markdown files
+- ✅ **Configuration as service** - Configure via YAML + Markdown
 
 ## 🤝 Contributing
 
