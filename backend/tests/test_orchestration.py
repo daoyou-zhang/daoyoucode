@@ -139,7 +139,6 @@ async def test_skill_loading():
             print(f"版本: {skill.version}")
             print(f"描述: {skill.description}")
             print(f"编排器: {skill.orchestrator}")
-            print(f"Agent: {skill.agent}")
             print(f"模型: {skill.llm.get('model')}")
             print(f"可用工具: {getattr(skill, 'tools', [])}")
         else:
@@ -162,7 +161,6 @@ async def test_skill_loading():
             print(f"版本: {skill.version}")
             print(f"描述: {skill.description}")
             print(f"编排器: {skill.orchestrator}")
-            print(f"Agent: {skill.agent}")
             print(f"模型: {skill.llm.get('model')}")
             print(f"可用工具: {getattr(skill, 'tools', [])}")
         else:

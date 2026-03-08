@@ -2,13 +2,13 @@
 
 <div align="center">
 
-**新一代 AI 编程助手 - 多 Agent 协作 + 智能编排**
+**新一代 AI 编程助手 - CoreOrchestrator + Workflow 驱动**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-active-success.svg)]()
 
-[English](README.md) • [中文文档](README.zh-CN.md)
+[English](README.en.md) • [中文文档](README.md)
 
 </div>
 
@@ -16,38 +16,50 @@
 
 ## 📖 项目简介
 
-**DaoyouCode** 是一个基于多 Agent 协作的新一代 AI 编程助手，采用智能编排系统、完整工具链和深度代码理解能力，为开发者提供强大的代码分析、编写和重构支持。
+**DaoyouCode** 是一个基于 CoreOrchestrator 架构的新一代 AI 编程助手，采用智能意图识别、分级预取机制和 Workflow 驱动，为开发者提供强大的代码分析、编写和重构支持。
 
 ### ✨ 核心特性
 
-- 🤖 **多 Agent 协作** - 6 个专业 Agent（代码分析、编程、重构、测试等）智能协作
-- 🎯 **智能编排系统** - 7 种编排策略（ReAct、Multi-Agent、Parallel 等），自动选择最优方案
+- 🎯 **智能意图识别** - 使用小模型（qwen-turbo）快速识别用户意图，准确率 95%+
+- 📊 **分级预取机制** - 根据任务复杂度动态加载上下文（Full/Medium/Light/None）
+- 🔄 **Workflow 驱动** - 通过 Markdown 文件定义任务执行方式，无需编写代码
 - 🛠️ **完整工具链** - 34+ 专业工具，LSP/AST 深度集成，Git 操作支持
 - 🧠 **智能记忆系统** - 对话历史、长期记忆、用户画像、智能上下文加载
 - 🌐 **国产 LLM 优化** - 深度支持通义千问、DeepSeek，多 Key 轮询
-- 📝 **Skill 系统** - 14+ 预置技能，灵活配置，可扩展
+- ⚙️ **配置即服务** - 通过 YAML + Markdown 配置，支持热更新
 
 ### 🎯 技术亮点
 
-**多 Agent 协作架构**
-- **Sisyphus 编排器** - 主 Agent，负责任务理解、专家调度、结果综合
-- **Code Analyzer** - 架构分析、代码审查、技术选型
-- **Programmer** - 代码编写、Bug 修复、功能实现
-- **Refactor Master** - 代码重构、性能优化、设计改进
-- **Test Expert** - 测试编写、测试修复、质量保证
-- **4 种协作模式** - Sequential（顺序）、Parallel（并行）、Debate（辩论）、Main-with-Helpers（主从）
+**CoreOrchestrator 架构**
+```
+用户输入
+  ↓
+意图识别（qwen-turbo，快速准确）
+  ↓
+分级预取（按需加载上下文）
+  ├─ Full: 目录结构 + 代码地图 + 项目文档
+  ├─ Medium: 目录结构 + 代码地图
+  ├─ Light: 代码地图
+  └─ None: 无预取
+  ↓
+工作流加载（根据意图动态加载）
+  ↓
+Agent 执行（动态创建，无需 Python 类）
+  ↓
+返回结果（支持流式输出）
+```
 
 **深度代码理解**
 - **LSP 集成** - 类型信息、引用关系、代码诊断、智能重命名
 - **AST 分析** - 语法树解析、结构化代码理解
 - **语义搜索** - 基于向量的代码检索，理解代码意图
-- **智能代码地图** - 自动生成项目结构概览
+- **智能代码地图** - 自动生成项目结构概览（带 LSP 增强）
 
-**智能编排系统**
-- **ReAct 模式** - 推理-行动循环，支持复杂工具调用
-- **Multi-Agent 模式** - 多专家并行分析，综合决策
-- **Conditional 模式** - 条件分支，动态路由
-- **Workflow 模式** - 工作流编排，复杂任务分解
+**配置即服务**
+- **skill.yaml** - 统一配置入口（Agent 名称、角色、工具、预取参数）
+- **workflow.md** - 定义任务执行方式（目标、步骤、原则）
+- **intents.yaml** - 意图配置（关键词、工作流、预取级别）
+- **prompt_template.md** - 基础 Prompt 模板
 
 ## 🚀 快速开始
 
@@ -60,42 +72,42 @@ cd daoyoucode
 
 # 安装依赖
 cd backend
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ### 配置
 
-编辑 `backend/config/llm_config.yaml`：
+编辑 `backend/.env`：
+
+```bash
+# 复制配置文件
+cp .env.example .env
+
+# 编辑 .env，填入你的 API Key
+DASHSCOPE_API_KEY=your_key_here
+```
+
+或编辑 `backend/config/llm_config.yaml`：
 
 ```yaml
 providers:
   qwen:
-    api_key: ["your-api-key-here"]  # 替换为你的 API Key
+    api_key: ["your-api-key-here"]
     enabled: true
 
 default:
   model: "qwen-max"
   temperature: 0.7
-  max_tokens: 4000
-  timeout: 1800
 ```
 
 ### 使用
 
 ```bash
-# 交互式对话（默认 chat-assistant）
+# 交互式对话（默认 sisyphus-orchestrator）
+python backend/daoyoucode.py chat
+
+# 或使用简化命令（如果已安装）
 daoyoucode chat
-
-# 使用多 Agent 编排（Sisyphus）
-daoyoucode chat --skill sisyphus-orchestrator
-
-# 使用特定专家
-daoyoucode chat --skill programming      # 编程专家
-daoyoucode chat --skill code-analysis    # 代码分析
-daoyoucode chat --skill refactoring      # 重构专家
-
-# 单次编辑
-daoyoucode edit "把 timeout 改成 60"
 
 # 查看所有 Skill
 daoyoucode skills list
@@ -106,55 +118,84 @@ daoyoucode doctor
 
 ## 🎓 使用示例
 
-### 示例 1: 多 Agent 协作分析代码
+### 示例 1: 理解项目
 
 ```bash
-daoyoucode chat --skill sisyphus-orchestrator
+daoyoucode chat
 
-你 > 分析 backend/daoyoucode/agents/core/agent.py 的设计
+你 > 帮我分析这个项目的架构
 
 AI 会自动：
-1. Code Analyzer 分析架构设计
-2. Programmer 评估代码质量
-3. Sisyphus 综合两位专家的意见
-4. 给出完整的分析报告和改进建议
+1. 识别意图 → understand_project
+2. 预取级别 → Full（目录结构 + 代码地图 + 项目文档）
+3. 加载工作流 → workflows/understand_project.md
+4. 分析项目架构
+5. 用 1-2 段话概括项目核心
 ```
 
-### 示例 2: 智能代码重构
+**输出示例**：
+```
+DaoyouCode 是一个基于 CoreOrchestrator 架构的 AI 编程助手。
+它采用编排器-Agent-工具的三层架构：CoreOrchestrator 负责
+意图识别和任务编排，动态 Agent 负责具体执行，工具层提供 
+LSP/AST 等代码分析能力。
 
-```bash
-你 > 重构 agent.py，提升可维护性
-
-AI 会：
-1. Code Analyzer 识别职责过多的问题
-2. Refactor Master 提出拆分方案
-3. Programmer 给出具体实现步骤
-4. Sisyphus 整合方案，给出执行计划
+核心特性包括智能意图识别（使用小模型快速判断）、分级预取
+机制（根据任务复杂度动态加载上下文）、以及配置即服务的设计
+（通过 skill.yaml 和 workflow 文件驱动行为）。技术栈基于 
+Python + FastAPI，深度集成了 Pylsp 和 Tree-sitter，支持
+通义千问等国产大模型。
 ```
 
-### 示例 3: Bug 修复
+---
+
+### 示例 2: 编写代码
 
 ```bash
-你 > 修复登录功能的 Bug
-
-AI 会：
-1. Code Analyzer 定位问题代码
-2. Programmer 提供修复方案
-3. Test Expert 建议测试用例
-4. Sisyphus 综合决策，执行修复
-```
-
-### 示例 4: 了解项目
-
-```bash
-你 > 了解这个项目
+你 > 在 user.py 中添加一个 get_user_by_id 函数
 
 AI 会自动：
-1. 调用 discover_project_docs 读取 README
-2. 调用 get_repo_structure 查看目录结构
-3. 调用 repo_map 生成代码地图
-4. 用简洁的语言概括项目特点
+1. 识别意图 → write_code
+2. 预取级别 → Medium（目录结构 + 代码地图）
+3. 加载工作流 → workflows/write_code.md
+4. 使用 LSP 工具查看现有代码
+5. 实现功能
+6. 使用 lsp_diagnostics 检查错误
 ```
+
+---
+
+### 示例 3: 重构代码
+
+```bash
+你 > 重构 auth.py，提取重复代码
+
+AI 会自动：
+1. 识别意图 → refactor_code
+2. 预取级别 → Medium（目录结构 + 代码地图）
+3. 加载工作流 → workflows/refactor_code.md
+4. 使用 lsp_find_references 查找所有引用
+5. 执行重构
+6. 使用 lsp_diagnostics 检查错误
+```
+
+---
+
+### 示例 4: 编写测试
+
+```bash
+你 > 为 user.py 编写单元测试
+
+AI 会自动：
+1. 识别意图 → write_test
+2. 预取级别 → Medium（目录结构 + 代码地图）
+3. 加载工作流 → workflows/write_test.md
+4. 使用 lsp_goto_definition 查看被测代码
+5. 编写测试用例
+6. 使用 run_test 运行测试
+```
+
+---
 
 ## 🏗️ 项目结构
 
@@ -165,211 +206,352 @@ daoyoucode/
 │   ├── cli/                   # CLI 命令
 │   ├── daoyoucode/
 │   │   └── agents/
-│   │       ├── core/          # Agent 核心（执行、Prompt、Skill）
-│   │       ├── orchestrators/ # 编排器（Simple、ReAct、Multi-Agent 等）
+│   │       ├── core/          # 核心组件
+│   │       │   ├── core_orchestrator.py  # CoreOrchestrator
+│   │       │   ├── agent.py              # Agent 基类
+│   │       │   ├── skill.py              # Skill 加载器
+│   │       │   └── intent.py             # 意图识别
 │   │       ├── tools/         # 工具系统（34+ 工具）
 │   │       ├── llm/           # LLM 客户端
 │   │       ├── memory/        # 记忆系统
-│   │       └── middleware/    # 中间件
+│   │       └── ui/            # UI 组件
 │   ├── config/                # 配置文件
+│   │   └── llm_config.yaml   # LLM 配置
 │   └── tests/                 # 测试
-├── skills/                    # Skill 配置与 Prompt
-│   ├── sisyphus-orchestrator/ # 多 Agent 编排
-│   ├── chat-assistant/        # 交互式对话
-│   ├── programming/           # 编程专家
-│   ├── code-analysis/         # 代码分析
-│   ├── refactoring/           # 重构专家
-│   ├── testing/               # 测试专家
-│   └── ...
+├── skills/                    # Skill 配置
+│   └── sisyphus-orchestrator/ # 默认 Skill
+│       ├── skill.yaml         # Skill 配置
+│       ├── intents.yaml       # 意图配置
+│       └── prompts/
+│           ├── base_template.md  # Prompt 模板
+│           └── workflows/        # 工作流文件
+│               ├── general_chat.md
+│               ├── understand_project.md
+│               ├── write_code.md
+│               ├── refactor_code.md
+│               ├── write_test.md
+│               └── run_test.md
 └── docs/                      # 文档
 ```
 
+---
+
 ## 🤖 核心概念
 
-### Agent（智能体）
+### 1. CoreOrchestrator（统一执行引擎）
 
-6 个专业 Agent，各司其职：
+CoreOrchestrator 是新一代编排器，负责：
 
-| Agent | 职责 | 擅长领域 |
-|-------|------|---------|
-| **Sisyphus** | 任务编排、专家调度、结果综合 | 复杂任务分解、多专家协作 |
-| **Code Analyzer** | 架构分析、代码审查 | 技术选型、设计评估 |
-| **Programmer** | 代码编写、Bug 修复 | 功能实现、问题解决 |
-| **Refactor Master** | 代码重构、性能优化 | 设计改进、代码质量 |
-| **Test Expert** | 测试编写、质量保证 | 测试策略、用例设计 |
-| **Librarian** | 代码搜索、快速定位 | 信息检索、代码导航 |
+**意图识别**
+- 使用小模型（qwen-turbo）快速识别用户意图
+- 准确率 95%+，成本降低 80%
+- 支持关键词兜底机制
 
-### Orchestrator（编排器）
+**分级预取**
+- Full: 目录结构 + 代码地图 + 项目文档（适用：understand_project）
+- Medium: 目录结构 + 代码地图（适用：write_code, refactor_code）
+- Light: 代码地图（适用：need_code_context）
+- None: 无预取（适用：general_chat, run_test）
 
-7 种编排策略，适应不同场景：
+**工作流加载**
+- 根据识别的意图动态加载对应的 workflow 文件
+- Workflow 文件定义任务的执行方式（目标、步骤、原则）
 
-| 编排器 | 特点 | 适用场景 |
-|--------|------|---------|
-| **Simple** | 单 Agent 执行 | 简单任务 |
-| **ReAct** | 推理-行动循环 | 需要工具调用的任务 |
-| **Multi-Agent** | 多 Agent 协作 | 复杂任务、需要多专家 |
-| **Parallel** | 并行执行 | 独立子任务 |
-| **Conditional** | 条件分支 | 动态决策 |
-| **Workflow** | 工作流编排 | 固定流程 |
-| **Sisyphus** | 迭代优化 | 持续改进 |
-
-### 协作模式
-
-**Main-with-Helpers（主从模式）**
-```
-1. 系统根据用户意图自动选择辅助 Agent
-2. 辅助 Agent 并行执行分析
-3. 主 Agent（Sisyphus）综合所有专家意见
-4. 给出完整方案
-```
-
-**Sequential（顺序模式）**
-```
-Agent1 → Agent2 → Agent3
-每个 Agent 处理前一个的输出
-```
-
-**Parallel（并行模式）**
-```
-Agent1 ↘
-Agent2 → 聚合结果
-Agent3 ↗
-```
-
-**Debate（辩论模式）**
-```
-多轮辩论，共享记忆，达成共识
-```
-
-### 工具系统（34+ 工具）
-
-**项目理解**（3 个）
-- `discover_project_docs` - 发现项目文档
-- `get_repo_structure` - 获取目录结构
-- `repo_map` - 智能代码地图
-
-**代码搜索**（4 个）
-- `text_search` - 文本搜索
-- `regex_search` - 正则搜索
-- `semantic_code_search` - 语义检索
-- `ast_grep_search` - AST 搜索
-
-**LSP 工具**（8 个）
-- `lsp_diagnostics` - 代码诊断
-- `lsp_goto_definition` - 跳转定义
-- `lsp_find_references` - 查找引用
-- `lsp_symbols` - 获取符号
-- `lsp_rename` - 重命名
-- `lsp_hover` - 悬停信息
-- `lsp_completion` - 代码补全
-- `lsp_signature_help` - 签名帮助
-
-**文件操作**（6 个）
-- `read_file` / `batch_read_files` - 读取文件
-- `write_file` / `batch_write_files` - 写入文件
-- `search_replace` - 搜索替换
-- `apply_patch` - 应用补丁
-
-**Git 工具**（3 个）
-- `git_status` - Git 状态
-- `git_diff` - Git 差异
-- `git_log` - Git 日志
-
-**其他工具**（10+ 个）
-- `execute_command` - 执行命令
-- `list_files` - 列出文件
-- `get_file_symbols` - 获取符号
-- ...
-
-## 🔧 高级功能
-
-### 智能上下文管理
-
-- **自动预取** - 根据任务类型自动加载相关信息
-- **对话历史** - 智能压缩，保留关键信息
-- **长期记忆** - 用户偏好、项目知识持久化
-- **语义检索** - 基于向量的相关代码检索
-
-### 自动显示 Diff
-
-修改代码后自动显示 unified diff：
-
-```diff
-✅ Successfully modified backend/test.py
-
-📝 Changes:
---- a/backend/test.py
-+++ b/backend/test.py
-@@ -10,7 +10,7 @@
--    timeout = 120
-+    timeout = 1800
-```
-
-### 超时恢复机制
-
-自动处理超时问题：
-1. 第一次：正常执行
-2. 第二次：增加超时时间
-3. 第三次：简化 Prompt + 增加超时
-4. 第四次：使用备用模型
-
-### 工具调用优化
-
-- **同轮去重** - 避免重复调用相同工具
-- **结果缓存** - 缓存工具执行结果
-- **批量操作** - 支持批量读写文件
-- **智能后处理** - 自动格式化工具输出
-
-## 📚 文档
-
-| 文档 | 说明 |
-|------|------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 代码级架构一览 |
-| [backend/README.md](backend/README.md) | 后端文档导航 |
-| [backend/01_CLI命令参考.md](backend/01_CLI命令参考.md) | CLI 命令详解 |
-| [backend/02_ORCHESTRATORS编排器介绍.md](backend/02_ORCHESTRATORS编排器介绍.md) | 编排器详解 |
-| [backend/03_AGENTS智能体介绍.md](backend/03_AGENTS智能体介绍.md) | Agent 详解 |
-| [backend/04_TOOLS工具参考.md](backend/04_TOOLS工具参考.md) | 工具详解 |
-| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | 快速参考卡 |
-
-## 🎯 技术栈
-
-- **Python 3.10+** - 核心编程语言
-- **Typer** - CLI 框架
-- **Tree-sitter** - 代码解析
-- **LSP** - Language Server Protocol
-- **通义千问** - 国产 LLM
-- **DeepSeek** - 代码专用 LLM
-- **Rich** - 终端美化
-- **Jinja2** - Prompt 模板
-
-## 🤝 贡献
-
-欢迎贡献！项目正在积极开发中。
-
-- 提交 Issue：[GitHub Issues](https://github.com/daoyou-zhang/daoyoucode/issues)
-- 提交 PR：[Pull Requests](https://github.com/daoyou-zhang/daoyoucode/pulls)
-
-## 📄 许可证
-
-[MIT License](LICENSE)
-
-## � 致谢
-
-感谢以下技术和工具的支持：
-- Python 生态系统
-- Tree-sitter 社区
-- LSP 协议
-- 通义千问、DeepSeek 等 LLM 提供商
+**Agent 执行**
+- 动态创建 Agent（无需 Python 类）
+- 构建 Prompt（模板 + 固定内容 + 动态内容）
+- LLM 调用 + 工具执行
+- 保存记忆
 
 ---
 
-<div align="center">
+### 2. Workflow（工作流）
 
-**道友同行，智能编程**
+Workflow 是一个 Markdown 文件，定义任务的执行方式：
 
-Made with ❤️ by [daoyou-zhang](https://github.com/daoyou-zhang)
+```markdown
+# 理解项目工作流
 
-⭐ 如果这个项目对你有帮助，请给个 Star！
+## 目标
+帮助用户快速理解项目架构
 
-</div>
+## 分析顺序
+1. 目录结构（整体布局）
+2. 代码地图（核心架构）
+3. 项目文档（背景信息）
+
+## 关键原则
+- 提炼核心，不要罗列
+- 突出架构设计思想
+- 用自然语言表达
+
+## 可选工具调用
+### 优先使用 LSP 工具
+- lsp_symbols - 查看符号
+- lsp_goto_definition - 追踪定义
+```
+
+**内置 Workflow**：
+- `general_chat.md` - 通用对话
+- `understand_project.md` - 理解项目
+- `need_code_context.md` - 需要代码上下文
+- `write_code.md` - 编写代码
+- `refactor_code.md` - 重构代码
+- `write_test.md` - 编写测试
+- `run_test.md` - 运行测试
+
+---
+
+### 3. Skill（技能配置）
+
+Skill 是一个配置文件（skill.yaml），定义：
+
+```yaml
+name: sisyphus-orchestrator
+orchestrator: core  # 使用 CoreOrchestrator
+
+# Prompt 模板配置
+prompt_template:
+  agent_name: "Sisyphus"
+  agent_description: "智能任务编排专家"
+  role: |
+    你是 Sisyphus，一个资深的项目经理和技术架构师。
+  positioning: |
+    你是决策者和执行者，不是简单的信息整合者。
+
+# 工作流配置
+workflows:
+  source: sisyphus-orchestrator
+
+# 工具列表
+tools:
+  - discover_project_docs
+  - repo_map
+  - get_repo_structure
+  - read_file
+  - write_file
+  - lsp_symbols
+  # ... 更多工具
+
+# 项目理解配置
+project_understanding:
+  use_intent: true          # 使用意图判断
+  doc_chars: 4000           # 文档字符数
+  struct_chars: 5000        # 结构字符数
+  repomap_chars: 12000      # 代码地图字符数
+  max_chars: 20000          # 总字符数上限
+```
+
+---
+
+### 4. 工具系统（34+ 工具）
+
+**项目理解**（3 个）
+- `discover_project_docs` - 发现项目文档（README、CONTRIBUTING 等）
+- `get_repo_structure` - 获取目录结构
+- `repo_map` - 智能代码地图（带 LSP 增强）
+
+**文件操作**（8 个）
+- `read_file` - 读取文件
+- `write_file` - 写入文件
+- `batch_read_files` - 批量读取
+- `batch_write_files` - 批量写入
+- `list_files` - 列出文件
+- `delete_file` - 删除文件
+- `batch_delete_files` - 批量删除
+- `get_file_info` - 获取文件信息
+
+**搜索**（4 个）
+- `text_search` - 文本搜索
+- `regex_search` - 正则搜索
+- `semantic_code_search` - 语义搜索
+- `ast_grep_search` - AST 搜索
+
+**LSP 工具**（5 个）
+- `lsp_diagnostics` - 代码诊断
+- `lsp_goto_definition` - 跳转定义
+- `lsp_find_references` - 查找引用
+- `lsp_symbols` - 查看符号
+- `get_file_symbols` - 获取文件符号
+
+**代码编辑**（3 个）
+- `search_replace` - 搜索替换
+- `intelligent_diff_edit` - 智能差异编辑
+- `ast_grep_replace` - AST 替换
+
+**Git 操作**（3 个）
+- `git_status` - Git 状态
+- `git_diff` - Git 差异
+- `git_commit` - Git 提交
+
+**命令执行**（3 个）
+- `run_test` - 运行测试
+- `run_lint` - 运行 Lint
+- `run_command` - 运行命令
+
+---
+
+## 🔧 创建自定义 Skill
+
+### 步骤 1: 创建 Skill 目录
+
+```bash
+mkdir -p skills/my-skill/prompts/workflows
+```
+
+### 步骤 2: 创建 skill.yaml
+
+```yaml
+# skills/my-skill/skill.yaml
+name: my-skill
+version: 1.0.0
+description: 我的自定义 Skill
+
+orchestrator: core
+
+llm:
+  model: qwen-max
+  temperature: 0.3
+
+prompt_template:
+  agent_name: "MyAgent"
+  agent_description: "我的自定义 Agent"
+  role: |
+    你是一个专业的...
+  positioning: |
+    你的核心能力是...
+
+workflows:
+  source: my-skill
+
+tools:
+  - read_file
+  - write_file
+  - lsp_symbols
+
+project_understanding:
+  use_intent: true
+  doc_chars: 4000
+  struct_chars: 5000
+  repomap_chars: 12000
+```
+
+### 步骤 3: 创建 Workflow 文件
+
+```markdown
+# skills/my-skill/prompts/workflows/my_workflow.md
+
+# 我的工作流
+
+## 目标
+明确要达成的目标
+
+## 关键步骤
+1. 第一步
+2. 第二步
+
+## 关键原则
+- 原则1
+- 原则2
+
+## 可选工具调用
+- lsp_symbols - 查看符号
+- read_file - 读取文件
+```
+
+### 步骤 4: 创建意图配置
+
+```yaml
+# skills/my-skill/intents.yaml
+intents:
+  - name: my_intent
+    description: "我的自定义意图"
+    keywords:
+      - "关键词1"
+      - "关键词2"
+    workflow: "my_workflow.md"
+    prefetch_level: "medium"
+```
+
+### 步骤 5: 使用
+
+```bash
+python backend/daoyoucode.py chat --skill my-skill
+```
+
+---
+
+## 📊 架构对比
+
+### 旧架构（1.0）
+
+```
+CLI → Skill → 编排器（7种） → Agent类（10个） → 工具
+```
+
+**问题**：
+- ❌ 多个编排器实现，维护成本高
+- ❌ 预定义 Agent 类，扩展困难
+- ❌ 配置分散，难以理解
+- ❌ 修改需要重启服务
+
+### 新架构（2.0）
+
+```
+CLI → Skill → CoreOrchestrator → 动态Agent → 工具
+                    ↓
+              Workflow驱动
+```
+
+**优势**：
+- ✅ 统一的 CoreOrchestrator
+- ✅ 动态创建 Agent，易于扩展
+- ✅ 配置统一，易于理解
+- ✅ 支持热更新，无需重启
+
+---
+
+## 📚 文档
+
+- [Backend 文档](backend/README.md) - 核心架构和开发指南
+- [编排器介绍](backend/02_ORCHESTRATORS编排器介绍.md) - CoreOrchestrator 详解
+- [Agent 介绍](backend/03_AGENTS智能体介绍.md) - 动态 Agent + Workflow
+- [工具参考](backend/04_TOOLS工具参考.md) - 34+ 工具完整参考
+- [CLI 命令参考](backend/01_CLI命令参考.md) - CLI 使用指南
+
+---
+
+## 🤝 贡献
+
+欢迎贡献代码和文档！
+
+### 贡献方式
+
+1. Fork 项目
+2. 创建分支
+3. 提交代码
+4. 发起 Pull Request
+
+---
+
+## 📧 联系
+
+如有问题，请提 Issue。
+
+---
+
+## 📝 更新日志
+
+### 2026-03-08
+- ✅ 重构为 CoreOrchestrator 架构
+- ✅ 实现智能意图识别
+- ✅ 实现分级预取机制
+- ✅ 实现动态 Agent 创建
+- ✅ 实现 Workflow 驱动
+- ✅ 更新所有文档
+
+---
+
+## 📄 License
+
+MIT License

@@ -71,7 +71,6 @@ async def test_skill_config():
     print(f"  • 名称: {skill.name}")
     print(f"  • 版本: {skill.version}")
     print(f"  • 编排器: {skill.orchestrator}")
-    print(f"  • Agent: {skill.agent}")
     print(f"  • 工具数量: {len(skill.tools)}")
     print(f"  • 工具列表: {', '.join(skill.tools)}")
     print(f"  • Prompt文件: {skill.prompt.get('file', 'N/A')}")

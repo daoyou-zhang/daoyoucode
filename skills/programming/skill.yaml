@@ -1,136 +1,66 @@
 name: programming
 version: 1.0.0
 description: 编程专家服务（继承 sisyphus-orchestrator 工作流）
-
-# orchestrator: 编排器类型（决定执行逻辑）
-#   - multi_agent: 多智能体编排器
-#   - 支持主 agent + 辅助 agents 协作
-#   - 适合：需要分析 + 编程的复杂任务
-orchestrator: multi_agent
-
-# collaboration_mode: 协作模式
-#   - main_with_helpers: 主 agent + 辅助 agents
-#   - sisyphus 负责任务分解和调度
-#   - programmer 负责具体编程
-#   - code_analyzer 负责代码分析
-collaboration_mode: main_with_helpers
-
-# agents: 智能体列表（对应 backend/daoyoucode/agents/builtin/ 下的类）
-agents:
-  - sisyphus          # 主编排：任务分解和调度
-  - programmer        # 核心：代码编写和实现
-  - code_analyzer     # 辅助：代码分析和理解
-
-# Prompt配置（使用独立文件）
-prompt:
-  file: prompts/programmer.md  # 专业版本（原 v2）
-
-# 🆕 工作流配置（引用共通工作流）
-workflows:
-  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
-  source: sisyphus-orchestrator
-  # 工作流路径：skills/sisyphus-orchestrator/prompts/workflows/
-  available_workflows:
-    - write_code      # 代码编写工作流
-    - analyze_code    # 代码分析工作流
-    - debug_code      # 调试工作流
-    - need_code_context  # 🆕 获取代码上下文
-  # 编程 agent 优先使用的意图
-  preferred_intents:
-    - write_code
-    - edit_or_write  # 🆕 编辑/编写代码
-    - edit_file
-    - search_code
-    - need_code_context  # 🆕 获取代码上下文
-
-# 意图识别
-project_understanding_use_intent: true
-
-# LLM配置（🎯 特化：使用编程专用模型）
+orchestrator: core
+agent:
+  name: sisyphus
+  model: qwen-coder-plus
+  temperature: 0.1
 llm:
   model: qwen-coder-plus
   temperature: 0.1
   max_tokens: 4000
-
-# 中间件
-middleware:
-  - context_management
-
-# 🎯 特化：精简的工具列表（只包含编程需要的）
 tools:
-  - read_file
-  - batch_read_files
-  - write_file
-  - batch_write_files
-  - list_files
-  - get_file_info
-  - text_search
-  - regex_search
-  - get_file_symbols
-  - git_status
-  - git_diff
-  - search_replace
-
-# 🎯 按 Agent 分配工具（最小权限原则）
-agent_tools:
-  sisyphus:           # 主编排：协调和执行
-    - read_file
-    - write_file
-    - text_search
-    - regex_search
-    - get_file_symbols
-    - git_status
-    - git_diff
-  
-  programmer:         # 编程专家：读写代码
-    - read_file
-    - batch_read_files
-    - write_file
-    - batch_write_files
-    - list_files
-    - get_file_info
-    - text_search
-    - regex_search
-    - get_file_symbols
-    - git_status
-    - git_diff
-    - search_replace
-  
-  code_analyzer:      # 架构分析：只读
-    - read_file
-    - batch_read_files
-    - text_search
-    - regex_search
-    - get_file_symbols
-
-# 输入
+- batch_read_files
+- batch_write_files
+- get_file_info
+- get_file_symbols
+- git_diff
+- git_status
+- list_files
+- read_file
+- regex_search
+- search_replace
+- text_search
+- write_file
+workflows:
+  source: sisyphus-orchestrator
+project_understanding:
+  use_intent: true
+middleware:
+- context_management
 inputs:
-  - name: task
-    type: string
-    required: true
-    description: 编程任务描述
-  
-  - name: code_context
-    type: string
-    required: false
-    description: 相关代码上下文
-  
-  - name: language
-    type: string
-    required: false
-    description: 编程语言
-
-# 输出
+- name: task
+  type: string
+  required: true
+  description: 编程任务描述
+- name: code_context
+  type: string
+  required: false
+  description: 相关代码上下文
+- name: language
+  type: string
+  required: false
+  description: 编程语言
 outputs:
-  - name: code
-    type: string
-    description: 生成的代码
-  
-  - name: explanation
-    type: string
-    description: 代码说明
-
-# Hook配置
+- name: code
+  type: string
+  description: 生成的代码
+- name: explanation
+  type: string
+  description: 代码说明
 hooks:
-  - logging
-  - metrics
+- logging
+- metrics
+_migration_notes:
+  migrated_from: multi_agent
+  original_agents:
+  - sisyphus
+  - programmer
+  - code_analyzer
+  migration_date: '2024-03-08'
+  changes:
+  - 使用 CoreOrchestrator 替代 multi_agent/simple/react
+  - 合并所有 agent_tools 到统一的 tools 列表
+  - 添加 workflows 配置（从 intents.yaml 加载）
+  - 添加 project_understanding 配置（预取机制）

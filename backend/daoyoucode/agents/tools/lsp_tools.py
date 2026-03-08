@@ -729,7 +729,7 @@ class LSPServerManager:
         
         self.clients: Dict[str, Dict[str, Any]] = {}  # {key: {client, last_used, ref_count, init_promise}}
         self.last_used: Dict[str, float] = {}
-        self.idle_timeout = 5 * 60  # 5分钟
+        self.idle_timeout = 30 * 60  # 30分钟（增加超时时间，避免频繁重启）
         self._cleanup_task: Optional[asyncio.Task] = None
         self._initialized = True
         

@@ -1,138 +1,83 @@
 name: refactoring
 version: 1.0.0
 description: 代码重构专家服务（继承 sisyphus-orchestrator 工作流）
-
-# 🆕 使用多Agent编排器
-orchestrator: multi_agent
-collaboration_mode: main_with_helpers
-
-# 🆕 重构专用 Agent 列表
-agents:
-  - sisyphus          # 主编排
-  - refactor_master   # 核心Agent
-  - code_analyzer     # 辅助分析
-  - test_expert       # 确保测试通过
-
-prompt:
-  file: prompts/refactor.md  # 专业版本（原 v2）
-
-# 🆕 工作流配置（引用共通工作流）
-workflows:
-  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
-  source: sisyphus-orchestrator
-  # 工作流路径：skills/sisyphus-orchestrator/prompts/workflows/
-  available_workflows:
-    - refactor_code   # 重构工作流
-    - analyze_code    # 代码分析工作流
-    - write_test      # 测试编写工作流（重构后验证）
-    - need_code_context  # 🆕 获取代码上下文
-  # 重构 agent 优先使用的意图
-  preferred_intents:
-    - refactor_code
-    - analyze_code
-    - write_test
-    - need_code_context  # 🆕 获取代码上下文
-
-# 意图识别
-project_understanding_use_intent: true
-
-# LLM配置（🎯 特化：稍高温度，更有创意）
+orchestrator: core
+agent:
+  name: sisyphus
+  model: qwen-coder-plus
+  temperature: 0.2
 llm:
   model: qwen-coder-plus
-  temperature: 0.2  # 稍高温度，更有创意的重构方案
+  temperature: 0.2
   max_tokens: 4000
-
-middleware:
-  - context_management
-
 tools:
-  - read_file
-  - batch_read_files      # 🆕 批量读取文件
-  - write_file
-  - batch_write_files     # 🆕 批量写入文件
-  - list_files
-  - get_file_info
-  - text_search
-  - regex_search
-  - search_replace
-  - git_status
-  - git_diff
-
+- batch_read_files
+- batch_write_files
+- get_file_info
+- get_file_symbols
+- git_diff
+- git_status
+- list_files
+- read_file
+- regex_search
+- run_test
+- search_replace
+- text_search
+- write_file
+workflows:
+  source: sisyphus-orchestrator
+project_understanding:
+  use_intent: true
+middleware:
+- context_management
 permissions:
   read:
-    - pattern: "*"
-      permission: allow
+  - pattern: '*'
+    permission: allow
   write:
-    - pattern: "*.py"
-      permission: ask
-    - pattern: "*.js"
-      permission: ask
-    - pattern: "*.ts"
-      permission: ask
-
+  - pattern: '*.py'
+    permission: ask
+  - pattern: '*.js'
+    permission: ask
+  - pattern: '*.ts'
+    permission: ask
 inputs:
-  - name: refactor_request
-    type: string
-    required: true
-    description: 重构需求
-  
-  - name: code_content
-    type: string
-    required: false
-    description: 要重构的代码
-  
-  - name: test_content
-    type: string
-    required: false
-    description: 现有测试
-
+- name: refactor_request
+  type: string
+  required: true
+  description: 重构需求
+- name: code_content
+  type: string
+  required: false
+  description: 要重构的代码
+- name: test_content
+  type: string
+  required: false
+  description: 现有测试
 outputs:
-  - name: refactor_plan
-    type: string
-    description: 重构方案
-  
-  - name: steps
-    type: array
-    description: 重构步骤列表
-
+- name: refactor_plan
+  type: string
+  description: 重构方案
+- name: steps
+  type: array
+  description: 重构步骤列表
 hooks:
-  - logging
-  - metrics
-  - validation
-
+- logging
+- metrics
+- validation
 metadata:
   category: development
   cost: MEDIUM
-
-
-# 🎯 按 Agent 分配工具（最小权限原则）
-agent_tools:
-  sisyphus:           # 主编排：协调和执行
-    - read_file
-    - write_file
-    - text_search
-    - git_status
-    - git_diff
-  
-  refactor_master:    # 重构专家：读写 + 重构工具
-    - read_file
-    - batch_read_files
-    - write_file
-    - batch_write_files
-    - list_files
-    - text_search
-    - regex_search
-    - search_replace
-    - git_status
-    - git_diff
-  
-  code_analyzer:      # 架构分析：只读
-    - read_file
-    - batch_read_files
-    - text_search
-    - regex_search
-    - get_file_symbols
-  
-  test_expert:        # 测试专家：运行测试
-    - read_file
-    - run_test
+_migration_notes:
+  migrated_from: multi_agent
+  original_agents:
+  - sisyphus
+  - refactor_master
+  - code_analyzer
+  - test_expert
+  migration_date: '2024-03-08'
+  changes:
+  - 使用 CoreOrchestrator 替代 multi_agent/simple/react
+  - 合并所有 agent_tools 到统一的 tools 列表
+  - 添加 workflows 配置（从 intents.yaml 加载）
+  - 添加 project_understanding 配置（预取机制）

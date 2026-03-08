@@ -38,6 +38,8 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
         Returns:
             增强的检索结果
         """
+        logger.warning(f"🔍 search_with_lsp 被调用: query='{query}', top_k={top_k}, enable_lsp={enable_lsp}")
+        
         # 1. 使用现有的混合检索获取候选结果（获取更多候选）
         candidates = self.search_hybrid(
             query,
@@ -47,12 +49,14 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
         )
         
         if not candidates:
+            logger.warning("⚠️  没有找到候选结果")
             return []
         
         logger.info(f"🔍 LSP增强检索: {len(candidates)} 个候选")
         
         # 2. 如果不启用LSP，直接返回
         if not enable_lsp:
+            logger.warning("⚠️  LSP增强已禁用")
             return candidates[:top_k]
         
         # 3. 使用LSP增强每个候选
@@ -81,17 +85,21 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
         
         enhanced = []
         
-        for chunk in candidates:
+        logger.warning(f"🔧 开始LSP增强: {len(candidates)} 个候选")
+        
+        for i, chunk in enumerate(candidates):
             file_path = str(self.repo_path / chunk['path'])
             
             # 检查缓存
             cache_key = f"{chunk['path']}:{chunk['start']}"
             if cache_key in self._lsp_cache:
+                logger.debug(f"  [{i+1}/{len(candidates)}] 使用缓存: {chunk['path']}")
                 chunk.update(self._lsp_cache[cache_key])
                 enhanced.append(chunk)
                 continue
             
             # 获取LSP信息
+            logger.debug(f"  [{i+1}/{len(candidates)}] 获取LSP信息: {chunk['path']}")
             lsp_info = await self._get_lsp_info(file_path, chunk)
             
             # 缓存结果
@@ -100,6 +108,14 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
             # 合并到chunk
             chunk.update(lsp_info)
             enhanced.append(chunk)
+            
+            if lsp_info.get('has_lsp_info'):
+                logger.debug(f"    ✅ LSP信息已获取: {lsp_info.get('symbol_count', 0)} 个符号")
+            else:
+                logger.debug(f"    ⚠️  LSP信息未获取")
+        
+        lsp_count = sum(1 for c in enhanced if c.get('has_lsp_info'))
+        logger.warning(f"🔧 LSP增强完成: {lsp_count}/{len(enhanced)} 个结果包含LSP信息")
         
         return enhanced
     
@@ -123,18 +139,23 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
         from ..tools.lsp_tools import with_lsp_client, get_lsp_manager
         
         try:
+            logger.debug(f"    开始获取LSP信息: {file_path}")
+            
             # 🔥 首次使用时检查并启动LSP服务器
             manager = get_lsp_manager()
             
             # 检查文件扩展名
             from pathlib import Path
             ext = Path(file_path).suffix
+            logger.debug(f"    文件扩展名: {ext}")
             
             # 查找对应的LSP服务器
             server_config = manager.find_server_for_extension(ext)
             if not server_config:
-                logger.debug(f"没有找到 {ext} 文件的LSP服务器")
+                logger.debug(f"    没有找到 {ext} 文件的LSP服务器")
                 return self._empty_lsp_info()
+            
+            logger.debug(f"    找到LSP服务器: {server_config.id}")
             
             # 检查LSP服务器是否已安装
             if not manager.is_server_installed(server_config):
@@ -146,12 +167,17 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
                     self._lsp_warning_shown = True
                 return self._empty_lsp_info()
             
+            logger.debug(f"    LSP服务器已安装")
+            
             # 🔥 使用with_lsp_client会自动启动LSP服务器
             # 获取文档符号
+            logger.debug(f"    调用with_lsp_client获取符号...")
             symbols = await with_lsp_client(
                 file_path,
                 lambda client: client.document_symbols(file_path)
             )
+            
+            logger.debug(f"    获取到 {len(symbols) if symbols else 0} 个符号")
             
             if not symbols:
                 return self._empty_lsp_info()
@@ -178,7 +204,9 @@ class LSPEnhancedCodebaseIndex(CodebaseIndex):
             }
         
         except Exception as e:
-            logger.debug(f"获取LSP信息失败 {file_path}: {e}")
+            logger.warning(f"⚠️  获取LSP信息失败 {file_path}: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             return self._empty_lsp_info()
     
     def _empty_lsp_info(self) -> Dict[str, Any]:

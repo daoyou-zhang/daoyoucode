@@ -67,6 +67,10 @@ class SemanticCodeSearchTool(BaseTool):
             # 🔥 默认使用LSP增强检索
             if enable_lsp:
                 try:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"🔍 开始代码搜索（LSP增强）: query='{query}', top_k={top_k}")
+                    
                     from ..memory.codebase_index_lsp_enhanced import search_codebase_with_lsp
                     results = await search_codebase_with_lsp(
                         path,
@@ -75,19 +79,26 @@ class SemanticCodeSearchTool(BaseTool):
                         enable_lsp=True
                     )
                     
-                    # 检查LSP是否真正工作
-                    has_lsp_info = any(r.get('has_lsp_info') for r in results)
+                    logger.warning(f"🔍 搜索完成: 返回 {len(results)} 个结果")
                     
-                    if not has_lsp_info:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.warning("⚠️  LSP信息未获取，可能需要安装LSP服务器")
-                        logger.warning("   Python: pip install pyright")
+                    # 只有在有结果的情况下才检查LSP
+                    if len(results) > 0:
+                        # 检查LSP是否真正工作
+                        has_lsp_info = any(r.get('has_lsp_info') for r in results)
+                        
+                        if not has_lsp_info:
+                            logger.warning("⚠️  LSP信息未获取（可能是首次启动，LSP服务器正在初始化）")
+                            logger.warning("   提示：再次运行相同查询，LSP信息应该就能正常获取了")
+                        else:
+                            lsp_count = sum(1 for r in results if r.get('has_lsp_info'))
+                            logger.warning(f"✅ LSP信息已获取: {lsp_count}/{len(results)} 个结果")
                     
                 except Exception as e:
                     import logging
                     logger = logging.getLogger(__name__)
                     logger.error(f"❌ LSP增强失败: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
                     # 只在异常时降级
                     from ..memory.codebase_index import search_codebase
                     results = search_codebase(path, query, top_k=top_k, strategy="hybrid")

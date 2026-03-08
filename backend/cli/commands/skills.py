@@ -148,14 +148,6 @@ def show_skill_details(skill_name: str):
 [bold]编排器[/bold]: {skill.orchestrator}
 """
         
-        # Agent信息
-        if skill.agents:
-            info += f"\n[bold]Agent列表[/bold]:\n"
-            for i, agent in enumerate(skill.agents, 1):
-                info += f"  {i}. {agent}\n"
-        elif skill.agent:
-            info += f"\n[bold]Agent[/bold]: {skill.agent}\n"
-        
         # 工具信息
         if skill.tools:
             info += f"\n[bold]工具[/bold] ({len(skill.tools)}个):\n"

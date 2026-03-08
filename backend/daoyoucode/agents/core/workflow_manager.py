@@ -52,12 +52,20 @@ class WorkflowManager:
             self.workflow_dir = self.skill_dir
         
         # 🆕 从 intents.yaml 加载配置
+        # intent_config: 完整的意图配置（未过滤）
+        # 包含所有意图的定义、描述、关键词、工作流配置等
         self.intent_config = self._load_intent_config()
         
         # 提取工作流映射（向后兼容）
+        # workflows: 意图ID到工作流配置的映射 {intent_id: {prompt_file, keywords, priority}}
+        # 作用：根据意图快速找到对应的工作流文件
+        # 注意：这不是权限控制，而是意图到工作流的索引
         self.workflows = self._extract_workflows()
         
         # 🆕 过滤工作流（如果配置了 preferred_intents）
+        # preferred_intents: 辅助 agent 只能使用的意图列表（白名单）
+        # 例如：programmer 只能使用 write_code, debug_code 等编程相关的工作流
+        # 这是一种能力限制机制，确保每个 agent 专注于自己的职责
         preferred_intents = workflows_config.get('preferred_intents', [])
         if preferred_intents:
             self.workflows = self._filter_workflows(self.workflows, preferred_intents)
@@ -172,6 +180,9 @@ class WorkflowManager:
         """
         获取意图定义（用于 LLM 分类）
         
+        🔥 重要：如果配置了 preferred_intents，只返回这些意图的定义
+        这样可以避免 LLM 识别出不支持的意图
+        
         Returns:
             意图定义字典 {intent_id: description}
         """
@@ -181,7 +192,15 @@ class WorkflowManager:
         intents = self.intent_config.get('intents', {})
         definitions = {}
         
+        # 🔥 如果有 preferred_intents 过滤，只返回这些意图的定义
+        # 这样 LLM 就不会识别出不支持的意图
+        allowed_intents = set(self.workflows.keys()) if self.workflows else set(intents.keys())
+        
         for intent_id, intent_data in intents.items():
+            # 🔥 只返回允许的意图
+            if intent_id not in allowed_intents:
+                continue
+            
             description = intent_data.get('description', '')
             if description:
                 definitions[intent_id] = description
@@ -208,15 +227,17 @@ class WorkflowManager:
         
         # 1. 优先使用意图匹配（按优先级排序）
         if intents:
-            # 🆕 收集所有匹配的工作流及其优先级
+            # 收集所有匹配的工作流及其优先级
             matched_workflows = []
+            
             for intent in intents:
                 workflow_config = self.workflows.get(intent)
+                
                 if workflow_config:
                     priority = workflow_config.get('priority', 5)
                     matched_workflows.append((intent, workflow_config, priority))
             
-            # 🆕 按优先级降序排序（优先级高的在前）
+            # 按优先级降序排序（优先级高的在前）
             if matched_workflows:
                 matched_workflows.sort(key=lambda x: x[2], reverse=True)
                 
@@ -227,7 +248,6 @@ class WorkflowManager:
                 if prompt_file:
                     content = self._load_prompt_file(prompt_file)
                     if content:
-                        # 🆕 如果有多个意图，记录日志
                         if len(matched_workflows) > 1:
                             other_intents = [x[0] for x in matched_workflows[1:]]
                             logger.info(
@@ -238,28 +258,7 @@ class WorkflowManager:
                             logger.info(f"✅ 加载工作流: {intent} -> {prompt_file}")
                         return content
         
-        # 2. 兜底：关键词匹配（如果配置了 keywords）
-        if user_input:
-            user_input_lower = user_input.lower()
-            # 🆕 同样按优先级排序
-            keyword_matches = []
-            for workflow_name, config in self.workflows.items():
-                keywords = config.get('keywords', [])
-                if keywords and any(kw.lower() in user_input_lower for kw in keywords):
-                    priority = config.get('priority', 5)
-                    keyword_matches.append((workflow_name, config, priority))
-            
-            if keyword_matches:
-                keyword_matches.sort(key=lambda x: x[2], reverse=True)
-                workflow_name, config, priority = keyword_matches[0]
-                prompt_file = config.get('prompt_file')
-                
-                if prompt_file:
-                    content = self._load_prompt_file(prompt_file)
-                    if content:
-                        logger.info(f"✅ 关键词匹配工作流: {workflow_name} -> {prompt_file} (优先级={priority})")
-                        return content
-        
+        # 没有匹配的工作流
         logger.debug(f"未找到匹配的工作流: intents={intents}")
         return None
     

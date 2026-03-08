@@ -22,7 +22,7 @@ _tool_registry = get_tool_registry()  # 触发工具注册
 
 from .init import initialize_agent_system
 from .executor import execute_skill, list_skills, get_skill_info
-from .core.agent import BaseAgent, AgentConfig, register_agent, get_agent_registry
+from .core.agent import BaseAgent, AgentConfig
 from .core.orchestrator import BaseOrchestrator, register_orchestrator, get_orchestrator
 from .core.middleware import BaseMiddleware, register_middleware, get_middleware
 from .core.skill import SkillConfig, SkillLoader
@@ -40,8 +40,6 @@ __all__ = [
     # Agent
     'BaseAgent',
     'AgentConfig',
-    'register_agent',
-    'get_agent_registry',
     
     # Orchestrator
     'BaseOrchestrator',

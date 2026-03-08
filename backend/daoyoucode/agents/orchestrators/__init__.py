@@ -1,31 +1,17 @@
 """
-内置编排器
+编排器注册
 
-自动注册所有内置编排器
+架构重构后只保留 CoreOrchestrator（通过 CoreOrchestratorAdapter 适配）
+所有 Skills 现在都使用统一的 core 编排器
 """
 
 from ..core.orchestrator import register_orchestrator
-from .simple import SimpleOrchestrator
-from .multi_agent import MultiAgentOrchestrator
-from .workflow import WorkflowOrchestrator
-from .conditional import ConditionalOrchestrator
-from .parallel import ParallelOrchestrator
-from .parallel_explore import ParallelExploreOrchestrator
+from .core_adapter import CoreOrchestratorAdapter
 
 
 def register_builtin_orchestrators():
-    """注册所有内置编排器"""
-    register_orchestrator('simple', SimpleOrchestrator)
-    register_orchestrator('multi_agent', MultiAgentOrchestrator)
-    register_orchestrator('workflow', WorkflowOrchestrator)
-    register_orchestrator('conditional', ConditionalOrchestrator)
-    register_orchestrator('parallel', ParallelOrchestrator)
-    register_orchestrator('parallel_explore', ParallelExploreOrchestrator)
-    
-    # 向后兼容：react 指向 simple
-    # 说明：ReAct循环已在Agent层通过Function Calling实现
-    #      SimpleOrchestrator 包含了原 ReActOrchestrator 的所有功能（预取、重试等）
-    register_orchestrator('react', SimpleOrchestrator)
+    """注册编排器 - 只注册 core"""
+    register_orchestrator('core', CoreOrchestratorAdapter)
 
 
 # 自动注册
@@ -33,11 +19,6 @@ register_builtin_orchestrators()
 
 
 __all__ = [
-    'SimpleOrchestrator',
-    'MultiAgentOrchestrator',
-    'WorkflowOrchestrator',
-    'ConditionalOrchestrator',
-    'ParallelOrchestrator',
-    'ParallelExploreOrchestrator',
+    'CoreOrchestratorAdapter',
     'register_builtin_orchestrators',
 ]

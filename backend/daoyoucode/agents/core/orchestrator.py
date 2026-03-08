@@ -28,6 +28,42 @@ class BaseOrchestrator(ABC):
         """执行Skill"""
         pass
     
+    def _init_workflow_manager(
+        self,
+        skill: 'SkillConfig',
+        context: Dict[str, Any]
+    ) -> None:
+        """
+        初始化工作流管理器（Skill 级别）
+        
+        在编排器的 execute 方法开始时调用，确保工作流管理器被正确初始化。
+        工作流管理器会根据 Skill 的 workflows 配置（包括 source 和 preferred_intents）
+        加载可用的工作流集合。
+        
+        Args:
+            skill: Skill 配置
+            context: 执行上下文（工作流管理器会被添加到 context 中）
+        """
+        if skill.skill_path:
+            from .workflow_manager import WorkflowManager
+            
+            skill_config = {
+                'skill_dir': str(skill.skill_path),
+                'workflows': getattr(skill, 'workflows', {})
+            }
+            
+            workflow_manager = WorkflowManager(skill_config)
+            
+            self.logger.info(
+                f"✅ 工作流管理器已初始化: {len(workflow_manager.workflows)} 个可用工作流"
+            )
+            
+            if workflow_manager.workflows:
+                self.logger.debug(f"可用工作流: {list(workflow_manager.workflows.keys())}")
+            
+            # 将工作流管理器添加到 context，供 Agent 使用
+            context['workflow_manager'] = workflow_manager
+    
     def _get_agent(self, agent_name: str):
         """获取Agent实例"""
         from .agent import get_agent_registry

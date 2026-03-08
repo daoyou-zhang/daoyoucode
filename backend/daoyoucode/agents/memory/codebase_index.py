@@ -273,7 +273,7 @@ class CodebaseIndex:
             return 0
 
         retriever = self._get_retriever()
-        if not getattr(retriever, "enabled", False) or not retriever.model:
+        if not retriever.enabled or not retriever.model:
             logger.warning("embedding 未启用，仅保存 chunk 元数据，检索将使用关键词回退")
             self._save_meta()
             return len(self.chunks)

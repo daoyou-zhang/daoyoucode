@@ -34,10 +34,8 @@ def initialize_agent_system():
     tool_registry = get_tool_registry()
     logger.info(f"✓ 工具注册表已初始化: {len(tool_registry.list_tools())} 个工具")
     
-    # 2. 注册内置Agent
-    from .builtin import register_builtin_agents
-    register_builtin_agents()
-    logger.info("✓ 内置Agent已注册")
+    # 2. 跳过内置Agent注册（单 Agent 架构，使用 Skill 配置驱动）
+    logger.info("✓ 跳过内置Agent注册（单 Agent 架构）")
     
     # 3. 注册内置编排器（已在__init__.py中完成）
     from .core.orchestrator import get_orchestrator_registry

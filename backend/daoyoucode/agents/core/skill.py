@@ -24,12 +24,11 @@ class SkillConfig:
     # 编排器配置
     orchestrator: str = "simple"
     
-    # Agent配置
-    agent: str = None  # 单个Agent
-    agents: List[str] = field(default_factory=list)  # 多个Agent
-    
     # Prompt配置（可插拔）
     prompt: Dict = field(default_factory=dict)
+    
+    # 🆕 Prompt模板配置（用于 CoreOrchestrator）
+    prompt_template: Dict = field(default_factory=dict)  # 包含 base, sections
     
     # LLM配置
     llm: Dict = field(default_factory=lambda: {
@@ -46,6 +45,9 @@ class SkillConfig:
     # 按 Agent 分配工具（仅 multi_agent 使用）：agent 名 -> 工具名列表，未列出的 Agent 用 tools
     agent_tools: Dict[str, List[str]] = field(default_factory=dict)
     
+    # 🆕 工作流配置
+    workflows: Dict = field(default_factory=dict)  # 包含 source, available_workflows, preferred_intents
+    
     # 权限配置
     permissions: Dict = field(default_factory=dict)
     
@@ -59,6 +61,7 @@ class SkillConfig:
     # 元数据
     metadata: Dict = field(default_factory=dict)
     skill_path: Path = None
+    skill_dir: Path = None  # 🆕 Skill 目录路径（用于加载 prompt 文件）
     # 可选：了解项目预取触发词（字符串列表），用户输入包含任一词即预取三层
     project_understanding_triggers: List[str] = field(default_factory=list)
     # 为 true 时用 LLM 判断「是否想了解项目/架构」意图，不依赖触发词；与 triggers 二选一或并用（intent 优先）
@@ -67,6 +70,10 @@ class SkillConfig:
     project_understanding_max_chars: Optional[int] = None
     # 可选：预取块前的说明/指令文案，拼在【项目文档】等之前；不设则用编排器默认
     project_understanding_header: Optional[str] = None
+    # 🆕 各部分的字符数限制
+    project_understanding_doc_chars: int = 4000
+    project_understanding_struct_chars: int = 5000
+    project_understanding_repomap_chars: int = 12000
 
 
 class SkillLoader:
@@ -140,24 +147,73 @@ class SkillLoader:
             version=config['version'],
             description=config['description'],
             orchestrator=config.get('orchestrator', 'simple'),
-            agent=config.get('agent'),
-            agents=config.get('agents', []),
             prompt=prompt_config,
+            prompt_template=config.get('prompt_template', {}),  # 🆕 加载 prompt_template 配置
             llm=config.get('llm', {}),
             middleware=config.get('middleware', []),
             tools=config.get('tools', []),
             agent_tools=config.get('agent_tools', {}),
+            workflows=config.get('workflows', {}),  # 🆕 加载 workflows 配置
             permissions=config.get('permissions', {}),
             hooks=config.get('hooks', []),
             inputs=config.get('inputs', []),
             outputs=config.get('outputs', []),
             metadata=config.get('metadata', {}),
             skill_path=skill_path,
-            project_understanding_triggers=config.get('project_understanding_triggers', []),
-            project_understanding_use_intent=config.get('project_understanding_use_intent', False),
-            project_understanding_max_chars=config.get('project_understanding_max_chars'),
-            project_understanding_header=config.get('project_understanding_header'),
+            skill_dir=skill_path,  # 🆕 设置 skill_dir
+            # 🔥 支持嵌套的 project_understanding 配置
+            project_understanding_triggers=self._get_nested_config(
+                config, 'project_understanding', 'triggers', 
+                default=config.get('project_understanding_triggers', [])
+            ),
+            project_understanding_use_intent=self._get_nested_config(
+                config, 'project_understanding', 'use_intent',
+                default=config.get('project_understanding_use_intent', False)
+            ),
+            project_understanding_max_chars=self._get_nested_config(
+                config, 'project_understanding', 'max_chars',
+                default=config.get('project_understanding_max_chars')
+            ),
+            project_understanding_header=self._get_nested_config(
+                config, 'project_understanding', 'header',
+                default=config.get('project_understanding_header')
+            ),
+            # 🆕 各部分的字符数限制
+            project_understanding_doc_chars=self._get_nested_config(
+                config, 'project_understanding', 'doc_chars',
+                default=4000
+            ),
+            project_understanding_struct_chars=self._get_nested_config(
+                config, 'project_understanding', 'struct_chars',
+                default=5000
+            ),
+            project_understanding_repomap_chars=self._get_nested_config(
+                config, 'project_understanding', 'repomap_chars',
+                default=12000
+            ),
         )
+    
+    @staticmethod
+    def _get_nested_config(config: Dict, section: str, key: str, default=None):
+        """
+        获取嵌套配置，支持两种格式：
+        1. 嵌套格式: project_understanding.use_intent
+        2. 扁平格式: project_understanding_use_intent
+        
+        Args:
+            config: 配置字典
+            section: 配置节名称（如 'project_understanding'）
+            key: 配置键名称（如 'use_intent'）
+            default: 默认值
+        
+        Returns:
+            配置值
+        """
+        # 优先使用嵌套格式
+        if section in config and isinstance(config[section], dict):
+            return config[section].get(key, default)
+        # 兜底到扁平格式
+        return default
     
     def get_skill(self, name: str) -> Optional[SkillConfig]:
         """获取指定Skill"""

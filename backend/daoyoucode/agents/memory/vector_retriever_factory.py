@@ -41,11 +41,18 @@ def get_vector_retriever(config_path: Optional[str] = None):
             }
         }
     
-    mode = config.get("mode", "api")
+    mode = config.get("mode", "disabled")
     
-    if mode == "api":
+    if mode == "disabled":
+        # 禁用向量检索 - 返回空对象而不是 None
+        from .vector_retriever_disabled import DisabledVectorRetriever
+        logger.info("ℹ️ 向量检索已禁用（使用关键词匹配）")
+        return DisabledVectorRetriever()
+    
+    elif mode == "api":
         # 使用API模式
         from .vector_retriever_api import VectorRetrieverAPI
+        from .vector_retriever_disabled import DisabledVectorRetriever
         
         api_config = config.get("api", {})
         provider = api_config.get("provider", "zhipu")
@@ -70,12 +77,14 @@ def get_vector_retriever(config_path: Optional[str] = None):
         
         if not retriever.enabled:
             logger.warning("⚠️ API模式初始化失败，回退到关键词匹配")
+            return DisabledVectorRetriever()
         
         return retriever
     
     else:
         # 使用本地模式
         from .vector_retriever import VectorRetriever
+        from .vector_retriever_disabled import DisabledVectorRetriever
         
         local_config = config.get("local", {})
         model_name = local_config.get("model_name", "paraphrase-multilingual-MiniLM-L12-v2")
@@ -86,6 +95,7 @@ def get_vector_retriever(config_path: Optional[str] = None):
         
         if not retriever.enabled:
             logger.warning("⚠️ 本地模式初始化失败，回退到关键词匹配")
+            return DisabledVectorRetriever()
         
         return retriever
 

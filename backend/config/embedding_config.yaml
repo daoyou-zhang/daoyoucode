@@ -1,9 +1,10 @@
 # Embedding配置文件
 
-# 模式选择: "local" 或 "api"
+# 模式选择: "local", "api", 或 "disabled"
 # - local: 使用本地模型（需要下载，约50MB-400MB）
 # - api: 使用远程API（无需下载，按使用量计费）
-mode: "api"
+# - disabled: 禁用向量检索（只使用关键词匹配）
+mode: "disabled"
 
 # ========== API模式配置 ==========
 api:

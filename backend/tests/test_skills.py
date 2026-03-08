@@ -48,7 +48,6 @@ async def test_skill(skill_name: str, test_case: dict):
         print(f"✅ Skill 加载成功")
         print(f"  描述: {skill.description}")
         print(f"  编排器: {skill.orchestrator}")
-        print(f"  Agent: {skill.agent}")
         print(f"  工具数量: {len(skill.tools)}")
         
         # 验证配置
@@ -188,7 +187,7 @@ async def test_skill_execution(skill_name: str = "programming"):
         # 执行（这会调用真实的 LLM）
         # 注意：这需要配置好的 API 密钥
         result = await orchestrator.execute(
-            agent_name=skill.agent,
+            agent_name=skill.name,  # 使用 skill.name 而不是 skill.agent
             user_input=user_input,
             tools=skill.tools,
             context={}

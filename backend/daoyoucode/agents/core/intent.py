@@ -39,6 +39,7 @@ async def classify_intents(
     user_input: str,
     llm_config: Optional[Dict[str, Any]] = None,
     intent_definitions: Optional[Dict[str, str]] = None,
+    intent_config: Optional[Dict[str, Any]] = None,  # 🔥 新增：完整的意图配置（包含 keywords）
 ) -> List[str]:
     """
     对用户输入做一次宽泛意图分类，返回命中的意图标签列表。
@@ -49,6 +50,7 @@ async def classify_intents(
         llm_config: Skill 的 llm 配置（model、temperature 等）
         intent_definitions: 意图 id -> 说明文案；None 用 DEFAULT_INTENT_DEFINITIONS
                            🆕 支持从 Skill 的 intents.yaml 传入自定义定义
+        intent_config: 🔥 完整的意图配置（包含 keywords），用于关键词兜底
 
     Returns:
         命中的意图 id 列表，如 ["understand_project", "need_code_context"]；解析失败返回 []。
@@ -62,31 +64,45 @@ async def classify_intents(
     if not defs:
         logger.warning("没有可用的意图定义，返回空列表")
         return []
-    lines = [f"- {k}: {v}" for k, v in defs.items()]
+    
+    # 🆕 构建更清晰的提示，让LLM从列表中选择
+    lines = []
+    for intent_id, description in defs.items():
+        lines.append(f"- `{intent_id}`: {description}")
+    
     defs_text = "\n".join(lines)
+    
+    # 🆕 提取所有有效的意图ID，用于强约束
+    valid_intent_ids = list(defs.keys())
+    valid_ids_str = ", ".join([f'"{id}"' for id in valid_intent_ids])
+    
     prompt = (
-        "你是一个意图分类器。根据用户输入，判断其意图属于下面哪些类型（可多选）。\n"
-        "意图定义：\n"
+        "根据用户输入，从以下意图中选择1个最匹配的（只选1个）：\n\n"
         f"{defs_text}\n\n"
-        "只输出一个 JSON 对象，格式：{\"intents\": [\"意图id1\", \"意图id2\"]}。"
-        "仅包含明确命中的意图，不要编造。若都不明显则 {\"intents\": []}。\n\n"
-        "用户输入：\n" + (user_input.strip()[:600])
+        "只输出JSON：{\"intents\": [\"意图id\"]}\n\n"
+        f"用户输入：{user_input.strip()[:600]}"
     )
+    
     try:
         from ..llm import get_client_manager
         from ..llm.base import LLMRequest
         cfg = llm_config or {}
-        model = cfg.get("model", "qwen-max")
+        
+        # 🔥 使用小模型做意图识别（快速、便宜、准确）
+        # 优先级：配置的小模型 > qwen-turbo > 配置的模型
+        intent_model = cfg.get("intent_model") or "qwen-turbo"  # qwen-turbo 是小模型，快速便宜
+        
         client_manager = get_client_manager()
-        client = client_manager.get_client(model=model)
+        client = client_manager.get_client(model=intent_model)
         request = LLMRequest(
             prompt=prompt,
-            model=model,
-            temperature=0,
-            max_tokens=120,
+            model=intent_model,
+            temperature=0,  # 确定性输出
+            max_tokens=50,  # 意图识别只需要很少的 token
         )
         resp = await client.chat(request)
         raw = (resp.content or "").strip()
+        
         # 兼容 ```json ... ``` 或直接 {...}
         if "```" in raw:
             raw = raw.split("```")[1]
@@ -98,10 +114,87 @@ async def classify_intents(
             raw = raw[start:]
         obj = json.loads(raw)
         intents = obj.get("intents") if isinstance(obj, dict) else []
-        return [x for x in intents if isinstance(x, str) and x in defs]
+        
+        # 🆕 严格验证：只保留在定义中的意图
+        valid_intents = []
+        for intent in intents:
+            if not isinstance(intent, str):
+                continue
+            
+            # 🆕 严格匹配，不做任何修正
+            if intent in defs:
+                valid_intents.append(intent)
+            else:
+                logger.warning(f"⚠️ LLM返回了不存在的意图: '{intent}'，已忽略")
+        
+        if valid_intents:
+            logger.info(f"✅ 意图识别成功: {valid_intents} (模型: {intent_model})")
+            return valid_intents
+        else:
+            logger.info(f"ℹ️ LLM未识别到明确意图，尝试关键词兜底...")
+            # 🔥 LLM 识别失败，使用关键词兜底
+            if intent_config:
+                fallback_intents = _keyword_fallback_intent(user_input.strip(), intent_config)
+                if fallback_intents:
+                    logger.info(f"✅ 关键词兜底成功: {fallback_intents}")
+                    return fallback_intents
+            
+            logger.info(f"ℹ️ 关键词兜底也未匹配，返回空列表")
+            return []
+        
     except Exception as e:
-        logger.warning("意图分类失败，返回空列表: %s", e)
+        logger.warning(f"意图分类失败: {e}，尝试关键词兜底...")
+        # 🔥 异常时也尝试关键词兜底
+        if intent_config:
+            fallback_intents = _keyword_fallback_intent(user_input.strip(), intent_config)
+            if fallback_intents:
+                logger.info(f"✅ 关键词兜底成功: {fallback_intents}")
+                return fallback_intents
+        
+        logger.warning("关键词兜底也失败，返回空列表")
         return []
+
+
+def _keyword_fallback_intent(
+    user_input: str,
+    intent_config: Dict[str, Any]
+) -> List[str]:
+    """
+    关键词兜底：当 LLM 识别失败时，使用关键词匹配
+    
+    Args:
+        user_input: 用户输入
+        intent_config: 完整的意图配置（从 intents.yaml 加载）
+    
+    Returns:
+        匹配的意图列表（按优先级排序，最多返回1个）
+    """
+    if not intent_config or 'intents' not in intent_config:
+        return []
+    
+    user_input_lower = user_input.lower()
+    keyword_matches = []
+    
+    # 遍历所有意图，查找关键词匹配
+    for intent_id, intent_data in intent_config['intents'].items():
+        keywords = intent_data.get('keywords', [])
+        if not keywords:
+            continue
+        
+        # 检查是否有关键词匹配
+        if any(kw.lower() in user_input_lower for kw in keywords):
+            priority = intent_data.get('priority', 5)
+            keyword_matches.append((intent_id, priority))
+            logger.debug(f"关键词匹配: {intent_id} (优先级={priority})")
+    
+    if not keyword_matches:
+        return []
+    
+    # 按优先级降序排序，取优先级最高的
+    keyword_matches.sort(key=lambda x: x[1], reverse=True)
+    best_match = keyword_matches[0][0]
+    
+    return [best_match]
 
 
 async def should_prefetch_project_understanding(
@@ -125,12 +218,6 @@ async def should_prefetch_project_understanding(
     if not user_input_stripped:
         logger.debug("用户输入为空，跳过预取")
         return False, [], "none"
-    
-    # 🆕 快速过滤：简单寒暄直接跳过（避免不必要的LLM调用）
-    SIMPLE_GREETINGS = ("你好", "您好", "hi", "hello", "嗨", "在吗", "在不在")
-    if user_input_stripped.lower() in SIMPLE_GREETINGS:
-        logger.info(f"检测到简单寒暄: '{user_input_stripped}'，跳过预取")
-        return False, ["general_chat"], "none"
 
     use_intent = getattr(skill, "project_understanding_use_intent", False)
     need = False
@@ -138,7 +225,35 @@ async def should_prefetch_project_understanding(
     prefetch_level = "none"
 
     if use_intent:
-        intents = await classify_intents(user_input_stripped, getattr(skill, "llm", None))
+        # 🔥 优化：尝试从 skill 获取完整的意图定义
+        # 如果失败，使用默认的 5 个意图定义
+        intent_defs = None
+        workflows_config = getattr(skill, 'workflows', {})
+        
+        # 只有在有 workflows 配置且有 source 时才尝试加载
+        if workflows_config and workflows_config.get('source'):
+            try:
+                from .workflow_manager import WorkflowManager
+                if hasattr(skill, 'skill_path') and skill.skill_path:
+                    skill_config = {
+                        'skill_dir': str(skill.skill_path),
+                        'workflows': workflows_config
+                    }
+                    wf_manager = WorkflowManager(skill_config)
+                    
+                    if wf_manager.intent_config:
+                        intent_defs = wf_manager.get_intent_definitions()
+                        logger.debug(f"从 skill 加载了 {len(intent_defs)} 个意图定义")
+            except Exception as e:
+                logger.debug(f"无法加载 skill 的意图定义，使用默认定义: {e}")
+        
+        # 调用意图识别
+        intents = await classify_intents(
+            user_input_stripped, 
+            getattr(skill, "llm", None),
+            intent_definitions=intent_defs,  # 可能是 None（使用默认）或完整定义
+            intent_config=wf_manager.intent_config if wf_manager else None  # 🔥 传入完整配置用于关键词兜底
+        )
         context["detected_intents"] = intents
         logger.info(f"意图识别结果: {intents}")
         

@@ -570,15 +570,13 @@ def _handle_chat_impl(user_input: str, ui_context: dict):
         import asyncio
         import sys
 
-        # 显示思考提示并立即刷新
+        # 显示思考提示
         sys.stdout.write("\n")
         sys.stdout.flush()
-        _safe_console_print(console, "[bold blue]AI正在思考...[/bold blue]")
+        console.print("[bold blue]思考中...[/bold blue]")
         sys.stdout.flush()
-        sys.stderr.flush()
         
         # 获取或创建事件循环
-        
         try:
             loop = asyncio.get_event_loop()
             if loop.is_closed():
@@ -924,7 +922,7 @@ def handle_chat_with_agent(user_input: str, context: dict) -> str:
             user_input = file_info + "\n\n用户问题: " + user_input
         
         # 显示思考动画
-        with console.status("[bold blue]AI正在思考...[/bold blue]", spinner="dots"):
+        with console.status("[bold blue]思考中...[/bold blue]", spinner="dots"):
             # 使用 get_event_loop 而不是 run 来避免 event loop closed 问题
             try:
                 loop = asyncio.get_event_loop()

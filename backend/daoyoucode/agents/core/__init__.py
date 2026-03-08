@@ -2,7 +2,7 @@
 Agent核心模块
 """
 
-from .agent import BaseAgent, AgentConfig, AgentResult, get_agent_registry, register_agent
+from .agent import BaseAgent, AgentConfig, AgentResult
 from .orchestrator import BaseOrchestrator, get_orchestrator_registry, register_orchestrator
 from .skill import SkillConfig, SkillLoader
 from .task import Task, TaskStatus, TaskManager, get_task_manager
@@ -18,8 +18,6 @@ __all__ = [
     'BaseAgent',
     'AgentConfig',
     'AgentResult',
-    'get_agent_registry',
-    'register_agent',
     
     # Orchestrator
     'BaseOrchestrator',

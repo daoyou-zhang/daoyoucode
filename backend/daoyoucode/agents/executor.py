@@ -223,7 +223,7 @@ async def _execute_skill_internal(
         task = task_manager.create_task(
             description=task_description,
             orchestrator=skill.orchestrator,
-            agent=skill.agent,
+            agent=skill.name,  # 使用 skill.name
             metadata={
                 'skill_name': skill_name,
                 'session_id': session_id,
@@ -351,8 +351,6 @@ def get_skill_info(skill_name: str) -> Optional[Dict[str, Any]]:
         'version': skill.version,
         'description': skill.description,
         'orchestrator': skill.orchestrator,
-        'agent': skill.agent,
-        'agents': skill.agents,
         'middleware': skill.middleware
     }
 

@@ -20,7 +20,6 @@ class AgentConfig:
     model: str
     temperature: float = 0.7
     system_prompt: str = ""
-    skill_dir: Optional[str] = None  # 🆕 Skill 目录（用于工作流管理器）
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -30,7 +29,6 @@ class AgentConfig:
             'model': self.model,
             'temperature': self.temperature,
             'system_prompt': self.system_prompt,
-            'skill_dir': self.skill_dir,
         }
 
 
@@ -395,18 +393,22 @@ class BaseAgent(ABC):
         tools_used = []
         
         try:
-            # 🆕 0. 初始化工作流管理器（如果 context 中有 skill_dir）
-            if not self.workflow_manager and context.get('skill_dir'):
-                from .workflow_manager import WorkflowManager
-                self.workflow_manager = WorkflowManager({'skill_dir': context['skill_dir']})
-                self.logger.debug(f"工作流管理器已初始化: {len(self.workflow_manager.workflows)} 个工作流")
+            # 🔥 0. 获取工作流管理器（从 context 中，由编排器初始化）
+            self.workflow_manager = context.get('workflow_manager')
+            
+            if self.workflow_manager:
+                self.logger.debug(
+                    f"使用共享工作流管理器: {len(self.workflow_manager.workflows)} 个可用工作流"
+                )
             
             # ========== 1. 获取记忆（智能加载）==========
             
-            # 1.1 判断是否为追问
-            is_followup = False
-            confidence = 0.0
-            if session_id != 'default':
+            # 1.1 获取追问判断结果（从 Orchestrator 传来）
+            is_followup = context.get('is_followup', False)
+            confidence = context.get('followup_confidence', 0.0)
+            
+            # 如果 Orchestrator 没有判断（兼容旧流程），则在这里判断
+            if 'is_followup' not in context and session_id != 'default':
                 is_followup, confidence, reason = await self.memory.is_followup(
                     session_id, user_input
                 )
@@ -449,38 +451,81 @@ class BaseAgent(ABC):
                 context['recent_tasks'] = task_history
                 self.logger.debug(f"加载了 {len(task_history)} 个最近任务")
             
-            # ========== 2. 加载Prompt ==========
+            # ========== 2. 获取意图（从编排器传来）==========
+            detected_intents = context.get('detected_intents', [])
+            
+            # 🔥 如果有工作流管理器，验证意图是否在支持范围内
+            if self.workflow_manager and self.workflow_manager.workflows:
+                available_intents = list(self.workflow_manager.workflows.keys())
+                
+                # 过滤出该 Agent 支持的意图
+                supported_intents = [intent for intent in detected_intents if intent in available_intents]
+                
+                if not supported_intents:
+                    # 没有支持的意图
+                    error_message = (
+                        f"❌ 无法处理此请求\n\n"
+                        f"当前 Agent ({self.name}) 不支持检测到的意图：{detected_intents}\n\n"
+                        f"**该 Agent 支持的任务类型**：\n"
+                        f"{chr(10).join(f'- {intent}' for intent in available_intents)}\n\n"
+                        f"**建议**：\n"
+                        f"1. 重新描述您的需求，使其更明确\n"
+                        f"2. 或者为该 Agent 添加新的工作流配置\n"
+                        f"3. 或者使用其他更合适的 Agent"
+                    )
+                    
+                    self.logger.error(
+                        f"❌ Agent {self.name} 不支持意图 {detected_intents}，"
+                        f"可用意图: {available_intents}"
+                    )
+                    
+                    return AgentResult(
+                        success=False,
+                        content=error_message,
+                        error="unsupported_intent",
+                        metadata={
+                            'agent': self.name,
+                            'detected_intents': detected_intents,
+                            'available_intents': available_intents
+                        }
+                    )
+                
+                # 更新为支持的意图
+                detected_intents = supported_intents
+                context['detected_intents'] = supported_intents
+                self.logger.info(f"✅ Agent {self.name} 支持的意图: {supported_intents}")
+            
+            # ========== 3. 加载 Prompt（包含工作流）==========
             prompt = await self._load_prompt(prompt_source, context)
             
-            # ========== 3. 渲染Prompt ==========
-            full_prompt = self._render_prompt(prompt, user_input, context)
+            # ========== 5. 渲染 Prompt（工作流会在这里注入）==========
+            try:
+                full_prompt = self._render_prompt(prompt, user_input, context)
+            except ValueError as e:
+                # 识别出意图但没有找到工作流
+                error_message = (
+                    f"❌ 配置错误\n\n"
+                    f"{str(e)}\n\n"
+                    f"**建议**：\n"
+                    f"1. 检查 intents.yaml 中的工作流配置\n"
+                    f"2. 确保工作流文件存在\n"
+                    f"3. 检查 preferred_intents 配置是否正确"
+                )
+                
+                self.logger.error(f"❌ 工作流配置错误: {e}")
+                
+                return AgentResult(
+                    success=False,
+                    content=error_message,
+                    error="workflow_config_error",
+                    metadata={
+                        'agent': self.name,
+                        'detected_intents': detected_intents
+                    }
+                )
             
-            # ========== 4. 准备工具调用 ==========
+            # ========== 6. 准备工具调用 ==========
             if tools:
-                # 🆕 意图识别：判断是否需要工具
-                # 如果是简单寒暄（general_chat），跳过工具调用
-                detected_intents = context.get('detected_intents', [])
-                
-                if not detected_intents:
-                    # 如果编排器没有做意图识别，这里做一次
-                    from .intent import classify_intents
-                    try:
-                        # 🆕 从工作流管理器获取意图定义（如果有）
-                        intent_defs = None
-                        if self.workflow_manager and self.workflow_manager.intent_config:
-                            intent_defs = self.workflow_manager.get_intent_definitions()
-                        
-                        detected_intents = await classify_intents(
-                            user_input,
-                            llm_config,
-                            intent_definitions=intent_defs  # 🆕 传入自定义意图定义（可能为 None）
-                        )
-                        context['detected_intents'] = detected_intents
-                        self.logger.info(f"🎯 意图识别: {detected_intents}")
-                    except Exception as e:
-                        self.logger.warning(f"意图识别失败: {e}")
-                        detected_intents = []
-                
                 # 如果是简单寒暄，不使用工具
                 if 'general_chat' in detected_intents and len(detected_intents) == 1:
                     self.logger.info("🌊 检测到简单寒暄，跳过工具调用，直接回复")
@@ -753,82 +798,167 @@ class BaseAgent(ABC):
     
     def _render_prompt(
         self,
-        prompt: str,
+        prompt_template: str,
         user_input: str,
         context: Dict[str, Any]
     ) -> str:
         """
-        渲染Prompt（支持Jinja2模板 + 工作流动态加载）
+        渲染 Prompt（一次性渲染所有变量）
+        
+        渲染变量包括：
+        - 固定内容（从 skill.yaml 的 prompt_template 配置）：
+          * agent_name: Agent 名称
+          * agent_description: Agent 描述
+          * role: 角色定义
+          * positioning: 角色定位
+        - 动态内容（从 context 和运行时）：
+          * user_input: 用户输入
+          * repo: 项目根目录
+          * workflow: 工作流 Prompt（根据意图加载）
+          * project_understanding_block: 项目理解块（如果有）
+          * conversation_history: 对话历史（如果有）
         
         Args:
-            prompt: 主 Prompt 模板
+            prompt_template: 基础 Prompt 模板（未渲染）
             user_input: 用户输入
-            context: 上下文（包含 detected_intents）
+            context: 上下文（包含 detected_intents、project_understanding_block 等）
         
         Returns:
             渲染后的完整 Prompt
+        
+        Raises:
+            ValueError: 如果没有工作流管理器或工作流加载失败
         """
-        try:
-            # 🆕 1. 尝试加载工作流 Prompt
-            workflow_prompt = None
-            detected_intents = context.get('detected_intents', [])
+        from jinja2 import Template
+        from pathlib import Path
+        
+        # 1. 加载工作流 Prompt（如果有意图和工作流管理器）
+        detected_intents = context.get('detected_intents', [])
+        
+        # 🔥 如果没有意图或工作流管理器，使用简化的渲染（用于流式输出等场景）
+        if not detected_intents or not self.workflow_manager:
+            if not detected_intents:
+                self.logger.debug("没有检测到意图，使用简化渲染（可能是流式输出场景）")
+            if not self.workflow_manager:
+                self.logger.debug("工作流管理器未初始化，使用简化渲染")
             
-            if detected_intents:
-                workflow_prompt = self.workflow_manager.get_workflow_prompt(
-                    intents=detected_intents,
-                    user_input=user_input
-                )
+            # 简化渲染：只填充基本变量，不加载工作流
+            from pathlib import Path
             
-            # 🆕 2. 如果有工作流 Prompt，组合到主 Prompt
-            if workflow_prompt:
-                prompt = self._build_prompt_with_workflow(prompt, workflow_prompt)
-                self.logger.info(f"✅ 已加载工作流指导 (意图: {detected_intents})")
+            repo_path = context.get('repo')
+            if not repo_path:
+                repo_path = str(Path.cwd())
+            repo_abs = str(Path(repo_path).resolve())
             
-            # 3. 渲染 Jinja2 模板
+            # 获取 prompt_template 配置
+            prompt_template_config = context.get('prompt_template_config', {})
+            
+            render_vars = {
+                # 固定内容
+                'agent_name': prompt_template_config.get('agent_name', self.name),
+                'agent_description': prompt_template_config.get('agent_description', ''),
+                'role': prompt_template_config.get('role', ''),
+                'positioning': prompt_template_config.get('positioning', ''),
+                # 动态内容
+                'user_input': user_input,
+                'repo': repo_abs,
+                'workflow': '（无工作流）',  # 占位符
+            }
+            
+            # 添加 context 中的其他变量
+            for key, value in context.items():
+                if key not in render_vars:
+                    render_vars[key] = value
+            
+            # 渲染
             from jinja2 import Template
-            template = Template(prompt)
-            return template.render(user_input=user_input, **context)
+            template = Template(prompt_template)
+            final_prompt = template.render(**render_vars)
+            
+            self.logger.info(f"✅ Prompt 简化渲染完成: {len(final_prompt)} 字符")
+            return final_prompt
         
-        except Exception as e:
-            self.logger.warning(f"Prompt渲染失败: {e}")
-            return prompt.replace('{{user_input}}', user_input)
-    
-    def _build_prompt_with_workflow(
-        self,
-        main_prompt: str,
-        workflow_prompt: str
-    ) -> str:
-        """
-        组合主 Prompt 和工作流 Prompt（总分关系）
+        # 正常流程：加载工作流
+        workflow_prompt = self.workflow_manager.get_workflow_prompt(
+            intents=detected_intents,
+            user_input=user_input
+        )
         
-        总分关系：
-        - 总（main_prompt）：角色定位、可用工具、通用原则
-        - 分（workflow_prompt）：当前任务的具体步骤和注意事项
+        if not workflow_prompt:
+            raise ValueError(
+                f"识别出意图 {detected_intents}，但没有找到对应的工作流。"
+                f"请检查 intents.yaml 和工作流文件。"
+            )
         
-        Args:
-            main_prompt: 主 Prompt（sisyphus.md - 总原则）
-            workflow_prompt: 工作流 Prompt（workflows/*.md - 具体步骤）
+        self.logger.info(f"✅ 已加载工作流: {detected_intents}")
         
-        Returns:
-            组合后的完整 Prompt
-        """
-        return f"""{main_prompt}
-
----
-
-## 🎯 当前任务专项工作流
-
-**说明**：以下是针对当前任务的详细执行步骤，请在遵循上述总体原则的基础上，严格按照此工作流执行。
-
-{workflow_prompt}
-
----
-
-**执行要求**：
-1. 遵循上述总体原则（角色定位、工具使用规范）
-2. 严格按照专项工作流的步骤执行
-3. 确保每个步骤都正确完成后再进入下一步
-"""
+        # 2. 准备所有渲染变量（固定 + 动态）
+        
+        # 2.1 从 context 获取 prompt_template 配置（由 CoreOrchestrator 传递）
+        prompt_template_config = context.get('prompt_template_config', {})
+        
+        # 如果没有传递，尝试从 skill 获取（向后兼容）
+        if not prompt_template_config:
+            from ..core.skill import get_skill_loader
+            skill_loader = get_skill_loader()
+            # 使用 agent_name 作为 skill_name（因为在 CoreOrchestrator 中它们是相同的）
+            skill_name = context.get('agent_name', 'sisyphus-orchestrator')
+            skill = skill_loader.get_skill(skill_name)
+            prompt_template_config = getattr(skill, 'prompt_template', {}) if skill else {}
+            self.logger.debug(f"从 skill {skill_name} 加载 prompt_template 配置")
+        
+        # 2.2 repo: 项目根目录（如果 context 中没有，使用当前工作目录）
+        repo_path = context.get('repo')
+        if not repo_path:
+            repo_path = str(Path.cwd())
+            self.logger.debug(f"context 中没有 repo，使用当前工作目录: {repo_path}")
+        
+        # 转换为绝对路径（更清晰）
+        repo_abs = str(Path(repo_path).resolve())
+        
+        # 2.3 准备所有渲染变量（一次性）
+        render_vars = {
+            # 固定内容（从 skill.yaml）
+            'agent_name': prompt_template_config.get('agent_name', self.name),
+            'agent_description': prompt_template_config.get('agent_description', ''),
+            'role': prompt_template_config.get('role', ''),
+            'positioning': prompt_template_config.get('positioning', ''),
+            # 动态内容
+            'user_input': user_input,
+            'repo': repo_abs,
+            'workflow': workflow_prompt,
+        }
+        
+        # 2.4 添加 context 中的其他变量（但不覆盖上面已设置的）
+        for key, value in context.items():
+            if key not in render_vars:
+                render_vars[key] = value
+        
+        # 🔥 调试日志
+        self.logger.debug(f"渲染变量: user_input={user_input[:50]}..., repo={repo_abs}")
+        self.logger.debug(f"agent_name={render_vars['agent_name']}, role_len={len(render_vars['role'])}")
+        self.logger.debug(f"workflow 长度: {len(workflow_prompt)} 字符")
+        
+        # 🔥 检查 project_understanding_block
+        if render_vars.get('project_understanding_block'):
+            block_len = len(render_vars['project_understanding_block'])
+            self.logger.debug(f"project_understanding_block: {block_len} 字符")
+            self.logger.debug(f"project_understanding_block 预览: {render_vars['project_understanding_block'][:200]}...")
+        else:
+            self.logger.debug("project_understanding_block: 无")
+        
+        self.logger.debug(f"conversation_history: {len(render_vars.get('conversation_history', []))} 轮")
+        
+        # 3. 一次性渲染 Jinja2 模板（所有变量）
+        template = Template(prompt_template)
+        final_prompt = template.render(**render_vars)
+        
+        self.logger.info(f"✅ Prompt 渲染完成: {len(final_prompt)} 字符")
+        
+        # 🔥 调试：输出前 500 字符
+        self.logger.debug(f"Prompt 预览:\n{final_prompt[:500]}...")
+        
+        return final_prompt
     
     async def _call_llm(
         self,
@@ -1351,37 +1481,3 @@ class BaseAgent(ABC):
             'content': response.content,
             'metadata': response.metadata
         }
-
-
-class AgentRegistry:
-    """Agent注册表"""
-    
-    def __init__(self):
-        self._agents: Dict[str, BaseAgent] = {}
-    
-    def register(self, agent: BaseAgent):
-        """注册Agent"""
-        self._agents[agent.name] = agent
-        logger.info(f"已注册Agent: {agent.name}")
-    
-    def get_agent(self, name: str) -> Optional[BaseAgent]:
-        """获取Agent"""
-        return self._agents.get(name)
-    
-    def list_agents(self) -> list:
-        """列出所有Agent"""
-        return list(self._agents.keys())
-
-
-# 全局注册表
-_agent_registry = AgentRegistry()
-
-
-def get_agent_registry() -> AgentRegistry:
-    """获取Agent注册表"""
-    return _agent_registry
-
-
-def register_agent(agent: BaseAgent):
-    """注册Agent"""
-    _agent_registry.register(agent)

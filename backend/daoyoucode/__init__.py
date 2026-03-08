@@ -7,7 +7,6 @@ from .agents import (
     execute_skill,
     list_skills,
     get_skill_info,
-    register_agent,
     register_orchestrator,
     register_middleware,
 )
@@ -16,7 +15,6 @@ __all__ = [
     'execute_skill',
     'list_skills',
     'get_skill_info',
-    'register_agent',
     'register_orchestrator',
     'register_middleware',
 ]

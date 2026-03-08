@@ -1,140 +1,115 @@
 name: sisyphus-orchestrator
-version: 1.0.0
-description: 主编排Agent - 智能任务分解和多Agent调度（类似Sisyphus）
+version: 2.0.0
+description: 全能编排器 - 智能任务分解和执行（使用 CoreOrchestrator）
 
-# orchestrator: 编排器类型（决定执行逻辑）
-#   - multi_agent: 多智能体编排器
-#   - 支持主 agent + 多个辅助 agents 协作
-#   - 可以并行或顺序调用辅助 agents，聚合结果
-#   - 适合：复杂任务、需要多个专家协作的场景
-orchestrator: multi_agent
+# 🆕 使用 CoreOrchestrator（统一执行引擎）
+orchestrator: core
 
-# collaboration_mode: 协作模式（multi_agent 编排器专用）
-#   - main_with_helpers: 主 agent + 辅助 agents（默认）
-#   - parallel: 所有 agents 并行执行
-#   - sequential: 所有 agents 顺序执行
-#   - debate: agents 之间辩论讨论
-collaboration_mode: main_with_helpers
-
-# agents: 智能体列表（multi_agent 编排器专用）
-#   - 第一个是主 agent，其余是辅助 agents
-#   - 每个 agent 对应 backend/daoyoucode/agents/builtin/ 下的 Python 类
-agents:
-  - sisyphus            # 主编排Agent（任务分解和调度）
-  - code_analyzer       # 辅助：架构分析和技术咨询
-  - programmer          # 辅助：代码编写
-  - refactor_master     # 辅助：代码重构
-  - test_expert         # 辅助：测试编写
-
-# Prompt配置（总分关系）
-# - 总：prompts/sisyphus.md（通用原则、角色定位、可用工具）
-# - 分：prompts/workflows/*.md（具体任务的详细步骤，根据意图动态加载）
-prompt:
-  file: prompts/sisyphus.md  # 总原则：角色定位、工具说明、通用策略
-
-# 了解项目预取：用 LLM 意图判断，避免死关键词漏掉「理解下当前项目」等说法
-project_understanding_use_intent: true
-
-# 可选：预取块总字符上限（不设则默认约 16000）
-# project_understanding_max_chars: 20000  # sisyphus 处理复杂任务，可以给更多预算
-
-# 可选：预取块的指导语（不设则使用默认）
-# project_understanding_header: "理解项目时，重点关注【代码地图】（核心代码和架构），【目录结构】帮助定位，【项目文档】提供背景。用1-2段话概括项目核心，不要逐条罗列。\n\n"
-
-# LLM配置
+# LLM 配置
 llm:
   model: qwen-max
   temperature: 0.3
   max_tokens: 8000
+  # 🔥 意图识别使用小模型（快速、便宜、准确）
+  intent_model: qwen-turbo  # 专门用于意图识别的小模型
 
-# 🆕 工作流配置已迁移到 intents.yaml
-# 意图定义和工作流配置现在统一在 intents.yaml 中管理
-# 这样实现了逻辑和数据分离，更加干净纯粹
+# 🆕 Prompt 模板配置
+prompt_template:
+  base: "base_template.md"  # 基础模板
+  # 从 skill.yaml 加载的内容
+  agent_name: "Sisyphus"
+  agent_description: "智能任务编排专家"
+  role: |
+    你是 Sisyphus，一个资深的项目经理和技术架构师。
+    你的核心能力是**理解需求、智能决策、高效执行**。
+  positioning: |
+    你不是简单的"信息整合者"，而是**决策者和执行者**：
+    - 理解用户的真实需求（不只是字面意思）
+    - 基于上下文和工具做出最优决策
+    - 像资深工程师一样自然地交流
 
-# 默认工具（未在 agent_tools 中列出的 Agent 使用）
+# 工具列表（CoreOrchestrator 会过滤和管理）
 tools:
+  # 项目理解
+  - discover_project_docs
   - repo_map
   - get_repo_structure
+  
+  # 搜索
   - text_search
+  - regex_search
+  - semantic_code_search
+  
+  # 文件操作
   - read_file
-  - batch_read_files      # 🆕 批量读取文件
-  - delete_file           # 🆕 删除文件
-  - batch_delete_files    # 🆕 批量删除文件
+  - batch_read_files
+  - write_file
+  - batch_write_files
+  - list_files
+  - delete_file
+  - batch_delete_files
+  - get_file_info
+  
+  # 代码分析
+  - get_file_symbols
+  - lsp_diagnostics
+  - lsp_find_references
+  - lsp_symbols
+  - lsp_goto_definition
+  
+  # 编辑
+  - search_replace
+  - intelligent_diff_edit
+  
+  # Git
+  - git_status
+  - git_diff
+  - git_commit
+  
+  # 测试
+  - run_test
+  - run_lint
+  - run_command
 
-# 按 Agent 分配工具（最优调度：各智能体仅获得其职责所需工具）
-agent_tools:
-  sisyphus:           # 主编排：理解、协调、执行
-    - discover_project_docs  # 🆕 了解项目
-    - repo_map
-    - get_repo_structure
-    - text_search
-    - regex_search           # 🆕 正则搜索
-    - semantic_code_search   # 🆕 语义搜索
-    - read_file
-    - batch_read_files
-    - write_file             # 🆕 写文件
-    - batch_write_files      # 🆕 批量写文件
-    - list_files             # 🆕 列出文件
-    - delete_file            # 🆕 删除文件
-    - batch_delete_files     # 🆕 批量删除文件
-    - search_replace         # 🆕 搜索替换
-    - get_file_symbols       # 🆕 获取符号
-    - git_status             # 🆕 Git 状态
-    - git_diff               # 🆕 Git diff
-  code_analyzer:      # 架构分析：读 + 地图 + LSP/符号
-    - read_file
-    - batch_read_files
-    - repo_map
-    - get_repo_structure
-    - text_search
-    - regex_search
-    - get_file_symbols      # 获取文件符号（不需要 LSP）
-    - lsp_diagnostics       # LSP 诊断（检查错误）
-    - lsp_find_references   # LSP 查找引用
-    - lsp_symbols           # LSP 符号查询（需要具体文件路径）
-  programmer:         # 编程：读写 + 搜索 + Git + 编辑
-    - read_file
-    - batch_read_files
-    - write_file
-    - batch_write_files
-    - list_files
-    - get_file_info
-    - delete_file
-    - batch_delete_files
-    - text_search
-    - regex_search
-    - get_file_symbols
-    - git_status
-    - git_diff
-    - search_replace
-  refactor_master:    # 重构：读写 + 搜索 + 编辑 + Git
-    - read_file
-    - batch_read_files
-    - write_file
-    - batch_write_files
-    - list_files
-    - text_search
-    - regex_search
-    - search_replace
-    - get_file_symbols
-    - git_status
-    - git_diff
-  test_expert:        # 测试：读写 + 搜索 + 运行测试/ lint
-    - read_file
-    - batch_read_files
-    - write_file
-    - batch_write_files
-    - list_files
-    - text_search
-    - run_test
-    - run_lint
+# 🆕 工作流配置（从 intents.yaml 继承）
+workflows:
+  # 从 sisyphus-orchestrator 继承所有工作流
+  source: sisyphus-orchestrator
+  
+  # 可选：只使用部分意图（如果不设置，使用所有意图）
+  # preferred_intents:
+  #   - general_chat
+  #   - need_code_context
+  #   - understand_project
+  #   - write_code
+  #   - refactor_code
+  #   - write_test
+  #   - run_test
 
-# 中间件
+# 🆕 项目理解配置（预取机制）
+project_understanding:
+  # 使用 LLM 意图判断（而不是死关键词）
+  use_intent: true
+  
+  # 字符数限制（可选，不设置则使用默认值）
+  doc_chars: 4000        # 项目文档
+  struct_chars: 5000     # 目录结构
+  repomap_chars: 12000   # 代码地图
+  
+  # 总字符数上限（可选）
+  max_chars: 20000       # sisyphus 处理复杂任务，给更多预算
+  
+  # 指导语（可选）
+  header: |
+    理解项目时，先看【目录结构】了解整体布局，再看【代码地图】掌握核心代码和架构，最后看【项目文档】补充背景信息。
+    用1-2段话概括项目核心，不要逐条罗列。
+
+# 中间件（可选）
 middleware:
   - context_management
   - memory_integration
 
-# 权限
+# 权限配置（可选）
 permissions:
   read:
     - pattern: "*"
@@ -146,12 +121,12 @@ permissions:
     - pattern: "*"
       permission: ask
 
-# 输入
+# 输入（可选，用于文档）
 inputs:
   - name: user_request
     type: string
     required: true
-    description: 用户的复杂任务请求
+    description: 用户的任务请求
   
   - name: session_id
     type: string
@@ -163,68 +138,103 @@ inputs:
     required: false
     description: 仓库路径
 
-# 输出
+# 输出（可选，用于文档）
 outputs:
-  - name: task_plan
-    type: string
-    description: 任务分解计划
-  
   - name: execution_result
     type: string
     description: 执行结果
   
-  - name: agents_used
+  - name: tools_used
     type: array
-    description: 使用的Agent列表
-  
-  - name: helper_results
-    type: array
-    description: 辅助Agent的结果
+    description: 使用的工具列表
 
-# Hook配置
+# Hook配置（可选）
 hooks:
   - logging
   - metrics
   - memory_save
 
-# 元数据
+# 元数据（可选，用于文档）
 metadata:
   category: orchestrator
   cost: HIGH
   triggers:
     - "复杂任务"
     - "多步骤任务"
-    - "需要多个专业领域"
+    - "代码分析"
+    - "代码编写"
+    - "代码重构"
+    - "测试编写"
   use_when:
-    - "重构 + 测试"
-    - "分析 + 优化"
-    - "探索 + 编写"
-    - "多文件修改"
+    - "需要理解项目结构"
+    - "需要编写或修改代码"
+    - "需要重构代码"
+    - "需要编写测试"
+    - "需要运行测试"
   features:
-    - "智能任务分解"
-    - "多Agent协作"
-    - "并行执行"
-    - "结果聚合"
+    - "智能意图识别"
+    - "动态工作流加载"
+    - "分级预取机制"
+    - "记忆系统集成"
+    - "工具调用管理"
+    - "流式输出支持"
   
   # 工作流说明
   workflow: |
-    1. 主Agent分析用户请求
-    2. 分解为子任务
-    3. 并行调用辅助Agent（如果可以）
-    4. 主Agent看到辅助Agent的结果
-    5. 聚合结果返回用户
+    CoreOrchestrator 执行流程：
+    
+    1. 意图识别
+       - 使用 LLM 分析用户输入
+       - 关键词兜底机制
+       - 判断预取级别（full/medium/light/none）
+    
+    2. 预取（如果需要）
+       - full: 文档 + 结构 + 地图
+       - medium: 结构 + 地图
+       - light: 只地图
+    
+    3. 工作流加载
+       - 根据识别的意图加载对应工作流
+       - 支持多意图组合
+       - 优先级排序
+    
+    4. Agent 执行
+       - 加载记忆（对话历史、用户偏好、任务历史）
+       - 构建完整 Prompt（注入工作流、记忆、项目理解）
+       - LLM 调用 + 工具执行
+       - 保存记忆
+    
+    5. 返回结果
+       - 支持流式输出
+       - 包含元数据（意图、工具使用、预取级别）
     
     示例：
-    用户："重构登录模块，添加测试"
-    
-    主Agent分析：
-    - 需要code_analyzer分析架构
-    - 需要refactor_master执行重构
-    - 需要test_expert编写测试
+    用户："帮我分析这个项目的架构"
     
     执行流程：
-    1. code_analyzer并行执行 → 分析登录模块架构
-    2. 主Agent看到分析结果
-    3. 调用refactor_master → 执行重构
-    4. 调用test_expert → 编写测试
-    5. 主Agent聚合结果 → 返回用户
+    1. 意图识别 → understand_project
+    2. 预取级别 → full（需要完整项目理解）
+    3. 预取 → 文档 + 结构 + 地图
+    4. 加载工作流 → workflows/understand_project.md
+    5. Agent 执行 → 分析项目架构
+    6. 返回结果 → 项目架构分析报告
+
+# 🆕 与旧版本的区别
+# 
+# 旧版本（multi_agent）:
+# - 使用多个 Agent 协作（sisyphus + code_analyzer + programmer + ...）
+# - 需要在 builtin/ 中定义每个 Agent 的 Python 类
+# - 配置分散（skill.yaml + intents.yaml + 多个 prompt 文件）
+# 
+# 新版本（core）:
+# - 使用单一 CoreOrchestrator
+# - 动态创建 Agent（无需 Python 类）
+# - 配置统一（skill.yaml + intents.yaml + workflow 文件）
+# - 更简洁、更灵活、更易维护
+# 
+# 迁移说明：
+# 1. 将 orchestrator 改为 core
+# 2. 删除 agents 和 agent_tools 配置（不再需要）
+# 3. 添加 workflows 配置（指定工作流来源）
+# 4. 添加 project_understanding 配置（预取机制）
+# 5. 保持 tools、llm、permissions 等配置不变

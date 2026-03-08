@@ -1,276 +1,282 @@
-# Skills 目录
+# Skills 目录说明
 
-> Skill驱动的Agent系统配置
+## 核心 Skills (6个)
 
----
+### 1. sisyphus-orchestrator
+**用途**: 全能编排器，支持所有功能
 
-## 目录结构
+**特点**:
+- 包含 13 个工作流
+- 支持代码分析、编写、测试、重构等所有功能
+- 默认 Skill，适合大多数场景
 
-```
-skills/
-├── translation/              # 翻译服务
-│   ├── skill.yaml
-│   └── prompts/
-│       └── translator.md
-│
-├── programming/              # 编程服务
-│   ├── skill.yaml
-│   └── prompts/
-│       └── programmer.md
-│
-├── code-analysis/            # 代码分析
-│   ├── skill.yaml
-│   └── prompts/
-│       └── oracle.md
-│
-├── code-exploration/         # 代码搜索
-│   ├── skill.yaml
-│   └── prompts/
-│       └── explore.md
-│
-├── refactoring/              # 代码重构
-│   ├── skill.yaml
-│   └── prompts/
-│       └── refactor.md
-│
-├── testing/                  # 测试编写和修复
-│   ├── skill.yaml
-│   └── prompts/
-│       └── test.md
-│
-└── README.md                 # 本文件
-```
+**使用场景**:
+- 不确定用哪个 Skill 时的默认选择
+- 需要多种功能组合的复杂任务
+- 需要智能意图识别和工作流切换
+
+**配置**:
+- 编排器: core
+- 工作流: 13 个（自有）
+- 权限: 读写
+- 工具: 全部
 
 ---
 
-## 已实现的Skills
+### 2. programming
+**用途**: 专注于代码开发
 
-### 1. translation - 翻译服务
-- **Agent**: translator
-- **模型**: qwen-max
-- **用途**: 专业翻译服务
-- **特点**: 准确、流畅、专业
+**特点**:
+- 专注于编写新代码
+- 理解需求并生成实现
+- 考虑代码质量和最佳实践
 
-### 2. programming - 编程服务
-- **Agent**: programmer
-- **模型**: qwen-coder-plus
-- **用途**: 代码编写、调试、优化
-- **特点**: 高质量代码、最佳实践
+**使用场景**:
+- 实现新功能
+- 编写新模块
+- 生成代码框架
 
-### 3. code-analysis - 代码分析
-- **Agent**: code_analyzer
-- **模型**: qwen-max
-- **用途**: 架构分析、代码审查
-- **特点**: 只读分析、务实建议
-
-### 4. code-exploration - 代码搜索
-- **Agent**: code_explorer
-- **模型**: qwen-coder-plus
-- **用途**: 快速查找代码位置
-- **特点**: 并行搜索、结构化输出
-
-### 5. refactoring - 代码重构
-- **Agent**: refactor_master
-- **模型**: qwen-coder-plus
-- **用途**: 安全渐进式重构
-- **特点**: 测试驱动、可回滚
-
-### 6. testing - 测试服务
-- **Agent**: test_expert
-- **模型**: deepseek-coder
-- **用途**: 测试编写和修复
-- **特点**: TDD工作流、高覆盖率
+**配置**:
+- 编排器: core
+- 工作流: 继承自 sisyphus-orchestrator
+- 权限: 读写
+- 工具: 全部
 
 ---
 
-## Skill配置格式
+### 3. testing
+**用途**: 专注于测试
 
-每个Skill包含两个文件：
+**特点**:
+- 编写单元测试
+- 编写集成测试
+- 运行和分析测试结果
 
-### 1. skill.yaml - Skill配置
+**使用场景**:
+- 为现有代码编写测试
+- 修复失败的测试
+- 提高测试覆盖率
 
-```yaml
-name: skill-name
-version: 1.0.0
-description: Skill描述
+**配置**:
+- 编排器: core
+- 工作流: 继承自 sisyphus-orchestrator
+- 权限: 读写
+- 工具: 全部
 
-# 编排器
-orchestrator: simple
+---
 
-# Agent
-agent: agent_name
+### 4. refactoring
+**用途**: 专注于代码重构
 
-# Prompt配置
-prompt:
-  file: prompts/prompt.md
+**特点**:
+- 改进代码结构
+- 优化性能
+- 提高可维护性
 
-# LLM配置
-llm:
-  model: qwen-max
-  temperature: 0.7
-  max_tokens: 2000
+**使用场景**:
+- 重构遗留代码
+- 优化代码结构
+- 消除代码异味
 
-# 中间件
-middleware:
-  - context_management
+**配置**:
+- 编排器: core
+- 工作流: 继承自 sisyphus-orchestrator
+- 权限: 读写
+- 工具: 全部
 
-# 权限（可选）
-permissions:
-  read:
-    - pattern: "*"
-      permission: allow
+---
 
-# 输入
-inputs:
-  - name: input_name
-    type: string
-    required: true
-    description: 输入描述
+### 5. code-review
+**用途**: 代码审查
 
-# 输出
-outputs:
-  - name: output_name
-    type: string
-    description: 输出描述
+**特点**:
+- 审查代码质量
+- 发现潜在问题
+- 提供改进建议
 
-# Hook（可选）
-hooks:
-  - logging
-  - metrics
+**使用场景**:
+- PR 代码审查
+- 代码质量检查
+- 安全审查
 
-# 元数据（可选）
-metadata:
-  category: category_name
-  cost: CHEAP/MEDIUM/EXPENSIVE
-```
+**配置**:
+- 编排器: core
+- 工作流: 继承自 sisyphus-orchestrator
+- 权限: 读写
+- 工具: 全部
 
-### 2. prompts/*.md - Prompt文件
+---
 
-Markdown格式的Prompt，包含：
-- 角色定义
-- 核心能力
-- 工作原则
-- 输出格式
-- 注意事项
+### 6. chat-assistant
+**用途**: 普通问答
+
+**特点**:
+- 友好的对话助手
+- 回答技术问题
+- 提供建议和指导
+
+**使用场景**:
+- 技术咨询
+- 概念解释
+- 一般性问答
+
+**配置**:
+- 编排器: core
+- 工作流: 继承自 sisyphus-orchestrator
+- 权限: 读写
+- 工具: 全部
 
 ---
 
 ## 使用方式
 
-### 方式1: 通过execute_skill
+### CLI 使用
 
-```python
-from daoyoucode.agents import execute_skill
+```bash
+# 使用默认 Skill (sisyphus-orchestrator)
+daoyoucode chat
 
-result = await execute_skill(
-    skill_name='translation',
-    user_input='翻译这段话',
-    context={'target_language': 'en'}
-)
+# 使用特定 Skill
+daoyoucode chat --skill programming
+daoyoucode chat --skill testing
+daoyoucode chat --skill refactoring
+daoyoucode chat --skill code-review
+daoyoucode chat --skill chat-assistant
 ```
 
-### 方式2: 直接使用Agent
+### 配置文件
 
-```python
-from daoyoucode.agents.builtin import TranslatorAgent
+每个 Skill 的配置文件位于 `skills/<skill-name>/skill.yaml`
 
-agent = TranslatorAgent()
-result = await agent.execute(
-    prompt_source={'file': 'skills/translation/prompts/translator.md'},
-    user_input='翻译这段话'
-)
+**配置结构**:
+```yaml
+name: "skill-name"
+version: "1.0.0"
+description: "Skill 描述"
+orchestrator: "core"
+
+# 工作流配置
+workflows:
+  source: "sisyphus-orchestrator"  # 继承工作流
+  preferred_intents: []             # 可选：过滤工作流
+
+# 项目理解配置
+project_understanding:
+  level: "medium"  # full/medium/light/none
+
+# 工具配置
+tools: []  # 空表示使用所有工具
+
+# LLM 配置
+llm:
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 4000
 ```
 
 ---
 
-## 创建新Skill
+## 工作流继承
 
-### 步骤1: 创建目录结构
+所有 Skills（除了 sisyphus-orchestrator）都继承 sisyphus-orchestrator 的 13 个工作流：
 
-```bash
-mkdir -p skills/my-skill/prompts
-```
+1. **general_chat** - 简单寒暄
+2. **need_code_context** - 需要代码上下文
+3. **understand_project** - 理解项目
+4. **write_code** - 编写代码
+5. **write_test** - 编写测试
+6. **refactor_code** - 重构代码
+7. **run_test** - 运行测试
+8. **debug_code** - 调试代码
+9. **analyze_code** - 分析代码
+10. **find_unused_code** - 查找未使用代码
+11. **search_code** - 搜索代码
+12. **review_code** - 审查代码
+13. **optimize_code** - 优化代码
 
-### 步骤2: 创建skill.yaml
+---
 
+## 添加新 Skill
+
+如果需要添加新的 Skill：
+
+1. 创建目录: `skills/<skill-name>/`
+2. 创建配置: `skills/<skill-name>/skill.yaml`
+3. 配置继承: `workflows.source: "sisyphus-orchestrator"`
+4. 测试验证: `daoyoucode chat --skill <skill-name>`
+
+**最小配置示例**:
 ```yaml
-name: my-skill
-version: 1.0.0
-description: 我的Skill
+name: "my-skill"
+version: "1.0.0"
+description: "我的自定义 Skill"
+orchestrator: "core"
 
-orchestrator: simple
-agent: my_agent
+workflows:
+  source: "sisyphus-orchestrator"
 
-prompt:
-  file: prompts/my-prompt.md
+project_understanding:
+  level: "medium"
+
+tools: []
 
 llm:
-  model: qwen-max
+  model: "gpt-4"
   temperature: 0.7
-```
-
-### 步骤3: 创建prompt文件
-
-```markdown
-# skills/my-skill/prompts/my-prompt.md
-
-你是...
-
-## 核心能力
-...
-```
-
-### 步骤4: 创建Agent（如果需要）
-
-```python
-# backend/daoyoucode/agents/builtin/my_agent.py
-from ..core.agent import BaseAgent, AgentConfig
-
-class MyAgent(BaseAgent):
-    def __init__(self):
-        config = AgentConfig(
-            name="my_agent",
-            description="我的Agent",
-            model="qwen-max",
-            temperature=0.7,
-            system_prompt=""
-        )
-        super().__init__(config)
-```
-
-### 步骤5: 注册Agent
-
-```python
-# backend/daoyoucode/agents/builtin/__init__.py
-from .my_agent import MyAgent
-
-def register_builtin_agents():
-    ...
-    register_agent(MyAgent())
 ```
 
 ---
 
 ## 设计原则
 
-1. **配置驱动** - 所有配置在YAML文件中
-2. **Prompt分离** - Prompt独立存放在Markdown文件
-3. **Agent简洁** - Agent只负责注册，不包含业务逻辑
-4. **完全可插拔** - Agent、Prompt、Skill都可插拔
+1. **专注单一职责**: 每个 Skill 专注于特定领域
+2. **继承复用**: 通过继承避免重复配置
+3. **配置驱动**: 通过配置文件而不是代码定义行为
+4. **简单优先**: 保持最小数量的 Skills，避免过度设计
 
 ---
 
-## 最佳实践
+## 已删除的 Skills
 
-1. **Skill命名** - 使用小写字母和连字符，如 `code-analysis`
-2. **Prompt文件** - 使用清晰的Markdown格式，包含完整说明
-3. **版本管理** - 使用语义化版本号
-4. **文档完整** - 每个Skill都要有清晰的描述和使用说明
-5. **测试验证** - 创建Skill后要测试验证
+以下 Skills 已被删除（功能可通过 sisyphus-orchestrator 实现）：
+
+- code-analysis（分析功能已集成）
+- code-exploration（探索功能已集成）
+- oracle（咨询功能已集成）
+- librarian（文档搜索已集成）
+- translation（翻译功能已集成）
+- edit-single（编辑功能已集成）
+- complex-refactor（重构功能已集成）
+- parallel-analysis（分析功能已集成）
+- test-core-orchestrator（测试用，已删除）
 
 ---
 
-## 参考资源
+## 维护指南
 
-- [Agent系统文档](../backend/daoyoucode/agents/README.md)
-- [编程Agent文档](../backend/PROGRAMMING_AGENTS.md)
+### 何时添加新 Skill
+
+只在以下情况添加新 Skill：
+- 有明确的、独特的使用场景
+- 需要特殊的权限配置（如只读）
+- 需要特殊的工具集合
+- 需要特殊的 LLM 配置
+
+### 何时不添加新 Skill
+
+避免在以下情况添加新 Skill：
+- 功能可以通过现有 Skill 实现
+- 只是为了组织代码
+- 功能重复或相似
+
+### 定期审查
+
+定期审查 Skills 目录：
+- 删除不常用的 Skills
+- 合并功能相似的 Skills
+- 保持 Skills 数量在 5-10 个
+
+---
+
+**最后更新**: 2024-03-08
+**维护者**: DaoyouCode Team

@@ -1,168 +1,109 @@
-# 名称与 CLI 默认 --skill chat-assistant 对齐，避免找不到 Skill
 name: chat-assistant
 version: 1.0.0
 description: 交互式对话助手，支持代码理解、编写和项目分析
-
-# orchestrator: 编排器类型（决定执行逻辑）
-#   - react: ReAct 编排器 = Reason(思考) + Act(行动) + Observe(观察) 循环
-#   - 自动进行推理循环，调用工具，观察结果，直到完成任务
-#   - 适合：交互式对话、需要多步推理的任务
-orchestrator: react
-
-# agent: 智能体名称（决定 AI 角色）
-#   - MainAgent: 通用智能体（backend/daoyoucode/agents/builtin/main_agent.py）
-#   - 适合：通用对话、代码理解、项目分析等多种任务
-agent: MainAgent
-
-# Prompt配置
-prompt:
-  file: prompts/chat_assistant.md  # 简化版本
-
-# 🆕 工作流配置（引用共通工作流）
-workflows:
-  # 引用 sisyphus-orchestrator 的工作流（能力/方法论）
-  source: sisyphus-orchestrator
-  # chat-assistant 是通用助手，可以使用所有工作流
-  available_workflows:
-    - write_code
-    - write_test
-    - analyze_code
-    - debug_code
-    - refactor_code
-    - find_unused_code
-  # 优先使用的意图（通用助手，不限制）
-  preferred_intents:
-    - write_code
-    - write_test
-    - analyze_code
-    - debug_code
-    - refactor_code
-    - search_code
-
-# 「了解项目」预取：用 LLM 判断意图（如「我想知道架构」也会触发），不再依赖写死触发词
-project_understanding_use_intent: true
-# 当 project_understanding_use_intent 为 false 时生效的触发词（可选兜底）
-project_understanding_triggers:
-  - 了解
-  - 看看项目
-  - 项目怎么样
-  - 项目是啥
-  - 介绍项目
-  - 这是什么项目
-  - 说说项目
-  - 项目结构
-
-# 可选：预取块总字符上限（不设则默认约 16000）。若模型上下文很小可设小值（如 8000）避免超窗
-# project_understanding_max_chars: 16000
-
-# 可选：预取块的指导语（不设则使用默认）
-# project_understanding_header: "理解项目时，重点关注【代码地图】（核心代码和架构），【目录结构】帮助定位，【项目文档】提供背景。用1-2段话概括项目核心，不要逐条罗列。\n\n"
-
-# LLM配置（max_tokens 为回复长度上限；输入上下文由模型窗口决定，ReAct 不经过 ContextManager 的 token_budget 剪枝）
+orchestrator: core
+agent:
+  name: chat_assistant
+  model: qwen-max
+  temperature: 0.7
 llm:
   model: qwen-max
   temperature: 0.7
   max_tokens: 4000
-
-# 可用工具（ReAct编排器会自动管理；「了解项目」必须用三层：discover_project_docs → get_repo_structure → repo_map）
 tools:
-  - discover_project_docs # 项目文档（README 等），了解项目先调
-  - get_repo_structure    # 目录树
-  - repo_map              # 代码地图
-  - semantic_code_search  # 按问题语义检索相关代码（Cursor 同级）
-  - read_file             # 读取文件
-  - batch_read_files      # 🆕 批量读取文件（并行处理，提高效率）
-  - text_search           # 文本搜索（修正：原来是grep_search）
-  - regex_search          # 正则搜索
-  - write_file            # 写入文件（如果需要）
-  - batch_write_files     # 🆕 批量写入文件（并行处理，支持流式显示）
-  - search_replace        # 🆕 搜索替换（修改代码）
-  - apply_patch           # 🆕 应用补丁（细粒度编辑）
-  - list_files            # 列出目录（修正：原来是list_directory）
-  - get_file_symbols      # 🆕 获取文件符号（AST）
-  - run_lint              # 🆕 运行 lint 验证
-  - git_diff              # 🆕 查看 git diff
-
-# 中间件
+- apply_patch
+- batch_read_files
+- batch_write_files
+- discover_project_docs
+- get_file_symbols
+- get_repo_structure
+- git_diff
+- list_files
+- read_file
+- regex_search
+- repo_map
+- run_lint
+- search_replace
+- semantic_code_search
+- text_search
+- write_file
+workflows:
+  source: sisyphus-orchestrator
+project_understanding:
+  use_intent: true
 middleware:
-  - context_management
-  - memory_integration
-
-# 权限（读写权限）
+- context_management
+- memory_integration
 permissions:
   read:
-    - pattern: "*"
-      permission: allow
+  - pattern: '*'
+    permission: allow
   write:
-    - pattern: "*.py"
-      permission: allow
-    - pattern: "*.js"
-      permission: allow
-    - pattern: "*.ts"
-      permission: allow
-    - pattern: "*.md"
-      permission: allow
+  - pattern: '*.py'
+    permission: allow
+  - pattern: '*.js'
+    permission: allow
+  - pattern: '*.ts'
+    permission: allow
+  - pattern: '*.md'
+    permission: allow
   execute:
-    - pattern: "*"
-      permission: deny
-
-# 输入
+  - pattern: '*'
+    permission: deny
 inputs:
-  - name: user_input
-    type: string
-    required: true
-    description: 用户输入的问题或指令
-  
-  - name: session_id
-    type: string
-    required: false
-    description: 会话ID
-  
-  - name: initial_files
-    type: array
-    required: false
-    description: 打开的编辑器文件列表（优先使用）
-  
-  - name: repo
-    type: string
-    required: false
-    description: 仓库路径
-
-# 输出
+- name: user_input
+  type: string
+  required: true
+  description: 用户输入的问题或指令
+- name: session_id
+  type: string
+  required: false
+  description: 会话ID
+- name: initial_files
+  type: array
+  required: false
+  description: 打开的编辑器文件列表（优先使用）
+- name: repo
+  type: string
+  required: false
+  description: 仓库路径
 outputs:
-  - name: response
-    type: string
-    description: AI的响应内容
-  
-  - name: tools_used
-    type: array
-    description: 使用的工具列表
-  
-  - name: reasoning
-    type: string
-    description: 推理过程
-
-# Hook配置
+- name: response
+  type: string
+  description: AI的响应内容
+- name: tools_used
+  type: array
+  description: 使用的工具列表
+- name: reasoning
+  type: string
+  description: 推理过程
 hooks:
-  - logging
-  - metrics
-  - memory_save
-
-# 元数据
+- logging
+- metrics
+- memory_save
 metadata:
   category: assistant
   cost: MEDIUM
   triggers:
-    - "对话"
-    - "提问"
-    - "代码编写"
-    - "项目分析"
+  - 对话
+  - 提问
+  - 代码编写
+  - 项目分析
   use_when:
-    - "用户交互"
-    - "代码理解"
-    - "项目探索"
+  - 用户交互
+  - 代码理解
+  - 项目探索
   features:
-    - "自动工具调用"
-    - "推理循环"
-    - "记忆集成"
-    - "上下文管理"
+  - 自动工具调用
+  - 推理循环
+  - 记忆集成
+  - 上下文管理
+_migration_notes:
+  migrated_from: react
+  original_agents: []
+  migration_date: '2024-03-08'
+  changes:
+  - 使用 CoreOrchestrator 替代 multi_agent/simple/react
+  - 合并所有 agent_tools 到统一的 tools 列表
+  - 添加 workflows 配置（从 intents.yaml 加载）
+  - 添加 project_understanding 配置（预取机制）
