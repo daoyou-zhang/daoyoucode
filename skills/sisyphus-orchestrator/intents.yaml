@@ -14,6 +14,14 @@
 intents:
   # ========== 工作流相关意图 ==========
   
+  find_hardcoded_config:
+    description: "用户想查找硬编码的配置、写死的参数、需要配置化的代码：硬编码、写死、配置文件、可配置、参数配置、配置化等"
+    keywords: ["硬编码", "写死", "配置文件", "可配置", "配置化", "需要配置", "应该配置"]
+    workflow:
+      prompt_file: "prompts/workflows/find_hardcoded_config.md"
+      enabled: true
+    priority: 8
+  
   find_unused_code:
     description: "用户想查找未使用的代码、死代码、冗余代码、没被使用的方法/类/函数。关键词：未使用、没用到、没被使用、死代码、冗余、清理、查找未使用、检查未使用等"
     keywords: ["未使用", "没用", "没被使用", "死代码", "冗余", "清理代码", "没有使用", "不使用", "查找未使用", "检查未使用"]
