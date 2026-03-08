@@ -8,6 +8,10 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from abc import ABC
 import logging
+from datetime import datetime
+
+# 🆕 导入 Context 相关类
+from .context import Context, ContextManager, get_context_manager
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +69,10 @@ class BaseAgent(ABC):
         from ..tools.postprocessor import get_tool_postprocessor
         self.tool_postprocessor = get_tool_postprocessor()
         self.logger.debug("工具后处理器已就绪")
+        
+        # 🆕 上下文管理器
+        self.context_manager = get_context_manager()
+        self.logger.debug("上下文管理器已就绪")
         
         # 🆕 工作流管理器（延迟初始化，在 execute 时根据 context 中的 skill_dir 创建）
         self.workflow_manager = None
@@ -345,7 +353,7 @@ class BaseAgent(ABC):
         self,
         prompt_source: Dict[str, Any],
         user_input: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,  # 保持原参数名
         llm_config: Optional[Dict[str, Any]] = None,
         tools: Optional[List[str]] = None,
         max_tool_iterations: int = 15,  # 🆕 增加到 15 次
@@ -360,7 +368,7 @@ class BaseAgent(ABC):
                 - {'inline': 'prompt text'}
                 - {'use_agent_default': True}
             user_input: 用户输入
-            context: 上下文
+            context: 上下文字典
             llm_config: LLM配置
             tools: 可用工具列表（工具名称）
             max_tool_iterations: 最大工具调用迭代次数
@@ -377,7 +385,19 @@ class BaseAgent(ABC):
         if context is None:
             context = {}
         
-        # 提取session_id和user_id
+        # 🆕 获取或创建 Context 对象
+        session_id = context.get('session_id', 'default')
+        try:
+            ctx = self.context_manager.get_or_create_context(session_id)
+            # 将字典内容同步到 Context（不追踪变更，避免性能开销）
+            ctx.update(context, track_change=False)
+            # 保存 Context 对象到字典（供后续使用）
+            context['_context_obj'] = ctx
+            self.logger.debug(f"✅ Context 对象已创建: session={session_id}")
+        except Exception as e:
+            self.logger.warning(f"创建 Context 对象失败: {e}，继续使用字典模式")
+        
+        # 提取session_id和user_id（保持原有逻辑）
         session_id = context.get('session_id', 'default')
         
         # 获取user_id（优先级：context > user_manager > session_id）
@@ -1368,6 +1388,14 @@ class BaseAgent(ABC):
                         shared_tool_cache[cache_key] = tool_result_str
                         self.logger.debug(f"💾 保存到共享缓存: {tool_name}")
                     
+                    # 🆕 保存到 Context 对象
+                    ctx = context.get('_context_obj')
+                    if ctx:
+                        try:
+                            self._save_tool_result_to_context(ctx, tool_name, tool_result)
+                        except Exception as e:
+                            self.logger.warning(f"保存工具结果到 Context 失败: {e}")
+                    
                     # 显示结果预览（可选）
                     # display.show_result_preview(tool_result_str, max_lines=3)
                 else:
@@ -1481,3 +1509,191 @@ class BaseAgent(ABC):
             'content': response.content,
             'metadata': response.metadata
         }
+
+    # ========== Context 集成辅助方法 ==========
+    
+    def _save_tool_result_to_context(
+        self,
+        context: Context,
+        tool_name: str,
+        tool_result: Any
+    ):
+        """
+        保存工具结果到 Context
+        
+        Args:
+            context: Context 对象
+            tool_name: 工具名称
+            tool_result: 工具结果
+        """
+        try:
+            # 保存最近的工具结果
+            context.set("last_tool_result", {
+                "tool": tool_name,
+                "result": str(tool_result.content)[:1000] if hasattr(tool_result, 'content') else str(tool_result)[:1000],
+                "timestamp": datetime.now().isoformat()
+            }, track_change=False)
+            
+            # 保存特定工具的结果
+            context.set(f"last_{tool_name}_result", tool_result, track_change=False)
+            
+            # 自动提取路径
+            if tool_name in ["text_search", "repo_map", "grep_search"]:
+                paths = self._extract_paths_from_result(tool_name, tool_result)
+                if paths:
+                    # 🆕 添加到搜索历史（不覆盖之前的搜索）
+                    search_history = context.get("search_history") or []
+                    search_entry = {
+                        "tool": tool_name,
+                        "paths": paths,
+                        "timestamp": datetime.now().isoformat(),
+                        "result_preview": str(tool_result.content)[:200] if hasattr(tool_result, 'content') else ""
+                    }
+                    search_history.append(search_entry)
+                    context.set("search_history", search_history, track_change=False)
+                    
+                    # 总是保存最新的搜索路径
+                    context.set("last_search_paths", paths, track_change=False)
+                    
+                    # 🔧 只在 target_file 未设置时才自动设置（避免覆盖）
+                    if not context.get("target_file"):
+                        if len(paths) == 1:
+                            # 单个文件：设置 target_file 和 target_dir
+                            context.set("target_file", paths[0], track_change=False)
+                            import os
+                            target_dir = os.path.dirname(paths[0])
+                            if target_dir:
+                                context.set("target_dir", target_dir, track_change=False)
+                            self.logger.info(f"✅ 自动设置 target_file: {paths[0]}")
+                        
+                        elif len(paths) > 1:
+                            # 多个文件：设置第一个为 target_file，保存所有路径
+                            context.set("target_file", paths[0], track_change=False)
+                            import os
+                            target_dir = os.path.dirname(paths[0])
+                            if target_dir:
+                                context.set("target_dir", target_dir, track_change=False)
+                            
+                            # 保存所有文件路径（用于多文件操作）
+                            context.set("target_files", paths, track_change=False)
+                            
+                            # 提取所有目录（去重）
+                            all_dirs = list(set(os.path.dirname(p) for p in paths if os.path.dirname(p)))
+                            if all_dirs:
+                                context.set("target_dirs", all_dirs, track_change=False)
+                            
+                            self.logger.info(f"✅ 自动设置 target_file (共 {len(paths)} 个文件)")
+                    else:
+                        # target_file 已存在，不覆盖，但记录到历史
+                        self.logger.info(f"✅ 搜索结果已添加到历史 (共 {len(search_history)} 条)")
+                        self.logger.debug(f"   target_file 保持不变: {context.get('target_file')}")
+            
+            self.logger.debug(f"已保存工具结果到 Context: {tool_name}")
+        except Exception as e:
+            self.logger.warning(f"保存工具结果失败: {e}")
+    
+    def _extract_paths_from_result(
+        self,
+        tool_name: str,
+        result: Any
+    ) -> List[str]:
+        """
+        从工具结果中提取文件路径
+        
+        Args:
+            tool_name: 工具名称
+            result: 工具结果
+        
+        Returns:
+            提取的路径列表
+        """
+        import re
+        
+        paths = []
+        
+        try:
+            # 获取结果字符串
+            if hasattr(result, 'content'):
+                result_str = str(result.content)
+            else:
+                result_str = str(result)
+            
+            if tool_name in ["text_search", "grep_search"]:
+                # 匹配格式：path/to/file.ext:line_number
+                # 支持多种文件扩展名
+                pattern = r'([^\s:]+\.(?:py|js|ts|tsx|jsx|java|cpp|c|h|go|rs|rb|php|md|txt|json|yaml|yml|toml|ini|cfg|conf)):\d+'
+                matches = re.findall(pattern, result_str)
+                paths = list(set(matches))
+            
+            elif tool_name == "repo_map":
+                # repo_map 结果中的路径格式
+                pattern = r'([^\s:]+\.(?:py|js|ts|tsx|jsx|java|cpp|c|h|go|rs|rb|php|md|txt|json|yaml|yml|toml|ini|cfg|conf))'
+                matches = re.findall(pattern, result_str)
+                paths = list(set(matches))
+            
+            if paths:
+                self.logger.debug(f"从 {tool_name} 结果中提取了 {len(paths)} 个路径")
+        except Exception as e:
+            self.logger.warning(f"提取路径失败: {e}")
+        
+        return paths
+    
+    def _format_context_info(self, context: Context) -> str:
+        """
+        格式化 Context 信息用于 Prompt
+        
+        Args:
+            context: Context 对象
+        
+        Returns:
+            格式化的 Context 信息
+        """
+        try:
+            lines = ["## 🔧 当前上下文变量", ""]
+            
+            # 重要变量
+            important_keys = [
+                "target_file",
+                "target_files",  # 🆕 多文件
+                "target_dir",
+                "target_dirs",   # 🆕 多目录
+                "config_file",
+                "llm_caller_file",
+                "tool_manager_file",
+                "last_search_paths"
+            ]
+            
+            has_important = False
+            for key in important_keys:
+                if context.has(key):
+                    value = context.get(key)
+                    if isinstance(value, list):
+                        lines.append(f"- **{key}**: {len(value)} 个路径")
+                        for i, path in enumerate(value[:5], 1):  # 显示前5个
+                            lines.append(f"  {i}. `{path}`")
+                        if len(value) > 5:
+                            lines.append(f"  ... 还有 {len(value) - 5} 个")
+                    else:
+                        lines.append(f"- **{key}**: `{value}`")
+                    has_important = True
+            
+            if not has_important:
+                return ""  # 没有重要变量，不显示
+            
+            lines.append("")
+            
+            # 🆕 多文件提示
+            if context.has("target_files"):
+                lines.append("⚠️ **多文件操作提示**：")
+                lines.append("- `target_file` 是第一个文件（主文件）")
+                lines.append("- `target_files` 包含所有文件")
+                lines.append("- 可以遍历 `target_files` 处理每个文件")
+                lines.append("")
+            
+            lines.append("⚠️ **提示**：上述变量已自动提取并保存，后续步骤可以直接使用这些路径")
+            lines.append("")
+            
+            return "\n".join(lines)
+        except Exception as e:
+            self.logger.warning(f"格式化 Context 信息失败: {e}")
+            return ""
