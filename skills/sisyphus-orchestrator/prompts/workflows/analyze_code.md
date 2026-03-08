@@ -175,7 +175,7 @@ lsp_symbols(file_path="backend", scope="workspace")
 
 #### 示例1：分析整个项目
 ```
-1. repo_map(repo_path=".", max_depth=3)
+1. repo_map(repo_path=".")
 2. 根据代码地图，识别核心模块
 3. 对核心模块使用 get_repo_structure
 4. 总结项目架构
@@ -227,9 +227,14 @@ lsp_symbols(file_path="backend", scope="workspace")
 用户："分析 ContextSnapshot 类"
 
 错误流程：
-1. 推测文件路径：backend/daoyoucode/agents/core/context.py
-2. lsp_symbols(file_path="backend/daoyoucode/agents/core/context.py")
-3. 失败：文件不存在
+1. 推测文件路径（如：backend/daoyoucode/agents/core/context.py）
+2. lsp_symbols(file_path="推测的路径")
+3. 失败：文件不存在或路径错误
+
+⚠️ 注意：
+- 不要推测路径
+- 路径相对于当前工作目录
+- backend 前缀可能不需要（取决于运行位置）
 
 正确流程：
 1. text_search(query="class ContextSnapshot")

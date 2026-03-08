@@ -92,10 +92,15 @@ grep_search(
 使用 read_file 读取文件，查看前后代码：
 
 read_file(
-    file_path="backend/daoyoucode/agents/core/agent.py",
+    file_path="搜索到的文件路径",
     start_line=1100,
     end_line=1120
 )
+
+⚠️ 注意：
+- 先使用 text_search 或 repo_map 查找文件
+- 使用相对于当前工作目录的路径
+- 不要硬编码 backend 前缀
 
 目的：
 - 理解这个值的用途
@@ -179,13 +184,15 @@ grep_search(
 
 find_class(
     class_name="UnifiedLLMClient",
-    file_path="backend/daoyoucode/agents/llm/clients/unified.py"
+    file_path="搜索到的文件路径"
 )
 
 find_function(
     function_name="chat",
-    file_path="backend/daoyoucode/agents/llm/clients/unified.py"
+    file_path="搜索到的文件路径"
 )
+
+⚠️ 注意：使用相对于当前工作目录的路径
 
 目的：
 - 理解调用链路
@@ -312,7 +319,7 @@ write_file(
    → 发现 3 处
 
 5. 分析第一个发现（LLM 超时）
-   read_file(file_path="backend/daoyoucode/agents/llm/clients/unified.py", start_line=110, end_line=115)
+   read_file(file_path="搜索到的文件路径", start_line=110, end_line=115)
    → 读取上下文
    → 判断：MUST_CONFIG (high priority)
 
@@ -321,6 +328,8 @@ write_file(
    → 发现 2 处使用（同步和流式）
 
 7. 查找所在类
+
+⚠️ 注意：使用相对于当前工作目录的路径
    find_class(class_name="UnifiedLLMClient", file_path="backend/daoyoucode/agents/llm/clients/unified.py")
    → 理解调用链路
 
@@ -417,8 +426,10 @@ read_file(file_path=..., start_line=line-10, end_line=line+10)
 ## 🔴 高优先级（影响核心功能）
 
 ### 1. LLM 请求超时
-**位置**: backend/daoyoucode/agents/llm/clients/unified.py:112
+**位置**: [文件路径]:112
 **当前值**: timeout=1800.0
+
+⚠️ 注意：文件路径相对于当前工作目录
 **问题**: 硬编码，无法根据任务类型调整
 **影响**: 所有 LLM 调用
 **建议配置**:

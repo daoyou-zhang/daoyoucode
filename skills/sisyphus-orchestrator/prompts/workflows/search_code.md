@@ -42,8 +42,12 @@
 
 ✅ 推荐方式：
 1. repo_map(repo_path=".") 
-   → 从结果中直接找到 "backend/daoyoucode/agents/core/agent.py"
+   → 从结果中直接找到文件路径（如 "daoyoucode/agents/core/agent.py"）
 2. 回复用户
+
+⚠️ 注意：路径相对于当前工作目录
+- 如果在 backend 目录下运行，路径是：daoyoucode/agents/core/agent.py
+- 如果在项目根目录运行，路径是：backend/daoyoucode/agents/core/agent.py
 
 ❌ 低效方式：
 1. text_search(query="class Agent")
@@ -123,10 +127,12 @@
 1. 使用文本搜索（关键词匹配）
    text_search(query="class Agent", file_pattern="**/*.py")
    
-2. 结果：找到 backend/daoyoucode/agents/core/agent.py
+2. 结果：找到文件路径（如 daoyoucode/agents/core/agent.py）
 
 3. 回复用户：
-   "Agent 类在 backend/daoyoucode/agents/core/agent.py 中定义"
+   "Agent 类在 [找到的路径] 中定义"
+   
+⚠️ 注意：路径相对于当前工作目录
 ```
 
 ### 示例 3：查找所有测试文件
