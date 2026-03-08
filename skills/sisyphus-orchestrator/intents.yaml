@@ -127,6 +127,14 @@ intents:
       prompt_file: "prompts/workflows/general_chat.md"
       enabled: true
     priority: 1
+  
+  code_development_design:
+    description: "代码开发设计工作流，用于指导代码开发设计过程。"
+    keywords: ["代码开发", "设计", "开发设计", "设计文档"]
+    workflow:
+      prompt_file: "prompts/workflows/code_development_design.md"
+      enabled: true
+    priority: 8
 
 # ========== 配置说明 ==========
 #

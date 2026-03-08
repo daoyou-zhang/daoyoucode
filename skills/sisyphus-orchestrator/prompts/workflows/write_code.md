@@ -102,21 +102,101 @@
 - 适当的注释
 - 合理的错误处理
 
-#### 4.3 使用工具写入代码
+#### 4.3 选择合适的编辑工具
+
+**⚠️ 重要：根据修改范围选择合适的工具**
+
+##### 场景1：小范围修改（推荐）
 ```
-单个文件：
+使用工具：search_replace
+参数：
+  - file_path: "目标文件路径"
+  - search: "要替换的代码块"
+  - replace: "替换后的代码块"
+
+优势：
+- ✅ 精确、安全
+- ✅ 支持9种智能匹配策略
+- ✅ 自动处理空白和缩进差异
+- ✅ 不需要完整文件内容
+
+适用场景：
+- 修改函数实现
+- 修改类方法
+- 修改配置值
+- 添加/删除几行代码
+```
+
+##### 场景2：中等范围修改（推荐）
+```
+使用工具：intelligent_diff_edit
+参数：
+  - file_path: "目标文件路径"
+  - search_block: "要查找的代码块"
+  - replace_block: "替换的代码块"
+  - fuzzy_match: true（可选，启用模糊匹配）
+  - similarity_threshold: 0.8（可选，相似度阈值）
+
+优势：
+- ✅ 精确到行
+- ✅ 支持模糊匹配
+- ✅ 自动 LSP 验证
+- ✅ 支持流式显示
+- ✅ 验证失败自动回滚
+
+适用场景：
+- 重构函数
+- 修改类结构
+- 批量修改相似代码
+```
+
+##### 场景3：大范围修改或新建文件
+```
 使用工具：write_file
 参数：
   - file_path: "目标文件路径"
   - content: "完整的文件内容"
 
-多个文件：
+优势：
+- ✅ 适合新建文件
+- ✅ 适合完全重写
+
+适用场景：
+- 创建新文件
+- 完全重写文件
+- 大规模重构
+
+⚠️ 注意：
+- 小改不要用 write_file（容易出错）
+- 优先使用 search_replace 或 intelligent_diff_edit
+```
+
+##### 场景4：多文件修改
+```
 使用工具：batch_write_files
 参数：
   - files: [
       {path: "文件1", content: "内容1"},
       {path: "文件2", content: "内容2"}
     ]
+
+适用场景：
+- 创建多个新文件
+- 批量重写文件
+```
+
+#### 4.4 工具选择决策树
+
+```
+是否是新文件？
+├─ 是 → write_file 或 batch_write_files
+└─ 否 → 修改现有文件
+    ├─ 修改范围 < 20 行？
+    │   └─ 是 → search_replace（推荐）
+    ├─ 修改范围 20-100 行？
+    │   └─ 是 → intelligent_diff_edit（推荐）
+    └─ 修改范围 > 100 行？
+        └─ 是 → write_file（谨慎使用）
 ```
 
 ### 5. 验证代码
@@ -170,8 +250,8 @@
 
 ```
 步骤：
-1. text_search(query="类似功能") - 查找是否已有实现
-2. get_repo_structure(repo_path=".") - 确定文件位置
+1. repo_map(repo_path=".") - 了解项目结构
+2. text_search(query="类似功能") - 查找是否已有实现
 3. read_file(file_path="参考文件") - 了解代码风格
 4. write_file(file_path="新文件", content="代码") - 编写代码
 5. lsp_diagnostics(file_path="新文件") - 验证语法
@@ -179,30 +259,75 @@
 7. 向用户说明实现
 ```
 
-### 场景2：修改现有文件添加功能
+### 场景2：小范围修改现有文件（推荐）
+
+```
+步骤：
+1. read_file(file_path="目标文件") - 读取现有代码
+2. search_replace(
+     file_path="目标文件",
+     search="要替换的代码块",
+     replace="替换后的代码块"
+   ) - 精确替换
+3. lsp_diagnostics(file_path="目标文件") - 验证语法
+4. git_diff(file_path="目标文件") - 查看变更
+5. 向用户说明修改
+
+优势：
+- 精确、安全
+- 不需要完整文件内容
+- 自动处理空白和缩进
+```
+
+### 场景3：中等范围修改（推荐）
+
+```
+步骤：
+1. read_file(file_path="目标文件") - 读取现有代码
+2. intelligent_diff_edit(
+     file_path="目标文件",
+     search_block="要查找的代码块",
+     replace_block="替换的代码块",
+     fuzzy_match=true
+   ) - 智能替换
+3. git_diff(file_path="目标文件") - 查看变更
+4. 向用户说明修改
+
+优势：
+- 支持模糊匹配
+- 自动 LSP 验证
+- 验证失败自动回滚
+```
+
+### 场景4：大范围修改（谨慎使用）
 
 ```
 步骤：
 1. read_file(file_path="目标文件") - 读取现有代码
 2. get_file_symbols(file_path="目标文件") - 了解文件结构
-3. write_file(file_path="目标文件", content="修改后的代码") - 写入修改
+3. write_file(file_path="目标文件", content="修改后的完整代码") - 重写文件
 4. lsp_diagnostics(file_path="目标文件") - 验证语法
 5. git_diff(file_path="目标文件") - 查看变更
 6. 向用户说明修改
+
+⚠️ 注意：
+- 只在必要时使用（大规模重构）
+- 优先考虑 search_replace 或 intelligent_diff_edit
 ```
 
-### 场景3：多文件实现功能
+### 场景5：多文件实现功能
 
 ```
 步骤：
-1. 分析需求，确定需要哪些文件
-2. 对每个文件：
+1. repo_map(repo_path=".") - 了解项目结构
+2. 分析需求，确定需要哪些文件
+3. 对每个文件：
    - 查找参考代码
    - 了解代码风格
-3. batch_write_files(files=[...]) - 批量写入
-4. 对每个文件验证语法
-5. git_diff() - 查看所有变更
-6. 向用户说明实现
+4. batch_write_files(files=[...]) - 批量写入
+5. 对每个文件验证语法
+6. git_diff() - 查看所有变更
+7. 向用户说明实现
 ```
 
 ## 注意事项
@@ -246,6 +371,28 @@
 - 必须包含必要的导入
 - 必须包含错误处理
 - 必须包含文档字符串
+
+❌ **不要滥用 write_file**
+- 小改用 search_replace（精确、安全）
+- 中改用 intelligent_diff_edit（智能、可靠）
+- 大改才用 write_file（谨慎使用）
+
+### 工具选择建议
+
+✅ **优先使用 search_replace**
+- 修改 < 20 行
+- 精确替换
+- 不需要完整文件内容
+
+✅ **其次使用 intelligent_diff_edit**
+- 修改 20-100 行
+- 支持模糊匹配
+- 自动验证和回滚
+
+✅ **最后使用 write_file**
+- 新建文件
+- 修改 > 100 行
+- 完全重写
 
 ## 成功标准
 

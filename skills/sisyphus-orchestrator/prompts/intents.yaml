@@ -1,0 +1,5 @@
+intents:
+  - name: code_development_design
+    description: 代码开发设计工作流，用于指导代码开发设计过程。
+    workflows:
+      - code_development_design.md

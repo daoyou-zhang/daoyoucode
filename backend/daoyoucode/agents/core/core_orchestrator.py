@@ -407,10 +407,6 @@ class CoreOrchestrator:
                 lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
                 self.logger.info(f"[预取] medium级别 struct={ls} repomap={lr} (chars)")
                 
-                # 中等预取的字符数限制（如果没有配置，使用默认值）
-                _STRUCT_CHARS = pu_config.get('struct_chars', 4000)
-                _REPOMAP_CHARS = pu_config.get('repomap_chars', 6000)
-                
                 # 🔥 安全属性访问
                 if s and getattr(s, "content", None) and s.content:
                     content = s.content[:_STRUCT_CHARS]
@@ -440,9 +436,6 @@ class CoreOrchestrator:
                 # 🔥 详细日志
                 lr = len(getattr(r, "content", None) or "") if r and getattr(r, "content", None) else 0
                 self.logger.info(f"[预取] light级别 repomap={lr} (chars)")
-                
-                # 轻量预取的字符数限制
-                _REPOMAP_CHARS = pu_config.get('repomap_chars', 8000)
                 
                 # 🔥 安全属性访问
                 if r and getattr(r, "content", None) and r.content:
