@@ -4,7 +4,31 @@
 
 ⚠️ **必读**：请先阅读 [工具使用指南](tool_usage_guide.md)，了解工具优先级和最佳实践。
 
+⚠️ **Context 变量**：请阅读 [Context 使用指南](context_usage_guide.md)，了解如何使用 Context 变量管理路径。
+
 **核心原则：优先使用 repo_map、LSP、AST 等高效工具，避免逐个文件搜索！**
+
+## 🎯 Context 变量自动管理路径
+
+系统会自动管理文件路径，简化工作流：
+
+- **target_file**: 首次搜索时自动设置，后续搜索不会覆盖
+- **last_search_paths**: 最新搜索结果，总是更新
+- **search_history**: 所有搜索历史，可以回溯
+
+**使用示例**：
+```
+1. text_search("example.py")
+   → 自动设置 target_file
+
+2. read_file(path="{{target_file}}")
+   → 使用 Context 变量，无需硬编码路径
+
+3. write_file(path="{{target_file}}", content="...")
+   → 修改正确的文件
+```
+
+详细说明请参考：[Context 使用指南](context_usage_guide.md)
 
 ## 任务目标
 

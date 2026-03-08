@@ -1538,7 +1538,7 @@ class BaseAgent(ABC):
             context.set(f"last_{tool_name}_result", tool_result, track_change=False)
             
             # 自动提取路径
-            if tool_name in ["text_search", "repo_map", "grep_search"]:
+            if tool_name in ["text_search", "repo_map", "regex_search"]:
                 paths = self._extract_paths_from_result(tool_name, tool_result)
                 if paths:
                     # 🆕 添加到搜索历史（不覆盖之前的搜索）
@@ -1618,7 +1618,7 @@ class BaseAgent(ABC):
             else:
                 result_str = str(result)
             
-            if tool_name in ["text_search", "grep_search"]:
+            if tool_name in ["text_search", "regex_search"]:
                 # 匹配格式：path/to/file.ext:line_number
                 # 支持多种文件扩展名
                 pattern = r'([^\s:]+\.(?:py|js|ts|tsx|jsx|java|cpp|c|h|go|rs|rb|php|md|txt|json|yaml|yml|toml|ini|cfg|conf)):\d+'

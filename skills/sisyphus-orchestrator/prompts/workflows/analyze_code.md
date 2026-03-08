@@ -4,7 +4,35 @@
 
 ⚠️ **必读**：请先阅读 [工具使用指南](tool_usage_guide.md)，了解工具优先级和最佳实践。
 
+⚠️ **Context 变量**：请阅读 [Context 使用指南](context_usage_guide.md)，了解如何使用 Context 变量。
+
 **核心原则：优先使用 repo_map、LSP、AST 等高效工具，避免逐个文件搜索！**
+
+## 🎯 Context 变量简化分析流程
+
+系统会自动保存搜索结果，简化多文件分析：
+
+- **target_file**: 首次搜索时自动设置（主要分析的文件）
+- **last_search_paths**: 最新搜索结果（参考文件）
+- **search_history**: 所有搜索历史（回溯查找）
+
+**使用示例**：
+```
+1. text_search("agent.py")
+   → target_file = "agent.py"
+
+2. read_file(path="{{target_file}}")
+   → 分析主文件
+
+3. text_search("context.py")
+   → target_file 保持不变
+   → last_search_paths = ["context.py"]
+
+4. read_file(path="{{last_search_paths[0]}}")
+   → 分析参考文件
+```
+
+详细说明请参考：[Context 使用指南](context_usage_guide.md)
 
 ## 任务目标
 

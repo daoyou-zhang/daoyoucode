@@ -4,7 +4,35 @@
 
 ⚠️ **必读**：请先阅读 [工具使用指南](tool_usage_guide.md)，了解工具优先级和最佳实践。
 
+⚠️ **Context 变量**：请阅读 [Context 使用指南](context_usage_guide.md)，了解搜索结果如何自动保存。
+
 **核心原则：优先使用 repo_map 获取全局视图，再使用搜索工具定位细节！**
+
+## 🎯 搜索结果自动保存到 Context
+
+系统会自动保存搜索结果，方便后续使用：
+
+- **首次搜索**: 自动设置 `target_file`（主目标文件）
+- **后续搜索**: `target_file` 保持不变，新结果保存到 `last_search_paths`
+- **所有搜索**: 记录到 `search_history`，可以回溯
+
+**使用示例**：
+```
+1. text_search("agent.py")
+   → target_file = "backend/daoyoucode/agents/core/agent.py"
+   → search_history = [搜索1]
+
+2. text_search("config.yaml")
+   → target_file 保持不变（仍然是 agent.py）
+   → last_search_paths = ["config.yaml"]
+   → search_history = [搜索1, 搜索2]
+
+3. 后续可以使用：
+   - {{target_file}} → agent.py（第一次搜索的文件）
+   - {{last_search_paths[0]}} → config.yaml（最新搜索的文件）
+```
+
+详细说明请参考：[Context 使用指南](context_usage_guide.md)
 
 ## 任务目标
 
